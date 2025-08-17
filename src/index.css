@@ -2,95 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Ways Telegram Mini App Design System */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Main Backgrounds */
+    --bg: 220 30% 7%;
+    --bg-elev-1: 220 28% 11%;
+    --bg-elev-2: 218 25% 16%;
+    --surface: 220 35% 9%;
+    
+    /* Text Colors */
+    --text-primary: 0 0% 100%;
+    --text-secondary: 215 20% 70%;
+    --text-tertiary: 215 15% 50%;
+    
+    /* Borders */
+    --border: 215 20% 25%;
+    
+    /* Accent Colors */
+    --accent-purple: 250 75% 68%;
+    --accent-purple-2: 250 68% 75%;
+    --accent-blue: 215 95% 58%;
+    --accent-cyan: 195 100% 62%;
+    --accent-green: 150 65% 48%;
+    --accent-red: 350 85% 60%;
+    --accent-yellow: 45 100% 62%;
+    --gold: 48 100% 70%;
+    --live-red: 5 100% 59%;
+    
+    /* Button Colors */
+    --btn-violet: 250 85% 64%;
+    --btn-violet-2: 250 75% 72%;
+    
+    /* Chip Colors */
+    --chip-gray: 220 25% 18%;
+    --chip-green: 150 40% 15%;
+    --chip-red: 350 45% 15%;
+    --chip-blue: 215 50% 18%;
+    
+    /* Shadows */
+    --shadow-purple: 250 75% 68%;
+    
+    /* Gradients */
+    --grad-prize: radial-gradient(closest-side, hsl(250 68% 75%) 0%, hsl(250 75% 68%) 45%, hsl(250 80% 55%) 100%);
+    --grad-cta: linear-gradient(180deg, hsl(250 75% 72%) 0%, hsl(250 85% 64%) 100%);
+    --grad-cta-pressed: linear-gradient(180deg, hsl(250 85% 58%) 0%, hsl(250 90% 52%) 100%);
+    
+    /* Standard Design System Mapping */
+    --background: var(--bg);
+    --foreground: var(--text-primary);
+    --card: var(--surface);
+    --card-foreground: var(--text-primary);
+    --popover: var(--bg-elev-2);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--accent-purple);
+    --primary-foreground: var(--text-primary);
+    --secondary: var(--chip-gray);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--chip-gray);
+    --muted-foreground: var(--text-secondary);
+    --accent: var(--accent-blue);
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--accent-red);
+    --destructive-foreground: var(--text-primary);
+    --input: var(--chip-gray);
+    --ring: var(--accent-purple);
+    --radius: 0.875rem;
   }
 }
 
@@ -100,6 +80,161 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-inter;
+    font-feature-settings: "tnum";
+  }
+  
+  h1 {
+    @apply text-[22px] leading-[28px] font-semibold text-foreground;
+    letter-spacing: 0;
+  }
+  
+  h2 {
+    @apply text-[18px] leading-[24px] font-semibold text-foreground;
+    letter-spacing: 0;
+  }
+  
+  .title {
+    @apply text-[16px] leading-[22px] font-semibold text-foreground;
+    letter-spacing: 0;
+  }
+  
+  .body {
+    @apply text-[15px] leading-[20px] font-medium text-foreground;
+    letter-spacing: 0;
+  }
+  
+  .caption {
+    @apply text-[13px] leading-[18px] font-medium text-foreground;
+    letter-spacing: 0;
+  }
+  
+  .micro {
+    @apply text-[11px] leading-[14px] font-medium text-foreground;
+    letter-spacing: 0.2px;
+  }
+}
+
+@layer components {
+  .chip {
+    @apply inline-flex items-center gap-1 px-3 py-2 rounded-xl text-foreground;
+    height: 28px;
+  }
+  
+  .chip-gray {
+    @apply bg-chip-gray;
+  }
+  
+  .chip-green {
+    @apply bg-chip-green;
+  }
+  
+  .chip-red {
+    @apply bg-chip-red;
+  }
+  
+  .chip-blue {
+    @apply bg-chip-blue;
+  }
+  
+  .live-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-live-red text-foreground;
+    height: 24px;
+  }
+  
+  .live-dot {
+    @apply w-1.5 h-1.5 rounded-full bg-current animate-pulse;
+  }
+  
+  .prize-pill {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[18px] text-foreground caption;
+    background: var(--grad-prize);
+    min-width: 96px;
+    height: 30px;
+    box-shadow: 0 0 24px hsl(var(--shadow-purple) / 0.6);
+  }
+  
+  .game-card {
+    @apply bg-surface rounded-2xl p-4;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  }
+  
+  .player-item {
+    @apply flex items-center justify-between py-2 px-3 rounded-lg;
+    height: 44px;
+  }
+  
+  .player-item-you {
+    @apply bg-[#10223A];
+  }
+  
+  .player-item:active {
+    @apply bg-[#141A28];
+  }
+}
+
+@layer utilities {
+  .bg-chip-gray {
+    background-color: hsl(var(--chip-gray));
+  }
+  
+  .bg-chip-green {
+    background-color: hsl(var(--chip-green));
+  }
+  
+  .bg-chip-red {
+    background-color: hsl(var(--chip-red));
+  }
+  
+  .bg-chip-blue {
+    background-color: hsl(var(--chip-blue));
+  }
+  
+  .bg-live-red {
+    background-color: hsl(var(--live-red));
+  }
+  
+  .bg-surface {
+    background-color: hsl(var(--surface));
+  }
+  
+  .bg-bg-elev-1 {
+    background-color: hsl(var(--bg-elev-1));
+  }
+  
+  .bg-bg-elev-2 {
+    background-color: hsl(var(--bg-elev-2));
+  }
+  
+  .text-secondary {
+    color: hsl(var(--text-secondary));
+  }
+  
+  .text-tertiary {
+    color: hsl(var(--text-tertiary));
+  }
+  
+  .text-accent-cyan {
+    color: hsl(var(--accent-cyan));
+  }
+  
+  .text-accent-green {
+    color: hsl(var(--accent-green));
+  }
+  
+  .text-accent-yellow {
+    color: hsl(var(--accent-yellow));
+  }
+  
+  .text-gold {
+    color: hsl(var(--gold));
+  }
+  
+  .border-accent-cyan {
+    border-color: hsl(var(--accent-cyan));
+  }
+  
+  .border-accent-yellow {
+    border-color: hsl(var(--accent-yellow));
   }
 }
