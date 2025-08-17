@@ -1,7 +1,7 @@
-import { WaysApp } from "./WaysApp"
+import { Navigate } from "react-router-dom"
 
 const Index = () => {
-  return <WaysApp />
+  return <Navigate to="/" replace />
 }
 
 export default Index

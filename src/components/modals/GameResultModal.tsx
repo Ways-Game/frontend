@@ -5,12 +5,13 @@ import { Trophy, Share, Medal, CheckCircle } from "lucide-react"
 
 interface GameResultModalProps {
   type: "win" | "lose"
+  prize?: number
   onPlayAgain: () => void
   onShare: () => void
   onClose: () => void
 }
 
-export function GameResultModal({ type, onPlayAgain, onShare, onClose }: GameResultModalProps) {
+export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose }: GameResultModalProps) {
   const [countdown, setCountdown] = useState(10)
 
   useEffect(() => {
@@ -70,7 +71,7 @@ export function GameResultModal({ type, onPlayAgain, onShare, onClose }: GameRes
             icon="star"
             className={isWin ? "text-accent-green" : "text-foreground"}
           >
-            {isWin ? "+3 423" : "3 423"}
+            {isWin ? `+${prize?.toLocaleString() || '3,423'}` : prize?.toLocaleString() || '3,423'}
           </Chip>
         </div>
 
@@ -81,7 +82,7 @@ export function GameResultModal({ type, onPlayAgain, onShare, onClose }: GameRes
               You lose
             </Chip>
             <Chip variant="red" icon="star" className="text-accent-red">
-              -600
+              -{prize?.toLocaleString() || '600'}
             </Chip>
           </div>
         )}
@@ -123,7 +124,7 @@ export function GameResultModal({ type, onPlayAgain, onShare, onClose }: GameRes
             
             {!isWin && (
               <Chip variant="gray" className="ml-auto">
-                -600
+                -{prize?.toLocaleString() || '600'}
               </Chip>
             )}
           </div>

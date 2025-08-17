@@ -1,24 +1,52 @@
 import React, { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Chip } from "@/components/ui/ways-chip"
 import { WaysButton } from "@/components/ui/ways-button"
 import { CircularTimer } from "@/components/game/TimerChip"
+import { GameResultModal } from "@/components/modals/GameResultModal"
 import { Trophy, Volume2, VolumeX, X } from "lucide-react"
+import { MockApi } from "@/services/mockApi"
+import { useTelegram } from "@/hooks/useTelegram"
 
-interface GameScreenProps {
-  onClose: () => void
-}
-
-export function GameScreen({ onClose }: GameScreenProps) {
+export function GameScreen() {
+  const navigate = useNavigate()
+  const { webApp } = useTelegram()
   const [timeLeft, setTimeLeft] = useState(56)
   const [soundEnabled, setSoundEnabled] = useState(true)
+  const [gameModal, setGameModal] = useState<"win" | "lose" | null>(null)
+  const [gameResult, setGameResult] = useState<{ result: 'win' | 'lose'; prize?: number } | null>(null)
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setTimeLeft(prev => prev > 0 ? prev - 1 : 0)
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          // Game ended, get result
+          MockApi.getGameResult().then(result => {
+            setGameResult(result)
+            setGameModal(result.result)
+          })
+          return 0
+        }
+        return prev - 1
+      })
     }, 1000)
     
     return () => clearInterval(timer)
   }, [])
+
+  const handleClose = () => {
+    navigate('/')
+  }
+
+  const handlePlayAgain = () => {
+    setGameModal(null)
+    setGameResult(null)
+    setTimeLeft(60)
+  }
+
+  const handleShare = () => {
+    MockApi.shareResult('current-game')
+  }
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
@@ -40,7 +68,7 @@ export function GameScreen({ onClose }: GameScreenProps) {
         
         <div className="flex items-center gap-2">
           <span className="caption text-text-secondary">GAME #23245</span>
-          <WaysButton variant="close" onClick={onClose} className="flex items-center gap-1">
+          <WaysButton variant="close" onClick={handleClose} className="flex items-center gap-1">
             <X className="w-3 h-3" />
             Close
           </WaysButton>
@@ -138,6 +166,17 @@ export function GameScreen({ onClose }: GameScreenProps) {
           </WaysButton>
         </div>
       </div>
+
+      {/* Game Result Modal */}
+      {gameModal && gameResult && (
+        <GameResultModal
+          type={gameModal}
+          prize={gameResult.prize}
+          onPlayAgain={handlePlayAgain}
+          onShare={handleShare}
+          onClose={() => setGameModal(null)}
+        />
+      )}
     </div>
   )
 }
