@@ -1,30 +1,32 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { Chip } from "@/components/ui/ways-chip"
 import { WaysButton } from "@/components/ui/ways-button"
 import { CircularTimer } from "@/components/game/TimerChip"
 import { GameResultModal } from "@/components/modals/GameResultModal"
-import { Trophy, Volume2, VolumeX, X } from "lucide-react"
+import { GameCanvas, GameCanvasRef } from "@/components/GameCanvas"
+import { Trophy, Volume2, VolumeX, X, Star } from "lucide-react"
 import { MockApi } from "@/services/mockApi"
 import { useTelegram } from "@/hooks/useTelegram"
+import { TabBar } from "@/components/navigation/TabBar"
 
 export function GameScreen() {
   const navigate = useNavigate()
   const { webApp } = useTelegram()
-  const [timeLeft, setTimeLeft] = useState(56)
+  const gameCanvasRef = useRef<GameCanvasRef>(null)
+  const [timeLeft, setTimeLeft] = useState(60)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [gameModal, setGameModal] = useState<"win" | "lose" | null>(null)
   const [gameResult, setGameResult] = useState<{ result: 'win' | 'lose'; prize?: number } | null>(null)
+  const [gameStarted, setGameStarted] = useState(false)
+  const [ballImages, setBallImages] = useState<string[]>([])
 
   useEffect(() => {
+    if (!gameStarted) return
+    
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          // Game ended, get result
-          MockApi.getGameResult().then(result => {
-            setGameResult(result)
-            setGameModal(result.result)
-          })
           return 0
         }
         return prev - 1
@@ -32,7 +34,7 @@ export function GameScreen() {
     }, 1000)
     
     return () => clearInterval(timer)
-  }, [])
+  }, [gameStarted])
 
   const handleClose = () => {
     navigate('/')
@@ -42,129 +44,108 @@ export function GameScreen() {
     setGameModal(null)
     setGameResult(null)
     setTimeLeft(60)
+    setGameStarted(false)
+    gameCanvasRef.current?.resetGame()
   }
 
   const handleShare = () => {
     MockApi.shareResult('current-game')
   }
 
+  const handleGameStart = () => {
+    setGameStarted(true)
+    setTimeLeft(60)
+  }
+
+  const handleGameEnd = () => {
+    // Game canvas finished, show result
+    MockApi.getGameResult().then(result => {
+      setGameResult(result)
+      setGameModal(result.result)
+    })
+  }
+
+  const handleBallWin = (ballId: string, playerId: string) => {
+    console.log(`Ball ${ballId} (${playerId}) won!`)
+  }
+
+  const startGame = () => {
+    gameCanvasRef.current?.startGame()
+  }
+
+  const testModal = () => {
+    MockApi.getGameResult().then(result => {
+      setGameResult(result)
+      setGameModal(result.result)
+    })
+  }
+
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
-      {/* Game Background Gradient */}
-      <div 
-        className="absolute inset-0"
-        style={{
-          background: 'linear-gradient(180deg, rgba(44,64,92,0.25) 0%, rgba(0,0,0,1) 50%)'
-        }}
+      {/* Game Canvas - Full Screen */}
+      <GameCanvas
+        ref={gameCanvasRef}
+        onBallWin={handleBallWin}
+        onGameStart={handleGameStart}
+        onGameEnd={handleGameEnd}
+        ballImages={ballImages}
+        className="absolute inset-0 w-full h-full"
       />
-
-      {/* Top Status Bar */}
-      <div className="relative z-10 flex items-center justify-between px-3 pt-2.5">
-        <Chip variant="prize" icon="star">
-          Prize: ⭐ 110
-        </Chip>
-        
-        <CircularTimer seconds={timeLeft} totalSeconds={60} />
-        
-        <div className="flex items-center gap-2">
-          <span className="caption text-text-secondary">GAME #23245</span>
-          <WaysButton variant="close" onClick={handleClose} className="flex items-center gap-1">
-            <X className="w-3 h-3" />
-            Close
+      
+      {/* Start Game Button */}
+      {!gameStarted && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-30">
+          <WaysButton onClick={startGame} className="px-8 py-4 text-lg">
+            Start Game
           </WaysButton>
         </div>
-      </div>
+      )}
 
-      {/* Game Field */}
-      <div className="relative mt-8 h-[500px] mx-4">
-        {/* Glowing Barriers */}
-        <div className="absolute top-0 left-0 right-0 h-16">
-          <svg className="w-full h-full" viewBox="0 0 390 64">
-            <path
-              d="M 50 50 Q 195 10 340 50"
-              stroke="hsl(var(--accent-cyan))"
-              strokeWidth="6"
-              fill="none"
-              className="drop-shadow-[0_0_12px_hsl(var(--accent-cyan))]"
-            />
-          </svg>
-        </div>
-
-        {/* Game Balls */}
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2">
-          <div 
-            className="w-4 h-4 rounded-full bg-white/90 border-2 border-accent-yellow animate-bounce"
-            style={{
-              boxShadow: '0 0 8px rgba(255, 255, 255, 0.5), inset 2px 2px 4px rgba(255, 255, 255, 0.3)'
-            }}
-          />
-          <div className="absolute -top-6 left-1/2 transform -translate-x-1/2">
-            <div className="w-0 h-0 border-l-[4px] border-r-[4px] border-b-[6px] border-l-transparent border-r-transparent border-b-text-secondary" />
+      {/* Top Status Bar */}
+      <div className="absolute top-0 left-0 right-0 z-20">
+        <div className="flex items-center justify-between px-3 py-2.5">
+          <Chip variant="prize">
+            <span className="text-base font-semibold">Prize: <img src="/src/assets/icons/star.svg" className="w-5 h-5 inline mx-1" alt="star" /> 110</span>
+          </Chip>
+          
+          <div className="bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-3 py-2">
+            <CircularTimer seconds={timeLeft} totalSeconds={60} />
           </div>
-        </div>
-
-        {/* Additional balls scattered */}
-        <div className="absolute top-32 left-16">
-          <div className="w-4 h-4 rounded-full bg-white/80 border border-white/20" />
-        </div>
-        <div className="absolute top-28 right-20">
-          <div className="w-4 h-4 rounded-full bg-white/80 border border-white/20" />
-        </div>
-        <div className="absolute top-40 left-1/3">
-          <div className="w-4 h-4 rounded-full bg-white/80 border border-white/20" />
-        </div>
-
-        {/* Block Wall */}
-        <div className="absolute bottom-16 left-0 right-0">
-          <div className="grid grid-cols-12 gap-1 px-4">
-            {/* First row - Pink */}
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div
-                key={`row1-${i}`}
-                className="h-2.5 rounded-sm"
-                style={{ backgroundColor: '#E46C7A' }}
-              />
-            ))}
-            {/* Second row - Peach */}
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div
-                key={`row2-${i}`}
-                className="h-2.5 rounded-sm"
-                style={{ backgroundColor: '#EAA36C' }}
-              />
-            ))}
-            {/* Third row - Ochre */}
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div
-                key={`row3-${i}`}
-                className="h-2.5 rounded-sm"
-                style={{ backgroundColor: '#C67E40' }}
-              />
-            ))}
+          
+          <div className="flex items-center gap-2">
+            <span className="caption text-text-secondary bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-3 py-2">GAME #23245</span>
           </div>
         </div>
       </div>
 
       {/* Bottom Controls */}
-      <div className="absolute bottom-20 left-0 right-0 px-4">
-        <div className="flex items-center justify-between">
-          <WaysButton variant="close" className="flex items-center gap-1.5">
+      <div className="absolute bottom-16 left-0 right-0 z-20">
+        <div className=" flex items-center justify-between px-4 py-3">
+          <WaysButton variant="close" className=" h-10 flex items-center gap-1.5 bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-4 py-3">
             <Trophy className="w-4 h-4" />
             Leader
           </WaysButton>
           
-          <WaysButton
-            variant="round"
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className="w-9 h-9"
-          >
-            {soundEnabled ? (
-              <Volume2 className="w-4 h-4" />
-            ) : (
-              <VolumeX className="w-4 h-4 text-text-tertiary" />
-            )}
-          </WaysButton>
+          <div className="flex items-center gap-2">
+            <button onClick={testModal} className="w-4 h-4 bg-red-500 rounded text-xs">T</button>
+            <WaysButton
+              variant="round"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="w-12 h-10 bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-4 py-3"
+            >
+              {soundEnabled ? (
+                <Volume2 className="w-4 h-4" />
+              ) : (
+                <VolumeX className="w-4 h-4 text-text-tertiary" />
+              )}
+            </WaysButton>
+          </div>
         </div>
+      </div>
+
+      {/* Bottom Navigation */}
+      <div className="absolute bottom-0 left-0 right-0 z-20">
+        <TabBar />
       </div>
 
       {/* Game Result Modal */}
@@ -174,7 +155,7 @@ export function GameScreen() {
           prize={gameResult.prize}
           onPlayAgain={handlePlayAgain}
           onShare={handleShare}
-          onClose={() => setGameModal(null)}
+          onClose={handleClose}
         />
       )}
     </div>

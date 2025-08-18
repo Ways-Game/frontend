@@ -32,7 +32,8 @@ export function PlayerItem({ name, ballz, avatar, isYou = false, className }: Pl
         <span className="body font-medium">{isYou ? "YOU" : name}</span>
       </div>
       
-      <Chip variant="blue" className="h-7">
+      <Chip variant="blue" className="h-7 flex items-center gap-1">
+        <img src="/src/assets/icons/disc.svg" className="w-3 h-3" alt="disc" />
         {ballz} ballz
       </Chip>
     </div>

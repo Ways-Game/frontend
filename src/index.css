@@ -1,10 +1,11 @@
+/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap'); */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* Ways Telegram Mini App Design System */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 @layer base {
   :root {
@@ -47,9 +48,9 @@
     --shadow-purple: 250 75% 68%;
     
     /* Gradients */
-    --grad-prize: radial-gradient(closest-side, hsl(250 68% 75%) 0%, hsl(250 75% 68%) 45%, hsl(250 80% 55%) 100%);
-    --grad-cta: linear-gradient(180deg, hsl(250 75% 72%) 0%, hsl(250 85% 64%) 100%);
-    --grad-cta-pressed: linear-gradient(180deg, hsl(250 85% 58%) 0%, hsl(250 90% 52%) 100%);
+    --grad-prize: radial-gradient(458.72% 228.94% at 57.65% 24.39%, #444CE7 0%, #B83EFF 30.5%, #E58C4C 60.5%, #444CE7 93.5%), linear-gradient(116deg, #FFF -56.16%, #0078D2 28.08%, #8E4FF8 80.58%);
+    --grad-cta: radial-gradient(458.72% 228.94% at 57.65% 24.39%, #444CE7 0%, #B83EFF 30.5%, #E58C4C 60.5%, #444CE7 93.5%), linear-gradient(116deg, #FFF -56.16%, #0078D2 28.08%, #8E4FF8 80.58%);
+    --grad-cta-pressed: radial-gradient(458.72% 228.94% at 57.65% 24.39%, #444CE7 0%, #B83EFF 30.5%, #E58C4C 60.5%, #444CE7 93.5%), linear-gradient(116deg, #FFF -56.16%, #0078D2 28.08%, #8E4FF8 80.58%);
     
     /* Standard Design System Mapping */
     --background: var(--bg);
@@ -147,11 +148,12 @@
   }
   
   .prize-pill {
-    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[18px] text-foreground caption;
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-foreground caption;
+    border-radius: 16px;
     background: var(--grad-prize);
     min-width: 96px;
     height: 30px;
-    box-shadow: 0 0 24px hsl(var(--shadow-purple) / 0.6);
+    box-shadow: 0 5px 22px 0 rgba(207, 62, 255, 0.34);
   }
   
   .game-card {

@@ -1,12 +1,12 @@
 import React from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
-import { Gamepad2, ShoppingBag, Star, Clock } from "lucide-react"
+import { Smile, ShoppingBag, Users, Clock } from "lucide-react"
 
 const tabs = [
-  { id: "pvp" as const, label: "PvP", icon: Gamepad2 },
+  { id: "pvp" as const, label: "PvP", icon: Smile },
   { id: "market" as const, label: "Market", icon: ShoppingBag },
-  { id: "earn" as const, label: "Earn", icon: Star },
+  { id: "earn" as const, label: "Earn", icon: Users },
   { id: "history" as const, label: "History", icon: Clock }
 ]
 

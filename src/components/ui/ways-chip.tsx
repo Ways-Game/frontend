@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
-import { Star, Users, Clock, X } from "lucide-react"
+import { Users, Clock, X } from "lucide-react"
 
 interface ChipProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: "gray" | "green" | "red" | "blue" | "live" | "prize"
@@ -26,7 +26,7 @@ const Chip = React.forwardRef<HTMLDivElement, ChipProps>(
       if (typeof icon === "string") {
         switch (icon) {
           case "star":
-            return <Star className="w-3 h-3 fill-current text-gold" />
+            return <img src="/src/assets/icons/star.svg" className="w-4 h-4" alt="star" />
           case "users":
             return <Users className="w-3 h-3" />
           case "clock":

@@ -17,32 +17,7 @@ export function ProgressChip({ current, total, progress, className }: ProgressCh
 
   return (
     <div className={cn("chip chip-gray flex items-center gap-2", className)}>
-      <div className="relative w-4 h-4">
-        <svg
-          height={radius * 2}
-          width={radius * 2}
-          className="transform -rotate-90"
-        >
-          <circle
-            stroke="hsl(var(--border))"
-            fill="transparent"
-            strokeWidth={strokeWidth}
-            r={normalizedRadius}
-            cx={radius}
-            cy={radius}
-          />
-          <circle
-            stroke="hsl(var(--accent-cyan))"
-            fill="transparent"
-            strokeWidth={strokeWidth}
-            strokeDasharray={strokeDasharray}
-            strokeLinecap="round"
-            r={normalizedRadius}
-            cx={radius}
-            cy={radius}
-          />
-        </svg>
-      </div>
+      <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
       <span className="caption">{current}/{total}</span>
     </div>
   )

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { WaysButton } from "@/components/ui/ways-button"
 import { Chip } from "@/components/ui/ways-chip"
-import { Trophy, Share, Medal, CheckCircle } from "lucide-react"
+import { Trophy, Share, Medal, CheckCircle, X } from "lucide-react"
 
 interface GameResultModalProps {
   type: "win" | "lose"
@@ -31,109 +31,97 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose }: 
   const isWin = type === "win"
   
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end justify-center p-4 z-50">
-      <div className="w-full max-w-[358px] bg-bg-elev-2 rounded-2xl p-4 shadow-2xl">
-        {/* Header */}
-        <div className="text-center mb-4">
-          <h2 className="text-foreground mb-3">
-            {isWin ? "Great! we play again?" : "Better luck next time…"}
-          </h2>
+    <div className="fixed inset-0 bg-black/60 flex flex-col justify-end items-center px-6 pb-10 z-50">
+      {/* Close Button */}
+      <button 
+        onClick={onClose}
+        className="absolute top-4 right-4 bg-zinc-800 rounded-[20px] px-3 py-2 flex items-center gap-2"
+      >
+        <span className="text-white text-base">Close</span>
+        <div className="w-6 h-6 bg-neutral-600 rounded-full flex items-center justify-center">
+          <X className="w-4 h-4 text-white" />
         </div>
+      </button>
 
-        {/* Winner/Result Info */}
-        <div className="flex items-center justify-between p-3 rounded-lg bg-surface mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
-              <span className="caption text-text-secondary">
-                {isWin ? "Y" : "B"}
-              </span>
-            </div>
-            <span className="body font-medium">
-              {isWin ? "YOU" : "beatles"}
-            </span>
-            <Chip 
-              variant={isWin ? "green" : "gray"}
-              className="flex items-center gap-1"
-            >
-              {isWin ? (
-                <>
-                  <Medal className="w-3 h-3" />
-                  YOU WIN!!
-                </>
-              ) : (
-                "WIN!"
-              )}
-            </Chip>
+      <div className="w-full max-w-96 flex flex-col gap-20">
+        {/* Main Result Card */}
+        <div className="px-3.5 py-4 bg-zinc-900/50 rounded-[20px] backdrop-blur-sm flex flex-col items-center gap-5">
+          <div className="text-center text-neutral-50 text-xl leading-snug">
+            {isWin ? "Great! we play again?" : "Better luck next time..."}
           </div>
           
-          <Chip 
-            variant="gray" 
-            icon="star"
-            className={isWin ? "text-accent-green" : "text-foreground"}
-          >
-            {isWin ? `+${prize?.toLocaleString() || '3,423'}` : prize?.toLocaleString() || '3,423'}
-          </Chip>
-        </div>
-
-        {/* Your Result (for lose screen) */}
-        {!isWin && (
-          <div className="flex items-center justify-between p-3 rounded-lg bg-surface mb-4">
-            <Chip variant="red" className="flex items-center gap-1">
-              You lose
-            </Chip>
-            <Chip variant="red" icon="star" className="text-accent-red">
-              -{prize?.toLocaleString() || '600'}
-            </Chip>
+          {/* Winner Info */}
+          <div className="w-full px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                <span className="text-xs font-bold text-blue-600">
+                  {isWin ? "Y" : "TG"}
+                </span>
+              </div>
+              <span className="text-neutral-50 text-sm">
+                {isWin ? "YOU" : "@ergertrthr"}
+              </span>
+              <span className={`text-sm px-2 py-1 rounded ${isWin ? 'bg-green-600 text-white' : 'text-neutral-50'}`}>
+                {isWin ? "YOU WIN!!" : "WIN!"}
+              </span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <img src="/src/assets/icons/star.svg" className="w-5 h-5" alt="star" />
+              <span className="text-neutral-50 text-base">{prize?.toLocaleString() || '3,423'}</span>
+            </div>
           </div>
-        )}
-
-        {/* Game Info */}
-        <div className="text-center mb-4">
-          <span className="caption text-text-tertiary">
-            GAME #23245 • Yesterday – beatles 📶
-          </span>
-        </div>
-
-        {/* Countdown */}
-        <div className="text-center mb-4">
-          <span className="caption text-text-secondary">
-            will close in {countdown}s
-          </span>
+          
+          {/* Game Info */}
+          <div className="w-full flex justify-between items-center">
+            <span className="text-zinc-500 text-xs">GAME #23245</span>
+            <div className="flex items-center gap-1">
+              <span className="text-zinc-500 text-xs">Yesterday - beatles</span>
+              <img src="/src/assets/icons/music.svg" className="w-4 h-4" alt="music" />
+            </div>
+          </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="space-y-3">
-          <WaysButton variant="primary" onClick={onPlayAgain} className="w-full">
+        <div className="flex flex-col gap-5">
+          <button 
+            onClick={onPlayAgain}
+            className="w-full h-12 px-3 py-3.5 rounded-2xl text-white text-base font-semibold"
+            style={{
+              background: 'radial-gradient(458.72% 228.94% at 57.65% 24.39%, #444CE7 0%, #B83EFF 30.5%, #E58C4C 60.5%, #444CE7 93.5%), linear-gradient(116deg, #FFF -56.16%, #0078D2 28.08%, #8E4FF8 80.58%)',
+              boxShadow: '0px 5px 22px 0px rgba(207, 62, 255, 0.34)'
+            }}
+          >
             Play again
-          </WaysButton>
+          </button>
           
-          <div className="flex items-center gap-2">
-            <WaysButton variant="close" className="flex items-center gap-1.5">
-              <Trophy className="w-4 h-4" />
-              Leader
-            </WaysButton>
-            
-            <WaysButton 
-              variant="close" 
-              onClick={onShare}
-              className="flex items-center gap-1.5"
-            >
-              <Share className="w-4 h-4" />
-              Share results
-            </WaysButton>
-            
-            {!isWin && (
-              <Chip variant="gray" className="ml-auto">
-                -{prize?.toLocaleString() || '600'}
-              </Chip>
-            )}
+          <button 
+            onClick={onShare}
+            className="w-full h-12 px-3 py-3.5 bg-zinc-800 rounded-2xl flex items-center justify-center gap-2.5 text-white text-base font-semibold relative overflow-hidden"
+            style={{
+              backgroundImage: 'url(/src/assets/share_back.png)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}
+          >
+            <img src="/src/assets/icons/forward.svg" className="w-6 h-6" alt="forward" />
+            Share results
+          </button>
+          
+          <div className="px-3.5 pt-2.5 pb-0.5 bg-zinc-900/50 rounded-[20px] backdrop-blur-sm flex flex-col items-center">
+            <div className="text-center">
+              <span className="text-neutral-400 text-base">Share a story </span>
+              <span className="text-white text-base">1</span>
+              <span className="text-neutral-400 text-base">/3 times a day</span>
+            </div>
+            <div className="w-80 p-3 flex gap-2">
+              <div className="flex-1 h-[3px] bg-blue-500 rounded-sm" />
+              <div className="flex-1 h-[3px] bg-gray-600 rounded-sm" />
+              <div className="flex-1 h-[3px] bg-gray-600 rounded-sm" />
+            </div>
           </div>
-
-          {/* Hint Text */}
-          <div className="text-center">
-            <span className="micro text-text-tertiary">
-              You can share a story and get some stars back on your balance
-            </span>
+          
+          <div className="w-64 text-center text-neutral-50 text-sm mx-auto">
+            You can share a story and get some stars back on your balance
           </div>
         </div>
       </div>

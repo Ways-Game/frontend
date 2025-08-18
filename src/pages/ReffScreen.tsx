@@ -2,7 +2,7 @@ import React from "react"
 import { Chip } from "@/components/ui/ways-chip"
 import { WaysButton } from "@/components/ui/ways-button"
 import { PlayerItem } from "@/components/game/PlayerItem"
-import { Users, Star, Gift } from "lucide-react"
+import { Users, UserPlus, X } from "lucide-react"
 
 const referralUsers = [
   { name: "Alex", ballz: 10 },
@@ -12,105 +12,113 @@ const referralUsers = [
 
 export function ReffScreen() {
   return (
-    <div className="min-h-screen bg-background pb-20">
-      {/* Hero Banner */}
-      <div className="mx-4 mt-4 mb-4">
+    <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
+      <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5">
+        {/* Hero Banner */}
         <div 
-          className="relative h-24 rounded-2xl p-4 flex flex-col justify-center"
-          style={{ background: '#2B5BFF' }}
+          className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden"
+          style={{
+            backgroundImage: 'url(/src/assets/ref_back.png)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center'
+          }}
         >
-          <h1 className="text-foreground mb-2">Post videos and earn money</h1>
-          <WaysButton 
-            variant="secondary" 
-            className="self-start bg-white/10 border-none h-8 px-3 py-1.5 rounded-[10px]"
-          >
-            Earn money
-          </WaysButton>
+          <div className="text-neutral-50 text-3xl font-bold">
+            Post videos and earn money
+          </div>
+          <div className="flex ">
+            <button className="h-10 px-3 py-2 bg-white rounded-[20px]">
+              <span className="text-black text-base font-semibold">Earn money</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Referral Card */}
-      <div className="mx-4">
-        <div className="game-card">
+        {/* Main Content */}
+        <div className="flex-1 p-2.5 bg-zinc-900/70 rounded-[20px] flex flex-col gap-5">
           {/* User Info Row */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
-                <span className="caption text-text-secondary">U</span>
+          <div className="flex justify-between items-center h-8">
+            <div className="flex items-center gap-2.5 px-3 py-2">
+              <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                <span className="text-xs font-bold text-blue-600">TG</span>
               </div>
-              <span className="caption text-text-tertiary">@username</span>
+              <span className="text-neutral-50 text-sm">@bluryt</span>
             </div>
             
-            <Chip variant="blue" onClose={() => {}}>
-              XD...FEeF
-            </Chip>
+            <div className="px-1.5 py-2 bg-[#4378FF20]  rounded-[20px] flex items-center gap-1.5 h-8">
+              <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
+              <span className="text-blue-400 text-base font-semibold">XDE3...FEeF</span>
+              <div className="w-5 h-5 bg-[#4378FF20] rounded-full flex items-center justify-center">
+                <X className="w-3 h-3 text-blue-400" />
+              </div>
+            </div>
           </div>
 
           {/* Title */}
-          <div className="mb-4">
-            <p className="title text-foreground leading-relaxed">
-              invite referrals to earn 10% of their market buys
-            </p>
+          <div className="text-neutral-50 text-3xl font-bold">
+            invite refferals to earn 10% of their market buys
           </div>
 
-          {/* Metrics Row */}
-          <div className="flex items-center justify-between mb-4 gap-2">
-            <div className="flex items-center gap-1">
-              <Users className="w-4 h-4 text-text-secondary" />
-              <span className="caption text-text-secondary">invited users</span>
-              <span className="caption text-foreground font-semibold">0</span>
+          {/* Invited Users */}
+          <div className="flex flex-col gap-2">
+            <span className="text-neutral-500 text-xs">invited users</span>
+            <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2 w-fit">
+              <Users className="w-4 h-4 text-gray-400" />
+              <span className="text-neutral-50 text-sm">0</span>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <Chip variant="gray" className="flex items-center gap-1">
-                <Star className="w-3 h-3 text-gold fill-current" />
-                <span className="caption">Claimable</span>
-              </Chip>
-              
-              <span className="caption text-text-secondary">Total claimed</span>
+          </div>
+
+          {/* Claimable and Total */}
+          <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
+              <span className="text-neutral-500 text-xs">Claimable amount</span>
+              <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5 w-fit">
+                <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
+                <span className="text-neutral-50 text-sm">0</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="text-neutral-500 text-xs">Total claimed amount</span>
+              <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5 w-fit">
+                <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
+                <span className="text-neutral-50 text-sm">0</span>
+              </div>
             </div>
           </div>
 
           {/* Claim Button */}
-          <div className="mb-4">
-            <WaysButton variant="claim" className="flex items-center gap-1.5">
-              <Star className="w-4 h-4 text-gold fill-current" />
-              Claim starz
-            </WaysButton>
-          </div>
+          <button className="h-8 px-3 py-2 opacity-35 bg-white rounded-[20px] flex items-center gap-1.5 self-start">
+            <img src="/src/assets/icons/star.svg" className="w-4 h-4 brightness-0" alt="star" />
 
-          {/* Referral Users Section */}
-          <div className="mb-4">
-            <h3 className="title text-foreground mb-3">Referral users</h3>
-            <div className="space-y-0">
-              {referralUsers.map((user, index) => (
-                <React.Fragment key={user.name}>
-                  <PlayerItem
-                    name={user.name}
-                    ballz={user.ballz}
-                    isYou={false}
-                  />
-                  {index < referralUsers.length - 1 && (
-                    <div className="h-px bg-border mx-3" />
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
+            <span className="text-black text-base font-semibold">Claim starz</span>
+          </button>
 
-          {/* Invite Button */}
-          <WaysButton 
-            variant="primary" 
-            className="w-full"
-            style={{ 
-              background: 'hsl(var(--accent-blue))',
-              boxShadow: '0 8px 16px rgba(47, 134, 255, 0.35)'
-            }}
-          >
-            <Gift className="w-4 h-4" />
-            Invite friends
-          </WaysButton>
+          {/* Referral Users */}
+          <div className="flex flex-col gap-2">
+            <span className="text-neutral-500 text-xs">Refferal users</span>
+            {['@dgfrfdtgrt', '@ergertrthr', '@rr4544'].map((username, index) => (
+              <div key={username} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-bold text-blue-600">TG</span>
+                  </div>
+                  <span className="text-neutral-50 text-sm">{username}</span>
+                </div>
+                <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5">
+                  <span className="text-neutral-50 text-sm">+{[20, 204, 23323][index]}</span>
+                  <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+      </div>
+
+      {/* Invite Button */}
+      <div className="px-6 pb-3">
+        <button className="w-full h-12 px-3 py-3.5 bg-[#1B91FF] rounded-2xl flex items-center justify-center gap-2.5">
+          <UserPlus className="w-6 h-6 text-white" />
+          <span className="text-white text-base font-semibold">Invite friends</span>
+        </button>
       </div>
     </div>
   )

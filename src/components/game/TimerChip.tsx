@@ -1,6 +1,6 @@
 import React from "react"
 import { cn } from "@/lib/utils"
-import { Clock } from "lucide-react"
+import { Clock, Circle } from "lucide-react"
 
 interface TimerChipProps {
   seconds: number
@@ -23,42 +23,10 @@ interface CircularTimerProps {
 }
 
 export function CircularTimer({ seconds, totalSeconds, className }: CircularTimerProps) {
-  const radius = 14
-  const strokeWidth = 2
-  const normalizedRadius = radius - strokeWidth * 2
-  const circumference = normalizedRadius * 2 * Math.PI
-  const progress = ((totalSeconds - seconds) / totalSeconds) * 100
-  const strokeDasharray = `${(progress / 100) * circumference} ${circumference}`
-
   return (
-    <div className={cn("relative w-7 h-7", className)}>
-      <svg
-        height={radius * 2}
-        width={radius * 2}
-        className="transform -rotate-90"
-      >
-        <circle
-          stroke="hsl(var(--border))"
-          fill="transparent"
-          strokeWidth={strokeWidth}
-          r={normalizedRadius}
-          cx={radius}
-          cy={radius}
-        />
-        <circle
-          stroke="hsl(var(--accent-yellow))"
-          fill="transparent"
-          strokeWidth={strokeWidth}
-          strokeDasharray={strokeDasharray}
-          strokeLinecap="round"
-          r={normalizedRadius}
-          cx={radius}
-          cy={radius}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="micro text-foreground font-medium">{seconds}</span>
-      </div>
+    <div className={cn("flex justify-start items-center gap-0.5", className)}>
+      <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
+      <div className="text-center text-neutral-50 text-sm leading-snug">{seconds}</div>
     </div>
   )
 }
