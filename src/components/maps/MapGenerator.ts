@@ -32,22 +32,20 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
   // Clear stage
   app.stage.removeChildren();
 
-  // Create walls - увеличены в 3 раза
-  const leftWall = new PIXI.Graphics();
-  leftWall.rect(0, 0, 60, 4000).fill(0x16213e);
-  app.stage.addChild(leftWall);
+  // Убрали боковые стенки
 
-  const rightWall = new PIXI.Graphics();
-  rightWall.rect(mapWidth - 60, 0, 60, 4000).fill(0x16213e);
-  app.stage.addChild(rightWall);
-
-  // Gate
-  const gate = new PIXI.Graphics();
-  gate.rect(mapWidth/2 - 100, 142, 200, 15).fill(0x666666);
-  app.stage.addChild(gate);
+  // Стартовая секция на всю высоту экрана
+  const screenHeight = typeof window !== 'undefined' ? window.innerHeight - 80 : 800;
+  const startSection = new PIXI.Graphics();
+  startSection.rect(0, 0, mapWidth, screenHeight).fill(0x2c3e50);
+  app.stage.addChild(startSection);
+  
+  // Простая линия-барьер
+  const gateBarrier = { x: mapWidth / 2, y: screenHeight, width: mapWidth, height: 20, type: 'barrier' as const };
+  obstacles.push(gateBarrier);
 
   // Generate random blocks with max 2 repetitions per block type
-  let currentY = 300;
+  let currentY = screenHeight + 100; // Начинаем после стартовой секции
   const numBlocks = 6 + Math.floor(rng() * 3); // 10-12 blocks
   const blockCounts = new Map<string, number>();
   const selectedBlocks: typeof MAP_BLOCKS[0][] = [];
@@ -181,5 +179,8 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
   const winY = finishY + stripeHeight;
   const deathY = winY + 200;
 
-  return { obstacles, spinners, mapWidth, mapHeight: currentY + funnelHeight + verticalPassage + 300, winY, deathY };
+  const mapData = { obstacles, spinners, mapWidth, mapHeight: currentY + funnelHeight + verticalPassage + 300, winY, deathY };
+  (mapData as any).gateBarrier = gateBarrier;
+  (mapData as any).screenHeight = screenHeight;
+  return mapData;
 };

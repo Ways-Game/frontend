@@ -106,8 +106,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         indicator.fill(0xFFD700).stroke({ width: 2, color: 0xFFA500 });
         indicator.visible = false;
         
-        const startX = 600 + (rng() - 0.5) * 20;
-        const startY = 100;
+        const screenHeight = (mapData as any).screenHeight || 800;
+        const startX = 50 + rng() * 1100; // По всей ширине поля
+        const startY = 50 + rng() * (screenHeight - 100); // По всей высоте экрана
         ballGraphics.position.set(startX, startY);
         indicator.position.set(startX, startY - 40);
         
@@ -129,8 +130,55 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       ballsRef.current = newBalls;
-      setGameState('playing');
-      onGameStart?.();
+      setGameState('waiting'); // Убираем черную модалку во время отсчета
+      
+      // Красивый отсчет перед началом игры
+      const countdown = new PIXI.Text({
+        text: '3',
+        style: { 
+          fontSize: 150, 
+          fill: 0xFFD700, 
+          fontWeight: 'bold', 
+          align: 'center',
+          stroke: 0x000000,
+          strokeThickness: 5
+        }
+      });
+      countdown.anchor.set(0.5);
+      countdown.position.set(mapData.mapWidth / 2, 400);
+      app.stage.addChild(countdown);
+      
+      let count = 3;
+      let countdownTimer: NodeJS.Timeout;
+      
+      const runCountdown = () => {
+        if (count > 0) {
+          countdown.text = count.toString();
+          count--;
+          countdownTimer = setTimeout(runCountdown, 1000);
+        } else {
+          countdown.text = "LET'S GO!";
+          
+          // Убираем линию-барьер
+          const gateBarrier = (mapData as any).gateBarrier;
+          if (gateBarrier) {
+            const index = obstaclesRef.current.indexOf(gateBarrier);
+            if (index > -1) {
+              obstaclesRef.current.splice(index, 1);
+            }
+          }
+          
+          countdownTimer = setTimeout(() => {
+            if (app.stage.children.includes(countdown)) {
+              app.stage.removeChild(countdown);
+            }
+            setGameState('playing');
+            onGameStart?.();
+          }, 1000);
+        }
+      };
+      
+      runCountdown();
     };
 
     const startGame = () => {
@@ -212,8 +260,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             
             if (!ball.bounceCount) ball.bounceCount = 0;
             
+            // Убираем все закручивание - только естественная физика
+            
             // Apply gravity and friction
-            ball.dy += 0.11; // Увеличена гравитация
+            ball.dy += 0.11;
             ball.dx *= 0.998;
             ball.dy *= 0.998;
             
@@ -250,28 +300,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   if (Math.abs(dx) < halfW && Math.abs(dy) < halfH) {
                     ball.bounceCount++;
                     
-                    // Простое отражение без вибрации
-                    if (Math.abs(dx) > Math.abs(dy)) {
-                      ball.dx = -ball.dx * 0.8;
-                      ball.x = dx > 0 ? obstacle.x + halfW : obstacle.x - halfW;
+                    // Особая логика для линии-барьера (ворот)
+                    const screenHeight = mapDataRef.current ? (mapDataRef.current as any).screenHeight || 800 : 800;
+                    if (obstacle.y === screenHeight) {
+                      // Мяч пытается пройти через линию - останавливаем
+                      ball.y = screenHeight - 10; // Останавливаем над линией
+                      ball.dy = 0; // Останавливаем вертикальное движение
                     } else {
-                      ball.dy = -ball.dy * 0.8;
-                      ball.y = dy > 0 ? obstacle.y + halfH : obstacle.y - halfH;
-                    }
-                    
-                    // Простое постепенное замедление после многих отскоков
-                    if (ball.bounceCount > 15) {
-                      // Легкое замедление только после многих отскоков
-                      ball.dx *= 0.98;
-                      ball.dy *= 0.98;
-                    }
-                    
-                    // Предотвращение просачивания - отталкиваем мяч подальше
-                    const pushDistance = 5;
-                    if (Math.abs(dx) > Math.abs(dy)) {
-                      ball.x += dx > 0 ? pushDistance : -pushDistance;
-                    } else {
-                      ball.y += dy > 0 ? pushDistance : -pushDistance;
+                      // Обычное отражение для других барьеров
+                      if (Math.abs(dx) > Math.abs(dy)) {
+                        ball.dx = -ball.dx * 0.8;
+                        ball.x = dx > 0 ? obstacle.x + halfW : obstacle.x - halfW;
+                      } else {
+                        ball.dy = -ball.dy * 0.8;
+                        ball.y = dy > 0 ? obstacle.y + halfH : obstacle.y - halfH;
+                      }
                     }
                     
                     collided = true;
@@ -295,6 +338,29 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 }
               }
             }
+            
+            // Коллизии между мячами - упрощенная версия
+            ballsRef.current.forEach(otherBall => {
+              if (otherBall === ball || otherBall.finished) return;
+              
+              const dx = ball.x - otherBall.x;
+              const dy = ball.y - otherBall.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              
+              if (distance < 48) {
+                const angle = Math.atan2(dy, dx);
+                ball.x = otherBall.x + Math.cos(angle) * 48;
+                ball.y = otherBall.y + Math.sin(angle) * 48;
+                
+                // Простой отскок
+                const tempDx = ball.dx;
+                const tempDy = ball.dy;
+                ball.dx = otherBall.dx * 0.9;
+                ball.dy = otherBall.dy * 0.9;
+                otherBall.dx = tempDx * 0.9;
+                otherBall.dy = tempDy * 0.9;
+              }
+            });
             
             // Boundary checks - обновлены для увеличенных стенок
             if (ball.x < 84) { ball.x = 84; ball.dx = Math.abs(ball.dx) * 0.8; }
@@ -350,7 +416,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
           
           // Scale and center the game field - keep same zoom for wider map
-          const scale = deviceWidth / 800;
+          const scale = deviceWidth / 1000;
           pixiApp.stage.scale.set(scale);
           
           // Camera follow and leader indicator

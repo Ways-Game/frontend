@@ -119,7 +119,7 @@ export function GameScreen() {
       </div>
 
       {/* Bottom Controls */}
-      <div className="absolute bottom-16 left-0 right-0 z-20">
+      <div className="absolute bottom-20 left-0 right-0 z-20">
         <div className=" flex items-center justify-between px-4 py-3">
           <WaysButton variant="close" className=" h-10 flex items-center gap-1.5 bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-4 py-3">
             <Trophy className="w-4 h-4" />
