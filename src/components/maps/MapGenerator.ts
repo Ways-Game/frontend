@@ -121,7 +121,7 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
     
     // Очень толстый барьер для быстрых мячей
     obstacles.push({
-      x: x - 25,
+      x: x - 45,
       y: y,
       width: 80,
       height: 50,
@@ -139,7 +139,7 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
     
     // Очень толстый барьер для быстрых мячей
     obstacles.push({
-      x: x + 25,
+      x: x + 45,
       y: y,
       width: 80,
       height: 50,

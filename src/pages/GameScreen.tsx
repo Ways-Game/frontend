@@ -19,6 +19,8 @@ export function GameScreen() {
   const [gameModal, setGameModal] = useState<"win" | "lose" | null>(null)
   const [gameResult, setGameResult] = useState<{ result: 'win' | 'lose'; prize?: number } | null>(null)
   const [gameStarted, setGameStarted] = useState(false)
+  const [showCountdown, setShowCountdown] = useState(false)
+  const [countdownText, setCountdownText] = useState('3')
   const [ballImages, setBallImages] = useState<string[]>([])
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export function GameScreen() {
     setGameResult(null)
     setTimeLeft(60)
     setGameStarted(false)
+    setShowCountdown(false)
     gameCanvasRef.current?.resetGame()
   }
 
@@ -70,7 +73,24 @@ export function GameScreen() {
   }
 
   const startGame = () => {
-    gameCanvasRef.current?.startGame()
+    setShowCountdown(true)
+    
+    // Countdown sequence
+    let count = 3
+    const countdown = () => {
+      if (count > 0) {
+        setCountdownText(count.toString())
+        count--
+        setTimeout(countdown, 1000)
+      } else {
+        setCountdownText("LET'S GO!")
+        setTimeout(() => {
+          setShowCountdown(false)
+          gameCanvasRef.current?.startGame()
+        }, 1000)
+      }
+    }
+    countdown()
   }
 
   const testModal = () => {
@@ -93,11 +113,23 @@ export function GameScreen() {
       />
       
       {/* Start Game Button */}
-      {!gameStarted && (
+      {!gameStarted && !showCountdown && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-30">
           <WaysButton onClick={startGame} className="px-8 py-4 text-lg">
             Start Game
           </WaysButton>
+        </div>
+      )}
+      
+      {/* Countdown Overlay */}
+      {showCountdown && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-40">
+          <div className="text-center">
+            <div className="text-8xl font-black text-transparent bg-gradient-to-b from-yellow-400 via-yellow-500 to-orange-600 bg-clip-text animate-pulse drop-shadow-2xl">
+              {countdownText}
+            </div>
+            <div className="w-32 h-1 bg-gradient-to-r from-yellow-400 to-orange-600 mx-auto mt-4 rounded-full animate-pulse"></div>
+          </div>
         </div>
       )}
 

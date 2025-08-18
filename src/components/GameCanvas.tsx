@@ -130,55 +130,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       ballsRef.current = newBalls;
-      setGameState('waiting'); // Убираем черную модалку во время отсчета
-      
-      // Красивый отсчет перед началом игры
-      const countdown = new PIXI.Text({
-        text: '3',
-        style: { 
-          fontSize: 150, 
-          fill: 0xFFD700, 
-          fontWeight: 'bold', 
-          align: 'center',
-          stroke: 0x000000,
-          strokeThickness: 5
+      // Убираем линию-барьер сразу
+      const gateBarrier = (mapData as any).gateBarrier;
+      if (gateBarrier) {
+        const index = obstaclesRef.current.indexOf(gateBarrier);
+        if (index > -1) {
+          obstaclesRef.current.splice(index, 1);
         }
-      });
-      countdown.anchor.set(0.5);
-      countdown.position.set(mapData.mapWidth / 2, 400);
-      app.stage.addChild(countdown);
+      }
       
-      let count = 3;
-      let countdownTimer: NodeJS.Timeout;
-      
-      const runCountdown = () => {
-        if (count > 0) {
-          countdown.text = count.toString();
-          count--;
-          countdownTimer = setTimeout(runCountdown, 1000);
-        } else {
-          countdown.text = "LET'S GO!";
-          
-          // Убираем линию-барьер
-          const gateBarrier = (mapData as any).gateBarrier;
-          if (gateBarrier) {
-            const index = obstaclesRef.current.indexOf(gateBarrier);
-            if (index > -1) {
-              obstaclesRef.current.splice(index, 1);
-            }
-          }
-          
-          countdownTimer = setTimeout(() => {
-            if (app.stage.children.includes(countdown)) {
-              app.stage.removeChild(countdown);
-            }
-            setGameState('playing');
-            onGameStart?.();
-          }, 1000);
-        }
-      };
-      
-      runCountdown();
+      setGameState('playing');
+      onGameStart?.();
     };
 
     const startGame = () => {
@@ -249,97 +211,141 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         let frameCount = 0;
         
-        // Optimized physics update function
+        // Professional physics update function
         const updateBalls = () => {
           if (!rngRef.current) return;
-          
-          
           
           ballsRef.current.forEach(ball => {
             if (ball.finished) return;
             
             if (!ball.bounceCount) ball.bounceCount = 0;
             
-            // Убираем все закручивание - только естественная физика
+            // Apply gravity with realistic acceleration
+            ball.dy += 0.15;
             
-            // Apply gravity and friction
-            ball.dy += 0.11;
-            ball.dx *= 0.998;
-            ball.dy *= 0.998;
+            // Air resistance (minimal)
+            ball.dx *= 0.9995;
+            ball.dy *= 0.9995;
+            
+            // Store previous position for collision detection
+            const prevX = ball.x;
+            const prevY = ball.y;
             
             // Update position
             ball.x += ball.dx;
             ball.y += ball.dy;
             
-            // Проверка коллизий каждый кадр для быстрых мячей
-            {
-              let collided = false;
+            // Collision detection with obstacles
+            for (let i = 0; i < obstaclesRef.current.length; i++) {
+              const obstacle = obstaclesRef.current[i];
+              if (obstacle.destroyed) continue;
               
-              for (let i = 0; i < obstaclesRef.current.length && !collided; i++) {
-                const obstacle = obstaclesRef.current[i];
-                if (obstacle.destroyed) continue;
-                
+              if (obstacle.type === 'peg') {
                 const dx = ball.x - obstacle.x;
                 const dy = ball.y - obstacle.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
                 
-                if (obstacle.type === 'peg') {
-                  const distance = dx * dx + dy * dy; // Используем квадрат расстояния
-                  if (distance < 1296) { // 36^2
-                    const angle = Math.atan2(dy, dx);
-                    ball.x = obstacle.x + Math.cos(angle) * 36;
-                    ball.y = obstacle.y + Math.sin(angle) * 36;
-                    const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
-                    ball.dx = Math.cos(angle) * speed * 0.8;
-                    ball.dy = Math.sin(angle) * speed * 0.8;
-                    collided = true;
-                  }
-                } else if (obstacle.type === 'barrier') {
-                  const halfW = obstacle.width / 2 + 24;
-                  const halfH = obstacle.height / 2 + 24;
+                if (distance < 36) { // 12 + 24 (peg radius + ball radius)
+                  // Calculate collision normal
+                  const normalX = dx / distance;
+                  const normalY = dy / distance;
                   
-                  if (Math.abs(dx) < halfW && Math.abs(dy) < halfH) {
-                    ball.bounceCount++;
-                    
-                    // Особая логика для линии-барьера (ворот)
-                    const screenHeight = mapDataRef.current ? (mapDataRef.current as any).screenHeight || 800 : 800;
-                    if (obstacle.y === screenHeight) {
-                      // Мяч пытается пройти через линию - останавливаем
-                      ball.y = screenHeight - 10; // Останавливаем над линией
-                      ball.dy = 0; // Останавливаем вертикальное движение
-                    } else {
-                      // Обычное отражение для других барьеров
-                      if (Math.abs(dx) > Math.abs(dy)) {
-                        ball.dx = -ball.dx * 0.8;
-                        ball.x = dx > 0 ? obstacle.x + halfW : obstacle.x - halfW;
-                      } else {
-                        ball.dy = -ball.dy * 0.8;
-                        ball.y = dy > 0 ? obstacle.y + halfH : obstacle.y - halfH;
-                      }
-                    }
-                    
-                    collided = true;
+                  // Move ball outside of peg
+                  ball.x = obstacle.x + normalX * 36;
+                  ball.y = obstacle.y + normalY * 36;
+                  
+                  // Reflect velocity with energy loss
+                  const dotProduct = ball.dx * normalX + ball.dy * normalY;
+                  ball.dx = ball.dx - 2 * dotProduct * normalX;
+                  ball.dy = ball.dy - 2 * dotProduct * normalY;
+                  
+                  // Energy loss on bounce - увеличиваю отскок
+                  const restitution = 0.85;
+                  ball.dx *= restitution;
+                  ball.dy *= restitution;
+                }
+              } else if (obstacle.type === 'barrier') {
+                const halfW = obstacle.width / 2;
+                const halfH = obstacle.height / 2;
+                
+                // Check if ball is inside barrier bounds
+                if (Math.abs(ball.x - obstacle.x) < halfW + 24 && 
+                    Math.abs(ball.y - obstacle.y) < halfH + 24) {
+                  
+                  // Special case for gate barrier
+                  const screenHeight = mapDataRef.current ? (mapDataRef.current as any).screenHeight || 800 : 800;
+                  if (obstacle.y === screenHeight) {
+                    ball.y = screenHeight - 24;
+                    ball.dy = 0;
+                    continue;
                   }
-                } else if (obstacle.type === 'brick' && Math.abs(dx) < obstacle.width / 2 + 24 && Math.abs(dy) < obstacle.height / 2 + 24) {
+                  
+                  // Calculate which side was hit
+                  const overlapX = (halfW + 24) - Math.abs(ball.x - obstacle.x);
+                  const overlapY = (halfH + 24) - Math.abs(ball.y - obstacle.y);
+                  
+                  if (overlapX < overlapY) {
+                    // Hit left or right side
+                    if (ball.x < obstacle.x) {
+                      ball.x = obstacle.x - halfW - 24;
+                    } else {
+                      ball.x = obstacle.x + halfW + 24;
+                    }
+                    ball.dx = -ball.dx * 0.85;
+                  } else {
+                    // Hit top or bottom side
+                    if (ball.y < obstacle.y) {
+                      ball.y = obstacle.y - halfH - 24;
+                    } else {
+                      ball.y = obstacle.y + halfH + 24;
+                    }
+                    ball.dy = -ball.dy * 0.85;
+                  }
+                }
+              } else if (obstacle.type === 'brick') {
+                const halfW = obstacle.width / 2;
+                const halfH = obstacle.height / 2;
+                
+                if (Math.abs(ball.x - obstacle.x) < halfW + 24 && 
+                    Math.abs(ball.y - obstacle.y) < halfH + 24) {
                   obstacle.destroyed = true;
                   if (obstacle.graphics) pixiApp.stage.removeChild(obstacle.graphics);
-                  ball.dy *= -0.8;
-                  collided = true;
-                } else if (obstacle.type === 'spinner') {
-                  const distance = dx * dx + dy * dy;
-                  if (distance < 3600) { // 60^2
-                    const angle = Math.atan2(dy, dx);
-                    ball.x = obstacle.x + Math.cos(angle) * 60;
-                    ball.y = obstacle.y + Math.sin(angle) * 60;
-                    const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
-                    ball.dx = Math.cos(angle) * speed * 0.9;
-                    ball.dy = Math.sin(angle) * speed * 0.9;
-                    collided = true;
+                  
+                  // Bounce off destroyed brick
+                  const overlapX = (halfW + 24) - Math.abs(ball.x - obstacle.x);
+                  const overlapY = (halfH + 24) - Math.abs(ball.y - obstacle.y);
+                  
+                  if (overlapX < overlapY) {
+                    ball.dx = -ball.dx * 0.8;
+                  } else {
+                    ball.dy = -ball.dy * 0.8;
                   }
+                }
+              } else if (obstacle.type === 'spinner') {
+                const dx = ball.x - obstacle.x;
+                const dy = ball.y - obstacle.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 48) { // Уменьшаю радиус коллизии воронки
+                  const normalX = dx / distance;
+                  const normalY = dy / distance;
+                  
+                  // Move ball outside spinner
+                  ball.x = obstacle.x + normalX * 48;
+                  ball.y = obstacle.y + normalY * 48;
+                  
+                  // Add spin effect
+                  const tangentX = -normalY;
+                  const tangentY = normalX;
+                  const spinForce = 2;
+                  
+                  ball.dx = normalX * Math.abs(ball.dx) * 0.85 + tangentX * spinForce;
+                  ball.dy = normalY * Math.abs(ball.dy) * 0.85 + tangentY * spinForce;
                 }
               }
             }
             
-            // Коллизии между мячами - упрощенная версия
+            // Ball-to-ball collisions with proper physics
             ballsRef.current.forEach(otherBall => {
               if (otherBall === ball || otherBall.finished) return;
               
@@ -347,24 +353,44 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               const dy = ball.y - otherBall.y;
               const distance = Math.sqrt(dx * dx + dy * dy);
               
-              if (distance < 48) {
-                const angle = Math.atan2(dy, dx);
-                ball.x = otherBall.x + Math.cos(angle) * 48;
-                ball.y = otherBall.y + Math.sin(angle) * 48;
+              if (distance < 48 && distance > 0) {
+                const normalX = dx / distance;
+                const normalY = dy / distance;
                 
-                // Простой отскок
-                const tempDx = ball.dx;
-                const tempDy = ball.dy;
-                ball.dx = otherBall.dx * 0.9;
-                ball.dy = otherBall.dy * 0.9;
-                otherBall.dx = tempDx * 0.9;
-                otherBall.dy = tempDy * 0.9;
+                // Separate balls
+                const overlap = 48 - distance;
+                ball.x += normalX * overlap * 0.5;
+                ball.y += normalY * overlap * 0.5;
+                otherBall.x -= normalX * overlap * 0.5;
+                otherBall.y -= normalY * overlap * 0.5;
+                
+                // Calculate relative velocity
+                const relativeVelX = ball.dx - otherBall.dx;
+                const relativeVelY = ball.dy - otherBall.dy;
+                const relativeSpeed = relativeVelX * normalX + relativeVelY * normalY;
+                
+                if (relativeSpeed > 0) return; // Balls moving apart
+                
+                // Collision response (assuming equal mass)
+                const restitution = 0.8;
+                const impulse = relativeSpeed * restitution;
+                
+                ball.dx -= impulse * normalX * 0.5;
+                ball.dy -= impulse * normalY * 0.5;
+                otherBall.dx += impulse * normalX * 0.5;
+                otherBall.dy += impulse * normalY * 0.5;
               }
             });
             
-            // Boundary checks - обновлены для увеличенных стенок
-            if (ball.x < 84) { ball.x = 84; ball.dx = Math.abs(ball.dx) * 0.8; }
-            if (ball.x > 1116) { ball.x = 1116; ball.dx = -Math.abs(ball.dx) * 0.8; }
+            // Boundary collisions with proper physics
+            if (ball.x < 24) { 
+              ball.x = 24; 
+              ball.dx = Math.abs(ball.dx) * 0.85; 
+            }
+            if (ball.x > 1176) { 
+              ball.x = 1176; 
+              ball.dx = -Math.abs(ball.dx) * 0.85; 
+            }
             
             // Check win/death zones - dynamic based on map
             if (mapDataRef.current) {
