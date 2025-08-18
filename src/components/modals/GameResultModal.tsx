@@ -51,23 +51,24 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose }: 
           </div>
           
           {/* Winner Info */}
-          <div className="w-full px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
+          <div className={`w-full px-2.5 py-2 font-black ${isWin ? 'bg-green-600 text-white' : ' bg-white/5 text-neutral-50'}  rounded-[37px] flex justify-between items-center`}>
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
                 <span className="text-xs font-bold text-blue-600">
                   {isWin ? "Y" : "TG"}
                 </span>
               </div>
-              <span className="text-neutral-50 text-sm">
+              <span className=" text-sm">
                 {isWin ? "YOU" : "@ergertrthr"}
               </span>
-              <span className={`text-sm px-2 py-1 rounded ${isWin ? 'bg-green-600 text-white' : 'text-neutral-50'}`}>
-                {isWin ? "YOU WIN!!" : "WIN!"}
+              <span className={`text-sm py-1 rounded `}>
+                WIN!{isWin ? "!" : ""}
               </span>
             </div>
             <div className="flex items-center gap-0.5">
               <img src="/src/assets/icons/star.svg" className="w-5 h-5" alt="star" />
-              <span className="text-neutral-50 text-base">{prize?.toLocaleString() || '3,423'}</span>
+
+              <span className="text-base">{`${isWin ? '+' : ''}${prize?.toLocaleString() || '3,423'}`}</span>
             </div>
           </div>
           

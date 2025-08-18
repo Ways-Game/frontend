@@ -43,20 +43,20 @@ export function TabBar() {
   
   const activeTab = getActiveTab()
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-[60px] bg-bg-elev-1 border-t border-border">
+    <div className="fixed bottom-0 left-0 right-0 bg-[#00000090] h-[80px] border-border z-50 py-2">
       <div className="flex items-center justify-around h-full px-4">
         {tabs.map(({ id, label, icon: Icon }) => (
-          <button
+          <div
             key={id}
-            onClick={() => handleTabChange(id)}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 px-3 py-2 transition-colors",
-              activeTab === id ? "text-foreground" : "text-tertiary"
+              "w-16 h-16 inline-flex flex-col justify-center items-center gap-1 transition-colors cursor-pointer",
+              activeTab === id ? "bg-zinc-800 rounded-3xl text-white" : "text-gray-400"
             )}
+            onClick={() => handleTabChange(id)}
           >
-            <Icon className="w-[22px] h-[22px]" />
-            <span className="micro">{label}</span>
-          </button>
+            <Icon className="w-6 h-6" />
+            <span className="text-xs font-bold">{label}</span>
+          </div>
         ))}
       </div>
     </div>

@@ -72,6 +72,8 @@
     --input: var(--chip-gray);
     --ring: var(--accent-purple);
     --radius: 0.875rem;
+
+    font-family: "SF Pro Display", "SF Pro Icons", "SF Pro Text", "Helvetica Neue", "Helvetica", "Arial", sans-serif;
   }
 }
 

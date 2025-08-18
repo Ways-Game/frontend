@@ -88,13 +88,14 @@ export function PvPScreen() {
       <div className="px-2.5 pt-3.5 flex flex-col justify-center items-end gap-3">
         <div className="w-full flex justify-start items-center gap-5 relative">
           <div className="flex-1 relative flex justify-start items-center gap-3 overflow-hidden">
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide">
+            <div className="flex gap-3 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               {[24, 15, 8, 32, 12].map((count, index) => (
-                <div key={index} className="h-8 px-3 py-2 bg-red-500 rounded-[20px] flex items-center gap-2 relative overflow-hidden flex-shrink-0">
+                <div key={index} onClick={handleStartGame} className="h-8 px-3 py-2 bg-red-500 rounded-[20px] flex items-center gap-2 relative overflow-hidden flex-shrink-0">
                   <div 
-                    className="absolute inset-0 bg-white/20 transition-all duration-10000"
+                    className="absolute inset-0 bg-white/20 transition-all duration-500 ease-out"
                     style={{
-                      width: `${((30 - timeLeft) / 30) * 100}%`
+                      width: `${((30 - timeLeft) / 30) * 100}%`,
+  
                     }}
                   />
                   <div className="flex items-center gap-1.5 relative z-10">
@@ -107,7 +108,7 @@ export function PvPScreen() {
                 </div>
               ))}
             </div>
-            <div className="w-5 h-8 bg-gradient-to-l from-black to-black/0 absolute right-0" />
+            <div className="w-5 h-8 bg-gradient-to-l from-black to-black/0 absolute right-[-2px]" />
           </div>
           <button 
             onClick={handleConnect}
