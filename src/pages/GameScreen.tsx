@@ -21,7 +21,6 @@ export function GameScreen() {
   const [gameStarted, setGameStarted] = useState(false)
   const [showCountdown, setShowCountdown] = useState(false)
   const [countdownText, setCountdownText] = useState('3')
-  const [ballImages, setBallImages] = useState<string[]>([])
 
   useEffect(() => {
     if (!gameStarted) return
@@ -108,7 +107,6 @@ export function GameScreen() {
         onBallWin={handleBallWin}
         onGameStart={handleGameStart}
         onGameEnd={handleGameEnd}
-        ballImages={ballImages}
         className="absolute inset-0 w-full h-full"
       />
       
@@ -141,7 +139,10 @@ export function GameScreen() {
           </Chip>
           
           <div className="bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-3 py-2">
-            <CircularTimer seconds={timeLeft} totalSeconds={60} />
+            <div className="flex justify-start items-center gap-0.5">
+              <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
+              <div className="text-center text-neutral-50 text-sm leading-snug">{250}</div>
+            </div>
           </div>
           
           <div className="flex items-center gap-2">

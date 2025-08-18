@@ -397,9 +397,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               const { winY, deathY, mapWidth } = mapDataRef.current;
               
               if (ball.y > winY && ball.y < winY + 30) {
-                if (ball.x > mapWidth/2 - 80 && ball.x < mapWidth/2 + 80 && !actualWinnersRef.current.includes(ball.id)) {
-                  // Win zone
-                  actualWinnersRef.current = [...actualWinnersRef.current, ball.id];
+                if (ball.x > mapWidth/2 - 80 && ball.x < mapWidth/2 + 80 && actualWinnersRef.current.length === 0) {
+                  // Первый победитель - сразу заканчиваем игру
+                  actualWinnersRef.current = [ball.id];
                   setActualWinners(actualWinnersRef.current);
                   ball.finished = true;
                   
@@ -407,10 +407,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     onBallWin(ball.id, ball.playerId);
                   }
                   
-                  if (actualWinnersRef.current.length >= 3) {
-                    setGameState('finished');
-                    onGameEnd?.();
-                  }
+                  setGameState('finished');
+                  onGameEnd?.();
                 }
               }
               
@@ -436,7 +434,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         // Animation loop
         const gameLoop = () => {
-          // Always update balls if they exist
           if (ballsRef.current.length > 0) {
             updateBalls();
           }

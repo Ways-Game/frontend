@@ -90,25 +90,25 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
   blueFunnel.beginFill(0x4ecdc4);
   
   // Левая часть
-  blueFunnel.moveTo(60, topY);
+  blueFunnel.moveTo(-5, topY);
   blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, bottomY);
   blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, passageBottomY);
-  blueFunnel.lineTo(60, passageBottomY);
+  blueFunnel.lineTo(-5, passageBottomY);
   blueFunnel.closePath();
   
   // Правая часть
-  blueFunnel.moveTo(mapWidth - 60, topY);
+  blueFunnel.moveTo(mapWidth + 5, topY);
   blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, bottomY);
   blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, passageBottomY);
-  blueFunnel.lineTo(mapWidth - 60, passageBottomY);
+  blueFunnel.lineTo(mapWidth + 5, passageBottomY);
   blueFunnel.closePath();
   
   blueFunnel.endFill();
   app.stage.addChild(blueFunnel);
 
   // Физика воронки - множество маленьких барьеров вдоль линий
-  const leftTopX = 60;
-  const rightTopX = mapWidth - 60;
+  const leftTopX = -5; // Увеличиваю влево еще на 25
+  const rightTopX = mapWidth + 5; // Увеличиваю вправо еще на 25
   const leftBottomX = mapWidth / 2 - funnelWidthBottom / 2;
   const rightBottomX = mapWidth / 2 + funnelWidthBottom / 2;
   
