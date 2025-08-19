@@ -1,6 +1,15 @@
 import { Player, GameData, UserStats } from './mockApi';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+export interface UserProfile {
+  id: number;
+  username?: string;
+  balance: number;
+  start_link: string;
+  balls_count: number;
+  referrers_id?: number[];
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 class ApiService {
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -51,6 +60,10 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ gameId }),
     });
+  }
+
+  async getUserProfile(id: number): Promise<UserProfile> {
+    return this.request<UserProfile>(`/profile/me/${id}`);
   }
 }
 

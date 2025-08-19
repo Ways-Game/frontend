@@ -32,6 +32,15 @@ export interface ReferralUser {
   joinedAt: string
 }
 
+export interface UserProfile {
+  id: number
+  username?: string
+  balance: number
+  start_link: string
+  balls_count: number
+  referrers_id?: number[]
+}
+
 // Mock data
 const mockPlayers: Player[] = [
   { id: '1', name: 'YOU', ballz: 20, isYou: true },
@@ -154,5 +163,18 @@ export class MockApi {
     }
     
     return { success: false, amount: 0 }
+  }
+
+  static async getUserProfile(id: number): Promise<UserProfile> {
+    await new Promise(resolve => setTimeout(resolve, 200))
+    
+    return {
+      id,
+      username: 'user_' + id,
+      balance: mockUserStats.balance,
+      start_link: `https://t.me/waysBallBot?start=${id}`,
+      balls_count: 20,
+      referrers_id: [1, 2, 3]
+    }
   }
 }

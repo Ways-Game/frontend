@@ -2,14 +2,15 @@ import React, { useState, useEffect } from "react"
 import { Chip } from "@/components/ui/ways-chip"
 import { WaysButton } from "@/components/ui/ways-button"
 import { PlayerItem } from "@/components/game/PlayerItem"
-import { Users, UserPlus, X } from "lucide-react"
+import { Users, UserPlus, X, User, Link } from "lucide-react"
 import { useTelegram } from "@/hooks/useTelegram"
-import { MockApi, type ReferralUser, type UserStats } from "@/services/mockApi"
+import { MockApi, type ReferralUser, type UserStats, type UserProfile } from "@/services/mockApi"
 
 export function ReffScreen() {
-  const { user, getUserDisplayName, shareReferralLink, inviteFriends } = useTelegram()
+  const { user, getUserDisplayName, shareReferralLink, inviteFriends, getUserProfile } = useTelegram()
   const [referralUsers, setReferralUsers] = useState<ReferralUser[]>([])
   const [userStats, setUserStats] = useState<UserStats | null>(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -21,6 +22,11 @@ export function ReffScreen() {
         ])
         setReferralUsers(users)
         setUserStats(stats)
+        
+        if (user?.id) {
+          const profile = await getUserProfile(user.id)
+          setUserProfile(profile)
+        }
       } catch (error) {
         console.error('Failed to load referral data:', error)
       } finally {
@@ -29,7 +35,7 @@ export function ReffScreen() {
     }
 
     loadData()
-  }, [])
+  }, [user, getUserProfile])
 
   const handleClaimRewards = async () => {
     try {
@@ -46,6 +52,40 @@ export function ReffScreen() {
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
       <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5">
+        {/* User Profile */}
+        {userProfile && (
+          <div className="bg-gray-900 rounded-lg p-4 mb-2">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                <User className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="text-white font-semibold">{getUserDisplayName()}</p>
+                {userProfile.username && (
+                  <p className="text-gray-400 text-sm">@{userProfile.username}</p>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 mb-2">
+              <Link className="w-4 h-4 text-gray-400" />
+              <p className="text-gray-400 text-sm">Referral Link</p>
+            </div>
+            <p className="text-blue-400 text-sm break-all mb-3">{userProfile.start_link}</p>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-800 rounded-lg p-2">
+                <p className="text-gray-400 text-xs">Balance</p>
+                <p className="text-white font-bold">{userProfile.balance}</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-2">
+                <p className="text-gray-400 text-xs">Balls</p>
+                <p className="text-white font-bold">{userProfile.balls_count}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Hero Banner */}
         <div 
           className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
+import { MockApi, type UserProfile } from '@/services/mockApi'
 
 interface TelegramUser {
   id: number
@@ -18,6 +19,7 @@ interface UseTelegramReturn {
   inviteFriends: () => void
   showAlert: (message: string) => void
   hapticFeedback: (type: 'light' | 'medium' | 'heavy') => void
+  getUserProfile: (id: number) => Promise<UserProfile>
 }
 
 const BOT_USERNAME = 'ways_ball_bot'
@@ -70,6 +72,10 @@ export const useTelegram = (): UseTelegramReturn => {
     WebApp.HapticFeedback.impactOccurred(type)
   }
 
+  const getUserProfile = async (id: number): Promise<UserProfile> => {
+    return MockApi.getUserProfile(id)
+  }
+
   return {
     user,
     webApp: WebApp,
@@ -78,6 +84,7 @@ export const useTelegram = (): UseTelegramReturn => {
     getUserDisplayName,
     inviteFriends,
     showAlert,
-    hapticFeedback
+    hapticFeedback,
+    getUserProfile
   }
 }
