@@ -28,7 +28,7 @@ export function ReffScreen() {
       } finally {
         setIsLoading(false)
       }
-       console.log(referralUsers || null, user?.referrers_id)
+      console.log('Referral users loaded:', referralUsers, 'User referrers:', user?.referrers_id)
     }
 
     loadData()
@@ -104,10 +104,12 @@ export function ReffScreen() {
 
           {/* Referral Users */}
           <div className="flex flex-col gap-2">
-            <span className="text-neutral-500 text-xs">Referral users</span>
+            <span className="text-neutral-500 text-xs">Referral users ({referralUsers.length})</span>
+            <div className="text-white text-sm">Debug: Loading={isLoading.toString()}, User={user?.id || 'null'}, Referrers={user?.referrers_id?.length || 0}</div>
             {isLoading ? (
               <div className="text-center py-4">
                 <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
+                <div className="text-white text-sm mt-2">Loading referrals...</div>
               </div>
             ) : referralUsers.length > 0 ? (
               referralUsers.map((referralUser) => (
