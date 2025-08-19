@@ -60,6 +60,7 @@ export const useTelegram = (): UseTelegramReturn => {
     
     try {
       const profile = await api.getUserProfile(user.id)
+      console.log('Loaded user profile:', profile)
       setUser(prev => prev ? {
         ...prev,
         balance: profile.balance,
@@ -89,6 +90,7 @@ export const useTelegram = (): UseTelegramReturn => {
     if (!user) return
     const referralUrl = `https://t.me/ballsbotdevbackendbot?start=Nzg4NTgwNTAx`
     const shareText = `🎮 Play Ways Ball Game with me! 🎁`
+    console.log("dima's link", user.start_link)
     WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
     WebApp.HapticFeedback.impactOccurred('medium')
   }
