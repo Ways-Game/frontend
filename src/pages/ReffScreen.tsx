@@ -13,15 +13,16 @@ export function ReffScreen() {
 
   useEffect(() => {
     const loadData = async () => {
+      if (!user?.referrers_id) {
+        setIsLoading(false)
+        return
+      }
+      
       try {
-        await loadUserProfile()
-        
-        if (user?.referrers_id) {
-          const users = await Promise.all(
-            user.referrers_id.map(id => api.getUserProfile(id))
-          )
-          setReferralUsers(users)
-        }
+        const users = await Promise.all(
+          user.referrers_id.map(id => api.getUserProfile(id))
+        )
+        setReferralUsers(users)
       } catch (error) {
         console.error('Failed to load referral data:', error)
       } finally {
@@ -29,10 +30,8 @@ export function ReffScreen() {
       }
     }
 
-    if (user?.id) {
-      loadData()
-    }
-  }, [user?.id, loadUserProfile])
+    loadData()
+  }, [user?.referrers_id])
 
 
   

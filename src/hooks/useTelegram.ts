@@ -49,19 +49,17 @@ export const useTelegram = (): UseTelegramReturn => {
           username: telegramUser.username,
           photo_url: telegramUser.photo_url
         })
-        loadUserProfile(telegramUser.id)
       }
       
       setIsReady(true)
     }
   }, [])
 
-  const loadUserProfile = async (id?: number): Promise<void> => {
+  const loadUserProfile = async (): Promise<void> => {
     if (!user?.id) return
     
     try {
       const profile = await api.getUserProfile(user.id)
-      console.log('Loaded user profile:', profile)
       setUser(prev => prev ? {
         ...prev,
         balance: profile.balance,
@@ -81,7 +79,7 @@ export const useTelegram = (): UseTelegramReturn => {
 
   const shareReferralLink = (): void => {
     if (!user) return
-    const referralUrl = `https://t.me/${BOT_USERNAME}?start=ref_${user.id}`
+    const referralUrl = user.start_link
     const shareText = `🎮 Join me in Ways Ball Game and earn rewards!\n\n🎁 Use my referral link to get bonus ballz!`
     WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
     WebApp.HapticFeedback.impactOccurred('light')
@@ -89,9 +87,8 @@ export const useTelegram = (): UseTelegramReturn => {
 
   const inviteFriends = (): void => {
     if (!user) return
-    const referralUrl = `https://t.me/ballsbotdevbackendbot?start=Nzg4NTgwNTAx`
+    const referralUrl = user.start_link
     const shareText = `🎮 Play Ways Ball Game with me! 🎁`
-    console.log("dima's link", user.start_link)
     WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
     WebApp.HapticFeedback.impactOccurred('medium')
   }
