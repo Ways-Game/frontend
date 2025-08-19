@@ -60,6 +60,7 @@ export const useTelegram = (): UseTelegramReturn => {
                 profile.referrers_id.map(id => api.getUserProfile(id))
               )
             }
+            console.log('Loaded user profile:', profile, referrers)
             setUser({
               ...baseUser,
               balance: profile.balance,
