@@ -88,7 +88,8 @@ export const useTelegram = (): UseTelegramReturn => {
   const inviteFriends = (): void => {
     if (!user) return
     const referralUrl = user.start_link
-    WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}}`)
+    const shareText = `🎮 Play Ways Ball Game with me! 🎁`
+    WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
     WebApp.HapticFeedback.impactOccurred('medium')
   }
 
