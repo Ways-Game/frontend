@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
 import { MockApi, type UserProfile } from '@/services/mockApi'
+import { api } from '@/services/api'
 
 interface TelegramUser {
   id: number
@@ -38,6 +39,8 @@ export const useTelegram = (): UseTelegramReturn => {
       if (WebApp.initDataUnsafe?.user) {
         setUser(WebApp.initDataUnsafe.user)
       }
+
+      console.log(WebApp, WebApp.initDataUnsafe.user)
       
       setIsReady(true)
     }
@@ -73,7 +76,8 @@ export const useTelegram = (): UseTelegramReturn => {
   }
 
   const getUserProfile = async (id: number): Promise<UserProfile> => {
-    return MockApi.getUserProfile(id)
+    console.log(api.getUserProfile(id), id)
+    return api.getUserProfile(id)
   }
 
   return {
