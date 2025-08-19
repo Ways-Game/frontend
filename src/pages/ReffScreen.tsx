@@ -23,12 +23,12 @@ export function ReffScreen() {
           user.referrers_id.map(id => api.getUserProfile(id))
         )
         setReferralUsers(users)
+        console.log('Referral users loaded:', users)
       } catch (error) {
         console.error('Failed to load referral data:', error)
       } finally {
         setIsLoading(false)
       }
-      console.log('Referral users loaded:', referralUsers, 'User referrers:', user?.referrers_id)
     }
 
     loadData()
@@ -104,29 +104,22 @@ export function ReffScreen() {
 
           {/* Referral Users */}
           <div className="flex flex-col gap-2">
-            <span className="text-neutral-500 text-xs">Referral users ({referralUsers.length})</span>
-            <div className="text-white text-sm">Debug: Loading={isLoading.toString()}, User={user?.id || 'null'}, Referrers={user?.referrers_id?.length || 0}</div>
-            {isLoading ? (
-              <div className="text-center py-4">
-                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
-                <div className="text-white text-sm mt-2">Loading referrals...</div>
-              </div>
-            ) : referralUsers.length > 0 ? (
-              referralUsers.map((referralUser) => (
-                <div key={referralUser.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
-                      <span className="text-xs font-bold text-blue-600">TG</span>
-                    </div>
-                    <span className="text-neutral-50 text-sm">{referralUser.username ? `@${referralUser.username}` : `User ${referralUser.id}`}</span>
+            <span className="text-neutral-500 text-xs">Referral users</span>
+            {referralUsers.map((referralUser) => (
+              <div key={referralUser.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-bold text-blue-600">TG</span>
                   </div>
-                  <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5">
-                    <span className="text-neutral-50 text-sm">{referralUser.balls_count || 0}</span>
-                    <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
-                  </div>
+                  <span className="text-neutral-50 text-sm">{referralUser.username ? `@${referralUser.username}` : `User ${referralUser.id}`}</span>
                 </div>
-              ))
-            ) : (
+                <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5">
+                  <span className="text-neutral-50 text-sm">{referralUser.balls_count || 0}</span>
+                  <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
+                </div>
+              </div>
+            ))}
+            {referralUsers.length === 0 && !isLoading && (
               <div className="text-center py-4 text-neutral-500 text-sm">
                 No referrals yet. Invite friends to start earning!
               </div>
