@@ -7,40 +7,26 @@ import { useTelegram } from "@/hooks/useTelegram"
 import { api } from "@/services/api"
 
 export function ReffScreen() {
-  const { user, getUserDisplayName, inviteFriends, loadUserProfile } = useTelegram()
+  const { user, getUserDisplayName, inviteFriends } = useTelegram()
   const [referralUsers, setReferralUsers] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    const loadData = async () => {
-      if (!user || !user.referrers_id || user.referrers_id.length === 0) {
-        setIsLoading(false)
-        return
-      }
-      
-      try {
-        const users = await Promise.all(
-          user.referrers_id.map(id => api.getUserProfile(id))
-        )
-        setReferralUsers(users)
-        console.log('Referral users loaded:', users)
-      } catch (error) {
-        console.error('Failed to load referral data:', error)
-      } finally {
-        setIsLoading(false)
-      }
+    if (user?.referrers_id?.length) {
+      setIsLoading(true)
+      Promise.all(user.referrers_id.map(id => api.getUserProfile(id)))
+        .then(users => {
+          setReferralUsers(users)
+          console.log('Loaded referrals:', users)
+        })
+        .catch(error => console.error('Error loading referrals:', error))
+        .finally(() => setIsLoading(false))
     }
+  }, [user?.referrers_id])
 
-    loadData()
-  }, [user])
-
-
-  
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
       <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5">
-
-
         {/* Hero Banner */}
         <div 
           className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden"
@@ -100,11 +86,16 @@ export function ReffScreen() {
             </div>
           </div>
 
-
-
           {/* Referral Users */}
           <div className="flex flex-col gap-2">
-            <span className="text-neutral-500 text-xs">Referral users</span>
+            <span className="text-neutral-500 text-xs">Referral users ({referralUsers.length})</span>
+            
+            {isLoading && (
+              <div className="text-center py-4">
+                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
+              </div>
+            )}
+
             {referralUsers.map((referralUser) => (
               <div key={referralUser.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
@@ -119,7 +110,8 @@ export function ReffScreen() {
                 </div>
               </div>
             ))}
-            {referralUsers.length === 0 && !isLoading && (
+
+            {!isLoading && referralUsers.length === 0 && (
               <div className="text-center py-4 text-neutral-500 text-sm">
                 No referrals yet. Invite friends to start earning!
               </div>
