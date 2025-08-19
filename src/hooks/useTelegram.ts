@@ -55,6 +55,7 @@ export const useTelegram = (): UseTelegramReturn => {
           try {
             console.log('Loading user profile for:', telegramUser.id)
             const profile = await api.getUserProfile(telegramUser.id)
+            console.log('Loaded user profile:', profile)
             let referrers = []
             if (profile.referrers_id?.length) {
               referrers = await Promise.all(
