@@ -1,0 +1,13 @@
+○ nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (]8;;file://5491845-qh50951/usr/lib/systemd/system/nginx.service/usr/lib/systemd/system/nginx.service]8;;; [0;1;32menabled[0m; preset: [0;1;32menabled[0m)
+     Active: inactive (dead) since Tue 2025-08-19 11:28:09 MSK; 38min ago
+   Duration: 16min 20.715s
+       Docs: ]8;;man:nginx(8)man:nginx(8)]8;;
+   Main PID: 8477 (code=exited, status=0/SUCCESS)
+        CPU: 33ms
+
+Aug 19 11:11:48 5491845-qh50951 systemd[1]: Starting nginx.service - A high performance web server and a reverse proxy server...
+Aug 19 11:11:48 5491845-qh50951 systemd[1]: Started nginx.service - A high performance web server and a reverse proxy server.
+Aug 19 11:28:09 5491845-qh50951 systemd[1]: Stopping nginx.service - A high performance web server and a reverse proxy server...
+Aug 19 11:28:09 5491845-qh50951 systemd[1]: nginx.service: Deactivated successfully.
+Aug 19 11:28:09 5491845-qh50951 systemd[1]: Stopped nginx.service - A high performance web server and a reverse proxy server.
