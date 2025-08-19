@@ -36,11 +36,23 @@ export const useTelegram = (): UseTelegramReturn => {
       WebApp.setHeaderColor('#0C0E12')
       WebApp.setBackgroundColor('#0C0E12')
       
-      if (WebApp.initDataUnsafe?.user) {
-        setUser(WebApp.initDataUnsafe.user)
+       const telegramUser = WebApp.initDataUnsafe?.user
+      
+      if (telegramUser) {
+        setUser({
+          id: telegramUser.id,
+          first_name: telegramUser.first_name,
+          last_name: telegramUser.last_name,
+          username: telegramUser.username,
+          photo_url: telegramUser.photo_url
+        })
       }
 
-      console.log(WebApp, WebApp.initDataUnsafe.user)
+      // Логируем после установки состояния
+      console.log('WebApp instance:', WebApp)
+      console.log('User data:', telegramUser) // Используем локальную переменную
+      
+      setIsReady(true)
       
       setIsReady(true)
     }
