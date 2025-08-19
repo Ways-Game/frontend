@@ -1,16 +1,48 @@
-import React from "react"
+import React, { useState, useEffect } from "react"
 import { Chip } from "@/components/ui/ways-chip"
 import { WaysButton } from "@/components/ui/ways-button"
 import { PlayerItem } from "@/components/game/PlayerItem"
 import { Users, UserPlus, X } from "lucide-react"
-
-const referralUsers = [
-  { name: "Alex", ballz: 10 },
-  { name: "Marina", ballz: 30 },
-  { name: "Dima", ballz: 50 }
-]
+import { useTelegram } from "@/hooks/useTelegram"
+import { MockApi, type ReferralUser, type UserStats } from "@/services/mockApi"
 
 export function ReffScreen() {
+  const { user, getUserDisplayName, shareReferralLink, inviteFriends } = useTelegram()
+  const [referralUsers, setReferralUsers] = useState<ReferralUser[]>([])
+  const [userStats, setUserStats] = useState<UserStats | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [users, stats] = await Promise.all([
+          MockApi.getReferralUsers(),
+          MockApi.getUserStats()
+        ])
+        setReferralUsers(users)
+        setUserStats(stats)
+      } catch (error) {
+        console.error('Failed to load referral data:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  const handleClaimRewards = async () => {
+    try {
+      const result = await MockApi.claimReferralRewards()
+      if (result.success) {
+        const updatedStats = await MockApi.getUserStats()
+        setUserStats(updatedStats)
+      }
+    } catch (error) {
+      console.error('Failed to claim rewards:', error)
+    }
+  }
+  
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
       <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5">
@@ -27,7 +59,10 @@ export function ReffScreen() {
             Post videos and earn money
           </div>
           <div className="flex ">
-            <button className="h-10 px-3 py-2 bg-white rounded-[20px]">
+            <button 
+              onClick={shareReferralLink}
+              className="h-10 px-3 py-2 bg-white rounded-[20px]"
+            >
               <span className="text-black text-base font-semibold">Earn money</span>
             </button>
           </div>
@@ -41,15 +76,18 @@ export function ReffScreen() {
               <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
                 <span className="text-xs font-bold text-blue-600">TG</span>
               </div>
-              <span className="text-neutral-50 text-sm">@bluryt</span>
+              <span className="text-neutral-50 text-sm">{getUserDisplayName()}</span>
             </div>
             
-            <div className="px-1.5 py-2 bg-[#4378FF20]  rounded-[20px] flex items-center gap-1.5 h-8">
+            <div className="px-1.5 py-2 bg-[#4378FF20] rounded-[20px] flex items-center gap-1.5 h-8">
               <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
-              <span className="text-blue-400 text-base font-semibold">XDE3...FEeF</span>
-              <div className="w-5 h-5 bg-[#4378FF20] rounded-full flex items-center justify-center">
+              <span className="text-blue-400 text-base font-semibold">ref_{user?.id || '0000'}</span>
+              <button 
+                onClick={shareReferralLink}
+                className="w-5 h-5 bg-[#4378FF20] rounded-full flex items-center justify-center hover:bg-[#4378FF40] transition-colors"
+              >
                 <X className="w-3 h-3 text-blue-400" />
-              </div>
+              </button>
             </div>
           </div>
 
@@ -63,7 +101,7 @@ export function ReffScreen() {
             <span className="text-neutral-500 text-xs">invited users</span>
             <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2 w-fit">
               <Users className="w-4 h-4 text-gray-400" />
-              <span className="text-neutral-50 text-sm">0</span>
+              <span className="text-neutral-50 text-sm">{userStats?.referrals || 0}</span>
             </div>
           </div>
 
@@ -73,49 +111,67 @@ export function ReffScreen() {
               <span className="text-neutral-500 text-xs">Claimable amount</span>
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5 w-fit">
                 <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
-                <span className="text-neutral-50 text-sm">0</span>
+                <span className="text-neutral-50 text-sm">{userStats?.claimableAmount || 0}</span>
               </div>
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-neutral-500 text-xs">Total claimed amount</span>
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5 w-fit">
                 <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
-                <span className="text-neutral-50 text-sm">0</span>
+                <span className="text-neutral-50 text-sm">{userStats?.totalClaimed || 0}</span>
               </div>
             </div>
           </div>
 
           {/* Claim Button */}
-          <button className="h-8 px-3 py-2 opacity-35 bg-white rounded-[20px] flex items-center gap-1.5 self-start">
+          <button 
+            onClick={handleClaimRewards}
+            disabled={!userStats?.claimableAmount}
+            className={`h-8 px-3 py-2 bg-white rounded-[20px] flex items-center gap-1.5 self-start transition-opacity ${
+              userStats?.claimableAmount ? 'opacity-100 hover:bg-gray-100' : 'opacity-35 cursor-not-allowed'
+            }`}
+          >
             <img src="/src/assets/icons/star.svg" className="w-4 h-4 brightness-0" alt="star" />
-
             <span className="text-black text-base font-semibold">Claim starz</span>
           </button>
 
           {/* Referral Users */}
           <div className="flex flex-col gap-2">
-            <span className="text-neutral-500 text-xs">Refferal users</span>
-            {['@dgfrfdtgrt', '@ergertrthr', '@rr4544'].map((username, index) => (
-              <div key={username} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-bold text-blue-600">TG</span>
-                  </div>
-                  <span className="text-neutral-50 text-sm">{username}</span>
-                </div>
-                <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5">
-                  <span className="text-neutral-50 text-sm">+{[20, 204, 23323][index]}</span>
-                  <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
-                </div>
+            <span className="text-neutral-500 text-xs">Referral users</span>
+            {isLoading ? (
+              <div className="text-center py-4">
+                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
               </div>
-            ))}
+            ) : referralUsers.length > 0 ? (
+              referralUsers.map((referralUser) => (
+                <div key={referralUser.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                      <span className="text-xs font-bold text-blue-600">TG</span>
+                    </div>
+                    <span className="text-neutral-50 text-sm">@{referralUser.username}</span>
+                  </div>
+                  <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5">
+                    <span className="text-neutral-50 text-sm">+{referralUser.earnings}</span>
+                    <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4 text-neutral-500 text-sm">
+                No referrals yet. Invite friends to start earning!
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Invite Button */}
       <div className="px-6 pb-3">
-        <button className="w-full h-12 px-3 py-3.5 bg-[#1B91FF] rounded-2xl flex items-center justify-center gap-2.5">
+        <button 
+          onClick={inviteFriends}
+          className="w-full h-12 px-3 py-3.5 bg-[#1B91FF] rounded-2xl flex items-center justify-center gap-2.5 hover:bg-[#1B91FF]/90 transition-colors"
+        >
           <UserPlus className="w-6 h-6 text-white" />
           <span className="text-white text-base font-semibold">Invite friends</span>
         </button>

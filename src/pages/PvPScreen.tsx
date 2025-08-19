@@ -14,7 +14,7 @@ const quickActions = ["210", "5", "10", "X2"]
 
 export function PvPScreen() {
   const navigate = useNavigate()
-  const { user, webApp } = useTelegram()
+  const { user, webApp, getUserDisplayName, showAlert, hapticFeedback } = useTelegram()
   const { isActive: isLiveActive, timeLeft } = useLiveTimer(30)
   
   const [activeAction, setActiveAction] = useState<string | null>(null)
@@ -51,9 +51,8 @@ export function PvPScreen() {
   }
 
   const handleConnect = () => {
-    if (webApp) {
-      webApp.openTelegramLink('https://t.me/wallet')
-    }
+    webApp.openLink('https://t.me/wallet')
+    hapticFeedback('light')
   }
 
   const handleBuyBallz = async () => {
@@ -67,7 +66,8 @@ export function PvPScreen() {
       setUserStats(updatedStats)
     } catch (error) {
       console.error('Failed to buy ballz:', error)
-      webApp?.showAlert('Insufficient balance!')
+      showAlert('Insufficient balance!')
+      hapticFeedback('heavy')
     }
   }
 
@@ -164,7 +164,7 @@ export function PvPScreen() {
                 <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
                   <span className="text-xs font-bold text-blue-600">TG</span>
                 </div>
-                <span className="text-neutral-50 text-sm">YOU</span>
+                <span className="text-neutral-50 text-sm">{getUserDisplayName()}</span>
               </div>
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
                 <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
@@ -177,7 +177,7 @@ export function PvPScreen() {
                   <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
                     <span className="text-xs font-bold text-blue-600">TG</span>
                   </div>
-                  <span className="text-neutral-50 text-sm">{player.name}</span>
+                  <span className="text-neutral-50 text-sm">@{player.name}</span>
                 </div>
                 <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
                   <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />

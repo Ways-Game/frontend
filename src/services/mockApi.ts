@@ -24,6 +24,14 @@ export interface UserStats {
   totalClaimed: number
 }
 
+export interface ReferralUser {
+  id: string
+  username: string
+  firstName: string
+  earnings: number
+  joinedAt: string
+}
+
 // Mock data
 const mockPlayers: Player[] = [
   { id: '1', name: 'YOU', ballz: 20, isYou: true },
@@ -57,6 +65,10 @@ export class MockApi {
 
   static async getUserStats(): Promise<UserStats> {
     await new Promise(resolve => setTimeout(resolve, 150))
+    // Update referrals count based on referral users
+    const referralUsers = await this.getReferralUsers()
+    mockUserStats.referrals = referralUsers.length
+    mockUserStats.claimableAmount = referralUsers.reduce((sum, user) => sum + Math.floor(user.earnings * 0.1), 0)
     return mockUserStats
   }
 
@@ -92,11 +104,55 @@ export class MockApi {
   static async shareResult(gameId: string): Promise<{ shared: boolean }> {
     await new Promise(resolve => setTimeout(resolve, 500))
     
-    // Mock share via Telegram
+    // Share game result via Telegram
     if ((window as any).Telegram?.WebApp) {
-      (window as any).Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=https://ways.app/game/${gameId}&text=Я только что выиграл в Ways!`)
+      const shareText = `🎮 I just played Ways Ball Game! 🏆\n\nJoin me and earn rewards!`
+      const gameUrl = `https://ways.app/game/${gameId}`
+      ;(window as any).Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(gameUrl)}&text=${encodeURIComponent(shareText)}`)
     }
     
     return { shared: true }
+  }
+
+  static async getReferralUsers(): Promise<ReferralUser[]> {
+    await new Promise(resolve => setTimeout(resolve, 200))
+    
+    return [
+      {
+        id: '1',
+        username: 'dgfrfdtgrt',
+        firstName: 'Alex',
+        earnings: 20,
+        joinedAt: '2024-01-15'
+      },
+      {
+        id: '2', 
+        username: 'ergertrthr',
+        firstName: 'Marina',
+        earnings: 204,
+        joinedAt: '2024-01-10'
+      },
+      {
+        id: '3',
+        username: 'rr4544',
+        firstName: 'Dima', 
+        earnings: 23323,
+        joinedAt: '2024-01-05'
+      }
+    ]
+  }
+
+  static async claimReferralRewards(): Promise<{ success: boolean; amount: number }> {
+    await new Promise(resolve => setTimeout(resolve, 300))
+    
+    const claimableAmount = mockUserStats.claimableAmount
+    if (claimableAmount > 0) {
+      mockUserStats.balance += claimableAmount
+      mockUserStats.totalClaimed += claimableAmount
+      mockUserStats.claimableAmount = 0
+      return { success: true, amount: claimableAmount }
+    }
+    
+    return { success: false, amount: 0 }
   }
 }
