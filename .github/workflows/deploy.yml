@@ -9,17 +9,21 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_KEY }}
+        
     - name: Add host to known_hosts
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
         
     - name: Deploy to server
-      uses: appleboy/ssh-action@v0.1.5
+      uses: appleboy/ssh-action@v1
       with:
         host: ${{ secrets.HOST }}
         username: ${{ secrets.USERNAME }}
-        key: ${{ secrets.SSH_KEY }}
         script: |
           cd frontend
           git pull origin main
