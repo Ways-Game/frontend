@@ -8,21 +8,6 @@ import { api } from "@/services/api"
 
 export function ReffScreen() {
   const { user, getUserDisplayName, inviteFriends } = useTelegram()
-  const [referralUsers, setReferralUsers] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-
-  useEffect(() => {
-    if (user?.referrers_id?.length) {
-      setIsLoading(true)
-      Promise.all(user.referrers_id.map(id => api.getUserProfile(id)))
-        .then(users => {
-          setReferralUsers(users)
-          console.log('Loaded referrals:', users)
-        })
-        .catch(error => console.error('Error loading referrals:', error))
-        .finally(() => setIsLoading(false))
-    }
-  }, [user?.referrers_id])
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
@@ -88,15 +73,9 @@ export function ReffScreen() {
 
           {/* Referral Users */}
           <div className="flex flex-col gap-2">
-            <span className="text-neutral-500 text-xs">Referral users ({referralUsers.length})</span>
+            <span className="text-neutral-500 text-xs">Referral users ({user?.referrers?.length || 0})</span>
             
-            {isLoading && (
-              <div className="text-center py-4">
-                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
-              </div>
-            )}
-
-            {referralUsers.map((referralUser) => (
+            {user?.referrers?.map((referralUser) => (
               <div key={referralUser.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
@@ -111,7 +90,7 @@ export function ReffScreen() {
               </div>
             ))}
 
-            {!isLoading && referralUsers.length === 0 && (
+            {(!user?.referrers || user.referrers.length === 0) && (
               <div className="text-center py-4 text-neutral-500 text-sm">
                 No referrals yet. Invite friends to start earning!
               </div>
