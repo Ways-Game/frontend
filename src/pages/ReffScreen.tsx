@@ -39,9 +39,13 @@ export function ReffScreen() {
           {/* User Info Row */}
           <div className="flex justify-between items-center h-8">
             <div className="flex items-center gap-2.5 px-3 py-2">
-              <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
-                <span className="text-xs font-bold text-blue-600">TG</span>
-              </div>
+              {user?.photo_url ? (
+                <img src={user.photo_url} className="w-7 h-7 rounded-full object-cover" alt="avatar" />
+              ) : (
+                <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                  <span className="text-xs font-bold text-blue-600">TG</span>
+                </div>
+              )}
               <span className="text-neutral-50 text-sm">{getUserDisplayName()}</span>
             </div>
             
@@ -78,9 +82,13 @@ export function ReffScreen() {
             {user?.referrers_id?.map((referralUser) => (
               <div key={referralUser.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-bold text-blue-600">TG</span>
-                  </div>
+                  {referralUser.photo_url ? (
+                    <img src={referralUser.photo_url} className="w-7 h-7 rounded-full object-cover" alt="avatar" />
+                  ) : (
+                    <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                      <span className="text-xs font-bold text-blue-600">TG</span>
+                    </div>
+                  )}
                   <span className="text-neutral-50 text-sm">{referralUser.username ? `@${referralUser.username}` : `User ${referralUser.id}`}</span>
                 </div>
                 <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5">
