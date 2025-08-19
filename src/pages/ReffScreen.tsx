@@ -39,43 +39,7 @@ export function ReffScreen() {
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
       <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5">
-        {/* User Profile */}
-        {user && (
-          <div className="bg-gray-900 rounded-lg p-4 mb-2">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-white font-semibold">{getUserDisplayName()}</p>
-                {user.username && (
-                  <p className="text-gray-400 text-sm">@{user.username}</p>
-                )}
-              </div>
-            </div>
-            
-            {user.start_link && (
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <Link className="w-4 h-4 text-gray-400" />
-                  <p className="text-gray-400 text-sm">Referral Link</p>
-                </div>
-                <p className="text-blue-400 text-sm break-all mb-3">{user.start_link}</p>
-              </>
-            )}
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-800 rounded-lg p-2">
-                <p className="text-gray-400 text-xs">Balance</p>
-                <p className="text-white font-bold">{user.balance || 0}</p>
-              </div>
-              <div className="bg-gray-800 rounded-lg p-2">
-                <p className="text-gray-400 text-xs">Balls</p>
-                <p className="text-white font-bold">{user.balls_count || 0}</p>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* Hero Banner */}
         <div 
@@ -91,7 +55,7 @@ export function ReffScreen() {
           </div>
           <div className="flex ">
             <button 
-              onClick={shareReferralLink}
+              onClick={inviteFriends}
               className="h-10 px-3 py-2 bg-white rounded-[20px]"
             >
               <span className="text-black text-base font-semibold">Earn money</span>
