@@ -13,7 +13,7 @@ export function ReffScreen() {
 
   useEffect(() => {
     const loadData = async () => {
-      if (!user?.referrers_id) {
+      if (!user || !user.referrers_id || user.referrers_id.length === 0) {
         setIsLoading(false)
         return
       }
@@ -28,10 +28,11 @@ export function ReffScreen() {
       } finally {
         setIsLoading(false)
       }
+       console.log(referralUsers || null, user?.referrers_id)
     }
-    console.log(referralUsers, user.referrers_id)
+
     loadData()
-  }, [user?.referrers_id])
+  }, [user])
 
 
   
