@@ -11,7 +11,7 @@ export function ReffScreen() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
-      <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5">
+      <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5 h-[154px]">
         {/* Hero Banner */}
         <div 
           className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden"
