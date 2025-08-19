@@ -29,7 +29,7 @@ export function ReffScreen() {
         setIsLoading(false)
       }
     }
-
+    console.log(referralUsers, user.referrers_id)
     loadData()
   }, [user?.referrers_id])
 
