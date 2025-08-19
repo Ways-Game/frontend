@@ -49,13 +49,14 @@ export const useTelegram = (): UseTelegramReturn => {
           username: telegramUser.username,
           photo_url: telegramUser.photo_url
         })
+        loadUserProfile(telegramUser.id)
       }
       
       setIsReady(true)
     }
   }, [])
 
-  const loadUserProfile = async (): Promise<void> => {
+  const loadUserProfile = async (id?: number): Promise<void> => {
     if (!user?.id) return
     
     try {
