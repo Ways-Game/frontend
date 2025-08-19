@@ -32,26 +32,44 @@ export const useTelegram = (): UseTelegramReturn => {
   const [user, setUser] = useState<ExtendedUser | null>(null)
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      WebApp.ready()
-      WebApp.expand()
-      WebApp.setHeaderColor('#0C0E12')
-      WebApp.setBackgroundColor('#0C0E12')
-      
-      const telegramUser = WebApp.initDataUnsafe?.user
-      
-      if (telegramUser) {
-        setUser({
-          id: telegramUser.id,
-          first_name: telegramUser.first_name,
-          last_name: telegramUser.last_name,
-          username: telegramUser.username,
-          photo_url: telegramUser.photo_url
-        })
+    const initTelegram = async () => {
+      if (typeof window !== 'undefined') {
+        WebApp.ready()
+        WebApp.expand()
+        WebApp.setHeaderColor('#0C0E12')
+        WebApp.setBackgroundColor('#0C0E12')
+        
+        const telegramUser = WebApp.initDataUnsafe?.user
+        
+        if (telegramUser) {
+          const baseUser = {
+            id: telegramUser.id,
+            first_name: telegramUser.first_name,
+            last_name: telegramUser.last_name,
+            username: telegramUser.username,
+            photo_url: telegramUser.photo_url
+          }
+          setUser(baseUser)
+          
+          try {
+            const profile = await api.getUserProfile(telegramUser.id)
+            setUser({
+              ...baseUser,
+              balance: profile.balance,
+              start_link: profile.start_link,
+              balls_count: profile.balls_count,
+              referrers_id: profile.referrers_id
+            })
+          } catch (error) {
+            console.error('Failed to load user profile:', error)
+          }
+        }
+        
+        setIsReady(true)
       }
-      
-      setIsReady(true)
     }
+    
+    initTelegram()
   }, [])
 
   const loadUserProfile = async (): Promise<void> => {
