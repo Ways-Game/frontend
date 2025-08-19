@@ -18,7 +18,6 @@ interface UseTelegramReturn {
   user: ExtendedUser | null
   webApp: typeof WebApp
   isReady: boolean
-  shareReferralLink: () => void
   getUserDisplayName: () => string
   inviteFriends: () => void
   showAlert: (message: string) => void
@@ -60,6 +59,7 @@ export const useTelegram = (): UseTelegramReturn => {
     
     try {
       const profile = await api.getUserProfile(user.id)
+      console.log('Loaded user profile:', profile)
       setUser(prev => prev ? {
         ...prev,
         balance: profile.balance,
@@ -77,17 +77,11 @@ export const useTelegram = (): UseTelegramReturn => {
     return user.username ? `@${user.username}` : [user.first_name, user.last_name].filter(Boolean).join(' ') || 'User'
   }
 
-  const shareReferralLink = (): void => {
-    if (!user) return
-    const referralUrl = user.start_link
-    const shareText = `🎮 Join me in Ways Ball Game and earn rewards!\n\n🎁 Use my referral link to get bonus ballz!`
-    WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
-    WebApp.HapticFeedback.impactOccurred('light')
-  }
 
   const inviteFriends = (): void => {
     if (!user) return
     const referralUrl = user.start_link
+    console.log('Inviting friends with referral link:', referralUrl)
     const shareText = `🎮 Play Ways Ball Game with me! 🎁`
     WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
     WebApp.HapticFeedback.impactOccurred('medium')
@@ -105,9 +99,8 @@ export const useTelegram = (): UseTelegramReturn => {
     user,
     webApp: WebApp,
     isReady,
-    shareReferralLink,
-    getUserDisplayName,
     inviteFriends,
+    getUserDisplayName,
     showAlert,
     hapticFeedback,
     loadUserProfile

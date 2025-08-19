@@ -7,7 +7,7 @@ import { useTelegram } from "@/hooks/useTelegram"
 import { api } from "@/services/api"
 
 export function ReffScreen() {
-  const { user, getUserDisplayName, shareReferralLink, inviteFriends, loadUserProfile } = useTelegram()
+  const { user, getUserDisplayName, inviteFriends, loadUserProfile } = useTelegram()
   const [referralUsers, setReferralUsers] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -77,7 +77,7 @@ export function ReffScreen() {
               <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
               <span className="text-blue-400 text-base font-semibold">ref_{user?.id || '0000'}</span>
               <button 
-                onClick={shareReferralLink}
+                onClick={inviteFriends}
                 className="w-5 h-5 bg-[#4378FF20] rounded-full flex items-center justify-center hover:bg-[#4378FF40] transition-colors"
               >
                 <X className="w-3 h-3 text-blue-400" />
