@@ -49,7 +49,7 @@ export const useTelegram = (): UseTelegramReturn => {
       }
 
       // Логируем после установки состояния
-      console.log('WebApp instance:', WebApp)
+      console.log('WebApp instance:', WebApp.initData)
       console.log('User data:', telegramUser) // Используем локальную переменную
       
       setIsReady(true)
