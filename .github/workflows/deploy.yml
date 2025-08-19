@@ -14,11 +14,15 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_KEY }}
 
-      - name: Deploy to Server
+      - name: Add server to known hosts
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
-          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+
+      - name: Deploy to Server
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
             cd frontend
             git pull origin main
             docker-compose down
