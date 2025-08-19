@@ -1,33 +1,26 @@
-name: Deploy
+name: CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Setup SSH
-      run: |
-        mkdir -p ~/.ssh
-        chmod 700 ~/.ssh
-        # Сохраняем ключ в файл
-        echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        # Добавляем хост в known_hosts
-        ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
-        
-    - name: Test SSH connection
-      run: |
-        ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} "echo 'SSH connection successful'"
-        
-    - name: Deploy to server
-      run: |
-        ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
-          cd frontend
-          git pull origin main
-          docker-compose down
-          docker-compose up --build -d
-        "
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Deploy to Server
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
+            cd frontend
+            git pull origin main
+            docker-compose down
+            docker-compose up --build -d
+          "
