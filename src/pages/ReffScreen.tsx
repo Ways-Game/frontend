@@ -4,28 +4,23 @@ import { WaysButton } from "@/components/ui/ways-button"
 import { PlayerItem } from "@/components/game/PlayerItem"
 import { Users, UserPlus, X, User, Link } from "lucide-react"
 import { useTelegram } from "@/hooks/useTelegram"
-import { MockApi, type ReferralUser, type UserStats, type UserProfile } from "@/services/mockApi"
+import { api } from "@/services/api"
 
 export function ReffScreen() {
-  const { user, getUserDisplayName, shareReferralLink, inviteFriends, getUserProfile } = useTelegram()
-  const [referralUsers, setReferralUsers] = useState<ReferralUser[]>([])
-  const [userStats, setUserStats] = useState<UserStats | null>(null)
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const { user, getUserDisplayName, shareReferralLink, inviteFriends, loadUserProfile } = useTelegram()
+  const [referralUsers, setReferralUsers] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [users, stats] = await Promise.all([
-          MockApi.getReferralUsers(),
-          MockApi.getUserStats()
-        ])
-        setReferralUsers(users)
-        setUserStats(stats)
+        await loadUserProfile()
         
-        if (user?.id) {
-          const profile = await getUserProfile(user.id)
-          setUserProfile(profile)
+        if (user?.referrers_id) {
+          const users = await Promise.all(
+            user.referrers_id.map(id => api.getUserProfile(id))
+          )
+          setReferralUsers(users)
         }
       } catch (error) {
         console.error('Failed to load referral data:', error)
@@ -34,26 +29,18 @@ export function ReffScreen() {
       }
     }
 
-    loadData()
-  }, [user, getUserProfile])
-
-  const handleClaimRewards = async () => {
-    try {
-      const result = await MockApi.claimReferralRewards()
-      if (result.success) {
-        const updatedStats = await MockApi.getUserStats()
-        setUserStats(updatedStats)
-      }
-    } catch (error) {
-      console.error('Failed to claim rewards:', error)
+    if (user?.id) {
+      loadData()
     }
-  }
+  }, [user?.id, loadUserProfile])
+
+
   
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
       <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5">
         {/* User Profile */}
-        {userProfile && (
+        {user && (
           <div className="bg-gray-900 rounded-lg p-4 mb-2">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
@@ -61,26 +48,30 @@ export function ReffScreen() {
               </div>
               <div>
                 <p className="text-white font-semibold">{getUserDisplayName()}</p>
-                {userProfile.username && (
-                  <p className="text-gray-400 text-sm">@{userProfile.username}</p>
+                {user.username && (
+                  <p className="text-gray-400 text-sm">@{user.username}</p>
                 )}
               </div>
             </div>
             
-            <div className="flex items-center gap-2 mb-2">
-              <Link className="w-4 h-4 text-gray-400" />
-              <p className="text-gray-400 text-sm">Referral Link</p>
-            </div>
-            <p className="text-blue-400 text-sm break-all mb-3">{userProfile.start_link}</p>
+            {user.start_link && (
+              <>
+                <div className="flex items-center gap-2 mb-2">
+                  <Link className="w-4 h-4 text-gray-400" />
+                  <p className="text-gray-400 text-sm">Referral Link</p>
+                </div>
+                <p className="text-blue-400 text-sm break-all mb-3">{user.start_link}</p>
+              </>
+            )}
             
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gray-800 rounded-lg p-2">
                 <p className="text-gray-400 text-xs">Balance</p>
-                <p className="text-white font-bold">{userProfile.balance}</p>
+                <p className="text-white font-bold">{user.balance || 0}</p>
               </div>
               <div className="bg-gray-800 rounded-lg p-2">
                 <p className="text-gray-400 text-xs">Balls</p>
-                <p className="text-white font-bold">{userProfile.balls_count}</p>
+                <p className="text-white font-bold">{user.balls_count || 0}</p>
               </div>
             </div>
           </div>
@@ -141,39 +132,11 @@ export function ReffScreen() {
             <span className="text-neutral-500 text-xs">invited users</span>
             <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2 w-fit">
               <Users className="w-4 h-4 text-gray-400" />
-              <span className="text-neutral-50 text-sm">{userStats?.referrals || 0}</span>
+              <span className="text-neutral-50 text-sm">{user?.referrers_id?.length || 0}</span>
             </div>
           </div>
 
-          {/* Claimable and Total */}
-          <div className="flex gap-2">
-            <div className="flex flex-col gap-2">
-              <span className="text-neutral-500 text-xs">Claimable amount</span>
-              <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5 w-fit">
-                <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
-                <span className="text-neutral-50 text-sm">{userStats?.claimableAmount || 0}</span>
-              </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <span className="text-neutral-500 text-xs">Total claimed amount</span>
-              <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5 w-fit">
-                <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
-                <span className="text-neutral-50 text-sm">{userStats?.totalClaimed || 0}</span>
-              </div>
-            </div>
-          </div>
 
-          {/* Claim Button */}
-          <button 
-            onClick={handleClaimRewards}
-            disabled={!userStats?.claimableAmount}
-            className={`h-8 px-3 py-2 bg-white rounded-[20px] flex items-center gap-1.5 self-start transition-opacity ${
-              userStats?.claimableAmount ? 'opacity-100 hover:bg-gray-100' : 'opacity-35 cursor-not-allowed'
-            }`}
-          >
-            <img src="/src/assets/icons/star.svg" className="w-4 h-4 brightness-0" alt="star" />
-            <span className="text-black text-base font-semibold">Claim starz</span>
-          </button>
 
           {/* Referral Users */}
           <div className="flex flex-col gap-2">
@@ -189,10 +152,10 @@ export function ReffScreen() {
                     <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
                       <span className="text-xs font-bold text-blue-600">TG</span>
                     </div>
-                    <span className="text-neutral-50 text-sm">@{referralUser.username}</span>
+                    <span className="text-neutral-50 text-sm">{referralUser.username ? `@${referralUser.username}` : `User ${referralUser.id}`}</span>
                   </div>
                   <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5">
-                    <span className="text-neutral-50 text-sm">+{referralUser.earnings}</span>
+                    <span className="text-neutral-50 text-sm">{referralUser.balls_count || 0}</span>
                     <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
                   </div>
                 </div>

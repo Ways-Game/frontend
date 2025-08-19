@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { MockApi, type UserProfile } from '@/services/mockApi'
-import { api } from '@/services/api'
+import { api, type UserProfile } from '@/services/api'
 
-interface TelegramUser {
+interface ExtendedUser {
   id: number
   first_name: string
   last_name?: string
   username?: string
   photo_url?: string
+  balance?: number
+  start_link?: string
+  balls_count?: number
+  referrers_id?: number[]
 }
 
 interface UseTelegramReturn {
-  user: TelegramUser | null
+  user: ExtendedUser | null
   webApp: typeof WebApp
   isReady: boolean
   shareReferralLink: () => void
@@ -20,14 +23,14 @@ interface UseTelegramReturn {
   inviteFriends: () => void
   showAlert: (message: string) => void
   hapticFeedback: (type: 'light' | 'medium' | 'heavy') => void
-  getUserProfile: (id: number) => Promise<UserProfile>
+  loadUserProfile: () => Promise<void>
 }
 
 const BOT_USERNAME = 'ways_ball_bot'
 
 export const useTelegram = (): UseTelegramReturn => {
   const [isReady, setIsReady] = useState(false)
-  const [user, setUser] = useState<TelegramUser | null>(null)
+  const [user, setUser] = useState<ExtendedUser | null>(null)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -36,7 +39,7 @@ export const useTelegram = (): UseTelegramReturn => {
       WebApp.setHeaderColor('#0C0E12')
       WebApp.setBackgroundColor('#0C0E12')
       
-       const telegramUser = WebApp.initDataUnsafe?.user
+      const telegramUser = WebApp.initDataUnsafe?.user
       
       if (telegramUser) {
         setUser({
@@ -47,16 +50,27 @@ export const useTelegram = (): UseTelegramReturn => {
           photo_url: telegramUser.photo_url
         })
       }
-
-      // Логируем после установки состояния
-      console.log('WebApp instance:', window.Telegram.WebApp )
-      console.log('User data:', telegramUser) // Используем локальную переменную
-      
-      setIsReady(true)
       
       setIsReady(true)
     }
   }, [])
+
+  const loadUserProfile = async (): Promise<void> => {
+    if (!user?.id) return
+    
+    try {
+      const profile = await api.getUserProfile(user.id)
+      setUser(prev => prev ? {
+        ...prev,
+        balance: profile.balance,
+        start_link: profile.start_link,
+        balls_count: profile.balls_count,
+        referrers_id: profile.referrers_id
+      } : null)
+    } catch (error) {
+      console.error('Failed to load user profile:', error)
+    }
+  }
 
   const getUserDisplayName = (): string => {
     if (!user) return 'Anonymous'
@@ -65,7 +79,7 @@ export const useTelegram = (): UseTelegramReturn => {
 
   const shareReferralLink = (): void => {
     if (!user) return
-    const referralUrl = `https://t.me/${BOT_USERNAME}?start=ref_${user.id}`
+    const referralUrl = user.start_link
     const shareText = `🎮 Join me in Ways Ball Game and earn rewards!\n\n🎁 Use my referral link to get bonus ballz!`
     WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
     WebApp.HapticFeedback.impactOccurred('light')
@@ -87,11 +101,6 @@ export const useTelegram = (): UseTelegramReturn => {
     WebApp.HapticFeedback.impactOccurred(type)
   }
 
-  const getUserProfile = async (id: number): Promise<UserProfile> => {
-    console.log(api.getUserProfile(id), id)
-    return api.getUserProfile(id)
-  }
-
   return {
     user,
     webApp: WebApp,
@@ -101,6 +110,6 @@ export const useTelegram = (): UseTelegramReturn => {
     inviteFriends,
     showAlert,
     hapticFeedback,
-    getUserProfile
+    loadUserProfile
   }
 }
