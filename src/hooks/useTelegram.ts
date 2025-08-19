@@ -53,6 +53,7 @@ export const useTelegram = (): UseTelegramReturn => {
           setUser(baseUser)
           
           try {
+            console.log('Loading user profile for:', telegramUser.id)
             const profile = await api.getUserProfile(telegramUser.id)
             let referrers = []
             if (profile.referrers_id?.length) {
