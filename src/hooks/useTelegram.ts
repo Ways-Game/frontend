@@ -79,7 +79,7 @@ export const useTelegram = (): UseTelegramReturn => {
 
   const shareReferralLink = (): void => {
     if (!user) return
-    const referralUrl = `https://t.me/${BOT_USERNAME}?start=ref_${user.id}`
+    const referralUrl = `${user.start_link}`
     const shareText = `🎮 Join me in Ways Ball Game and earn rewards!\n\n🎁 Use my referral link to get bonus ballz!`
     WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
     WebApp.HapticFeedback.impactOccurred('light')
@@ -87,7 +87,7 @@ export const useTelegram = (): UseTelegramReturn => {
 
   const inviteFriends = (): void => {
     if (!user) return
-    const referralUrl = `https://t.me/${BOT_USERNAME}?start=ref_${user.id}`
+    const referralUrl = `${user.start_link}`
     const shareText = `🎮 Play Ways Ball Game with me! 🎁`
     WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
     WebApp.HapticFeedback.impactOccurred('medium')
