@@ -11,8 +11,7 @@ interface ExtendedUser {
   balance?: number
   start_link?: string
   balls_count?: number
-  referrers_id?: number[]
-  referrers?: any[]
+  referrers_id?: any[]
 }
 
 interface UseTelegramReturn {
@@ -56,20 +55,12 @@ export const useTelegram = (): UseTelegramReturn => {
             console.log('Loading user profile for:', telegramUser.id)
             const profile = await api.getUserProfile(telegramUser.id)
             console.log('Loaded user profile:', profile)
-            let referrers = []
-            if (profile.referrers_id?.length) {
-              referrers = await Promise.all(
-                profile.referrers_id.map(id => api.getUserProfile(id))
-              )
-            }
-            console.log('Loaded user profile:', profile, referrers)
             setUser({
               ...baseUser,
               balance: profile.balance,
               start_link: profile.start_link,
               balls_count: profile.balls_count,
-              referrers_id: profile.referrers_id,
-              referrers
+              referrers_id: profile.referrers_id
             })
           } catch (error) {
             console.error('Failed to load user profile:', error)

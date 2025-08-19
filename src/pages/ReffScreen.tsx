@@ -73,9 +73,9 @@ export function ReffScreen() {
 
           {/* Referral Users */}
           <div className="flex flex-col gap-2">
-            <span className="text-neutral-500 text-xs">Referral users ({user?.referrers?.length || 0})</span>
+            <span className="text-neutral-500 text-xs">Referral users ({user?.referrers_id?.length || 0})</span>
             
-            {user?.referrers?.map((referralUser) => (
+            {user?.referrers_id?.map((referralUser) => (
               <div key={referralUser.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
@@ -90,7 +90,7 @@ export function ReffScreen() {
               </div>
             ))}
 
-            {(!user?.referrers || user.referrers.length === 0) && (
+            {(!user?.referrers_id || user.referrers_id.length === 0) && (
               <div className="text-center py-4 text-neutral-500 text-sm">
                 No referrals yet. Invite friends to start earning!
               </div>
