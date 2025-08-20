@@ -13,7 +13,7 @@ class WebSocketService {
   private listeners: Map<string, Set<(data: any) => void>> = new Map()
 
   connect() {
-    const wsUrl =  `wss://bot.guarant.network/ws/games`
+    const wsUrl =  `wss://bot.guarant.network/game/ws/games`
     
     try {
       this.ws = new WebSocket(wsUrl)
