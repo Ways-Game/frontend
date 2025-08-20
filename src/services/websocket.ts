@@ -1,5 +1,5 @@
 import type { GameDetailResponse } from '@/types/api'
-
+const API_BASE_URL = import.meta.env.VITE_API_URL
 interface GamesListMessage {
   type: 'games_list'
   data: GameDetailResponse[]
@@ -13,9 +13,7 @@ class WebSocketService {
   private listeners: Map<string, Set<(data: any) => void>> = new Map()
 
   connect() {
-    const wsUrl = process.env.NODE_ENV === 'development' 
-      ? 'ws://localhost:8080/ws/games'
-      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/games`
+    const wsUrl =  `wss://${API_BASE_URL}/ws/games`
     
     try {
       this.ws = new WebSocket(wsUrl)
