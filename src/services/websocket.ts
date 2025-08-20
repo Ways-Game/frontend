@@ -70,10 +70,10 @@ class WebSocketService {
       this.listeners.set(eventType, new Set())
     }
     this.listeners.get(eventType)!.add(callback)
-
+    console.log('subscribe method this.listeners', this.listeners)
     return () => {
       const callbacks = this.listeners.get(eventType)
-    console.log('subcribe method', callbacks)
+    console.log('subcribe method callbacks', callbacks)
 
       if (callbacks) {
         callbacks.delete(callback)
