@@ -22,9 +22,10 @@ export interface ParticipantData {
 }
 
 export enum GameState {
-  WAITING = 'waiting',
-  ACTIVE = 'active',
-  FINISHED = 'finished'
+  WAIT_PLAYERS = 'wait_players',
+  WAIT_PLAY = 'wait_play', 
+  PLAY = 'play',
+  FINISH = 'finish'
 }
 
 export interface GameDetailResponse {

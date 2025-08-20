@@ -36,7 +36,7 @@ export function PvPScreen() {
         
         // Select first waiting game by default
         if (games.length > 0 && !selectedGame) {
-          const waitingGame = games.find(g => g.status === GameState.WAITING)
+          const waitingGame = games.find(g => g.status === GameState.WAIT_PLAYERS || g.status === GameState.WAIT_PLAY)
           if (waitingGame) {
             setSelectedGame(waitingGame)
           }
@@ -53,7 +53,7 @@ export function PvPScreen() {
 
   const handleStartGame = async () => {
     try {
-      if (selectedGame?.status === GameState.ACTIVE) {
+      if (selectedGame?.status === GameState.PLAY) {
         navigate('/game')
       }
     } catch (error) {
@@ -101,7 +101,7 @@ export function PvPScreen() {
           <div className="flex-1 relative flex justify-start items-center gap-3 overflow-hidden">
             <div className="flex gap-3 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               {games.map((game) => {
-                const isActive = game.status === GameState.ACTIVE
+                const isActive = game.status === GameState.PLAY
                 const isSelected = selectedGame?.seed === game.seed
                 return (
                   <div 
@@ -152,8 +152,8 @@ export function PvPScreen() {
             <div className="h-8 px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
               <span className="text-white text-base">GAME #{selectedGame?.seed.slice(-5) || '-----'}</span>
               <div className={`w-2 h-2 rounded-full ${
-                selectedGame?.status === GameState.ACTIVE ? 'bg-green-500' :
-                selectedGame?.status === GameState.WAITING ? 'bg-yellow-500' : 'bg-gray-500'
+                selectedGame?.status === GameState.PLAY ? 'bg-green-500' :
+                selectedGame?.status === GameState.WAIT_PLAYERS || selectedGame?.status === GameState.WAIT_PLAY ? 'bg-yellow-500' : 'bg-gray-500'
               }`} />
             </div>
             <div className="flex items-center gap-2">
@@ -161,7 +161,7 @@ export function PvPScreen() {
                 isConnected={isConnected}
                 playersCount={selectedGame?.participants.length || 0}
                 maxPlayers={6}
-                gameStatus={selectedGame?.status || GameState.WAITING}
+                gameStatus={selectedGame?.status || GameState.WAIT_PLAYERS}
               />
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-400" />

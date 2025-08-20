@@ -4,21 +4,21 @@ interface ConnectionStatusProps {
   isConnected: boolean
   playersCount: number
   maxPlayers: number
-  gameStatus: 'waiting' | 'active' | 'finished'
+  gameStatus: 'wait_players' | 'wait_play' | 'play' | 'finish'
 }
 
 export function ConnectionStatus({ isConnected, playersCount, maxPlayers, gameStatus }: ConnectionStatusProps) {
   const getStatusColor = () => {
     if (!isConnected) return 'bg-red-500'
-    if (gameStatus === 'active') return 'bg-green-500'
-    if (gameStatus === 'waiting') return 'bg-yellow-500'
+    if (gameStatus === 'play') return 'bg-green-500'
+    if (gameStatus === 'wait_players' || gameStatus === 'wait_play') return 'bg-yellow-500'
     return 'bg-gray-500'
   }
 
   const getStatusText = () => {
     if (!isConnected) return 'Disconnected'
-    if (gameStatus === 'active') return 'Game Active'
-    if (gameStatus === 'waiting') return `Waiting (${playersCount}/${maxPlayers})`
+    if (gameStatus === 'play') return 'Game Active'
+    if (gameStatus === 'wait_players' || gameStatus === 'wait_play') return `Waiting (${playersCount}/${maxPlayers})`
     return 'Game Ended'
   }
 

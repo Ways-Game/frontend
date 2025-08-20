@@ -63,6 +63,7 @@ class WebSocketService {
   }
 
   subscribe(eventType: string, callback: (data: any) => void) {
+    console.log('subcribe method')
     if (!this.listeners.has(eventType)) {
       this.listeners.set(eventType, new Set())
     }
