@@ -1,4 +1,4 @@
-import { Player, GameData, UserStats, UserProfile } from '@/types';
+import { Player, GameData, UserProfile } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://bot.guarant.network/api';
 
@@ -26,9 +26,6 @@ class ApiService {
     return this.request<GameData>('/game/current');
   }
 
-  async getUserStats(): Promise<UserStats> {
-    return this.request<UserStats>('/user/stats');
-  }
 
   async buyBallz(amount: number): Promise<{ success: boolean; newBalance: number }> {
     return this.request<{ success: boolean; newBalance: number }>('/user/buy-ballz', {

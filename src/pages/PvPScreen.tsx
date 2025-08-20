@@ -23,17 +23,13 @@ export function PvPScreen() {
   
   const [activeAction, setActiveAction] = useState<string | null>(null)
   const [selectedGame, setSelectedGame] = useState<GameDetailResponse | null>(null)
-  const [userStats, setUserStats] = useState<UserStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   
   const { games, isConnected } = useGames()
 
   useEffect(() => {
-    console.log('Games list: ', games, "is connected ", isConnected)
     const loadData = async () => {
       try {
-        const stats = await api.getUserStats()
-        setUserStats(stats)
         
         // Select first waiting game by default
         if (games.length > 0 && !selectedGame) {

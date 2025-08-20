@@ -55,15 +55,6 @@ export interface GameData {
   status: 'waiting' | 'active' | 'finished'
 }
 
-export interface UserStats {
-  balance: number
-  totalGames: number
-  wins: number
-  referrals: number
-  claimableAmount: number
-  totalClaimed: number
-}
-
 export interface ReferralUser {
   id: string
   username: string

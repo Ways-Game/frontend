@@ -28,7 +28,6 @@ export function useApi<T>(apiCall: () => Promise<T>) {
 
 export const useGameApi = () => ({
   getCurrentGame: useApi(() => apiProxy.getCurrentGame()),
-  getUserStats: useApi(() => apiProxy.getUserStats()),
   startGame: useApi(() => apiProxy.startGame()),
   getGameResult: useApi(() => apiProxy.getGameResult()),
 });

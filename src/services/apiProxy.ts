@@ -20,17 +20,6 @@ class ApiProxy {
     }
   }
 
-  async getUserStats() {
-    try {
-      return await this.getService().getUserStats();
-    } catch (error) {
-      console.error('API Error:', error);
-      if (!USE_MOCK) {
-        return MockApi.getUserStats();
-      }
-      throw error;
-    }
-  }
 
   async buyBallz(amount: number) {
     try {
