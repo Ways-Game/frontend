@@ -1,23 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { wsService } from '@/services/websocket'
 import type { GameDetailResponse } from '@/types/api'
 
 export function useGames() {
   const [games, setGames] = useState<GameDetailResponse[]>([])
   const [isConnected, setIsConnected] = useState(false)
-  const unsubscribeRefs = useRef<(() => void)[]>([])
 
   useEffect(() => {
+    const unsubscribe = wsService.subscribe('games_list', (data: GameDetailResponse[]) => {
+      console.log('Received games:', data)
+      setGames(data)
+    })
+    
     wsService.connect()
-
-    const unsubscribes = [
-      wsService.subscribe('games_list', (data: GameDetailResponse[]) => {
-        console.log('Received games:', data)
-        setGames(data)
-      })
-    ]
-
-    unsubscribeRefs.current = unsubscribes
 
     const checkConnection = () => {
       setIsConnected(wsService.isConnected())
@@ -28,7 +23,7 @@ export function useGames() {
 
     return () => {
       clearInterval(interval)
-      unsubscribeRefs.current.forEach(unsub => unsub())
+      unsubscribe()
       wsService.disconnect()
     }
   }, [])

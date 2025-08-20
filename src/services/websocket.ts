@@ -81,9 +81,13 @@ class WebSocketService {
   }
 
   private notifyListeners(eventType: string, data: any) {
+    console.log('Notifying listeners for event:', eventType, 'with data:', data)
     const callbacks = this.listeners.get(eventType)
     if (callbacks) {
+      console.log('Found', callbacks.size, 'callbacks for event:', eventType)
       callbacks.forEach(callback => callback(data))
+    } else {
+      console.log('No callbacks found for event:', eventType)
     }
   }
 
