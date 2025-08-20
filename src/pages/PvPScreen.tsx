@@ -120,11 +120,11 @@ export function PvPScreen() {
                         }}
                       />
                     )}
-                    <div className="flex items-center gap-1.5 relative z-10">
-                      <Smile className="w-4 h-4 text-white" />
+                    <div className="flex items-center gap-1.5 relative z-10">         
                       <span className="text-white text-base font-semibold">
                         {isActive ? 'LIVE' : 'WAIT'}
                       </span>
+                      <Smile className="w-4 h-4 text-white" />
                     </div>
                     <div className="flex items-center gap-1 relative z-10">
                       <span className="text-white/80 text-base font-semibold">{game.participants.length}</span>
@@ -151,26 +151,20 @@ export function PvPScreen() {
           {/* Game Info Row */}
           <div className="flex justify-between items-start">
             <div className="h-8 px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
-              <span className="text-white text-base">GAME #{selectedGame?.seed.slice(-5) || '-----'}</span>
+              <span className="text-white text-base">GAME #{selectedGame?.id || '-----'}</span>
               <div className={`w-2 h-2 rounded-full ${
                 selectedGame?.status === GameState.PLAY ? 'bg-green-500' :
                 selectedGame?.status === GameState.WAIT_PLAYERS || selectedGame?.status === GameState.WAIT_PLAY ? 'bg-yellow-500' : 'bg-gray-500'
               }`} />
             </div>
             <div className="flex items-center gap-2">
-              <ConnectionStatus 
-                isConnected={isConnected}
-                playersCount={selectedGame?.participants.length || 0}
-                maxPlayers={6}
-                gameStatus={selectedGame?.status || GameState.WAIT_PLAYERS}
-              />
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-400" />
                 <span className="text-neutral-50 text-sm">15s</span>
               </div>
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
                 <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
-                <span className="text-neutral-50 text-sm">{selectedGame?.total_price || 0}<span className="text-neutral-50/40">/{selectedGame?.total_balls || 0}</span></span>
+                <span className="text-neutral-50 text-sm">{selectedGame?.total_balls || 0}<span className="text-neutral-50/40">/300</span></span>
               </div>
             </div>
           </div>
@@ -195,7 +189,7 @@ export function PvPScreen() {
           {/* Players List */}
           <div className="flex-1 py-6 flex flex-col gap-2">
             {selectedGame?.participants.length ? (
-              selectedGame.participants.slice(0, 4).map((participant, index) => (
+              selectedGame.participants.map((participant, index) => (
                 <div key={participant.id} className={`px-2.5 py-2 rounded-[37px] flex justify-between items-center ${
                   index === 0 ? 'bg-blue-600' : 'bg-white/5'
                 }`}>
@@ -222,9 +216,6 @@ export function PvPScreen() {
             ) : (
               <div className="text-center py-8">
                 <p className="text-neutral-400 text-sm">Waiting for players...</p>
-                <p className="text-neutral-500 text-xs mt-1">
-                  0/6 players
-                </p>
               </div>
             )}
           </div>

@@ -29,6 +29,7 @@ export enum GameState {
 }
 
 export interface GameDetailResponse {
+  id: number;
   seed: string;
   start_time: string;
   map_id: number;

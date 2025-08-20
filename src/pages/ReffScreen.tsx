@@ -35,7 +35,7 @@ export function ReffScreen() {
             backgroundPosition: 'center'
           }}
         >
-          <div className="text-neutral-50 text-3xl font-bold">
+          <div className="text-neutral-50 text-3xl font-bold w-[60%]">
             Post videos and earn money
           </div>
           <div className="flex ">

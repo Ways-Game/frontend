@@ -10,13 +10,13 @@ class WebSocketService {
   private listeners: Map<string, Set<(data: any) => void>> = new Map()
 
   connect() {
-    const wsUrl =  `wss://bot.guarant.network/api/game/ws/games`
-    
+    const wsUrl =  `wss://${API_BASE_URL}/game/ws/games`
+
     try {
       this.ws = new WebSocket(wsUrl)
       
       this.ws.onopen = () => {
-        console.log('WebSocket connected to:', wsUrl)
+
         this.reconnectAttempts = 0
         // Сервер отправляет games_list сразу, но можно запросить обновление
         setTimeout(() => this.requestGames(), 100)
@@ -24,12 +24,12 @@ class WebSocketService {
       
       this.ws.onmessage = (event) => {
         try {
-          console.log('Raw message:', event.data)
+
           const message = JSON.parse(event.data)
-          console.log('WebSocket message received:', message)
+
           this.notifyListeners(message.event, message.data)
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error)
+
         }
       }
       
@@ -70,10 +70,8 @@ class WebSocketService {
       this.listeners.set(eventType, new Set())
     }
     this.listeners.get(eventType)!.add(callback)
-    console.log('subscribe method this.listeners', this.listeners)
     return () => {
       const callbacks = this.listeners.get(eventType)
-    console.log('subcribe method callbacks', callbacks)
 
       if (callbacks) {
         callbacks.delete(callback)
@@ -85,10 +83,8 @@ class WebSocketService {
   }
 
   private notifyListeners(eventType: string, data: any) {
-    console.log('Notifying listeners for event:', eventType, 'with data:', data)
     const callbacks = this.listeners.get(eventType)
     if (callbacks) {
-      console.log('Found', callbacks.size, 'callbacks for event:', eventType)
       callbacks.forEach(callback => callback(data))
     } else {
       console.log('No callbacks found for event:', eventType)
@@ -103,7 +99,6 @@ class WebSocketService {
     if (this.ws?.readyState === WebSocket.OPEN) {
       // Отправляем get_games для получения данных
       this.ws.send('get_games')
-      console.log('отправил get_games на сервер')
     }
   }
 }
