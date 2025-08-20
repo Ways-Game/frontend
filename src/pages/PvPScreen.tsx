@@ -29,6 +29,7 @@ export function PvPScreen() {
   const { games, isConnected } = useGames()
 
   useEffect(() => {
+    console.log('Games list: ', games, "is connected ", isConnected)
     const loadData = async () => {
       try {
         const stats = await MockApi.getUserStats()
