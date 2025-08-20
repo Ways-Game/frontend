@@ -7,31 +7,30 @@ export function useGames() {
   const [isConnected, setIsConnected] = useState(false)
 
   useEffect(() => {
+    // подписываемся один раз
     const unsubscribe = wsService.subscribe('games_list', (data: GameDetailResponse[]) => {
       console.log('Received games:', data)
       setGames(data)
     })
-    
+
+    // подключаемся (onopen у сервиса сам отправит get_games)
     wsService.connect()
 
-    const checkConnection = () => {
-      const connected = wsService.isConnected()
-      setIsConnected(connected)
-      // Запрашиваем данные при подключении
-      if (connected && games.length === 0) {
-        wsService.requestGames()
-      }
-    }
-    
-    const interval = setInterval(checkConnection, 1000)
-    checkConnection()
+    // только для индикации соединения (обновляем каждую секунду)
+    const interval = setInterval(() => {
+      setIsConnected(wsService.isConnected())
+    }, 1000)
+    // и выставим начальное состояние
+    setIsConnected(wsService.isConnected())
 
     return () => {
       clearInterval(interval)
+      // снимаем только нашу подписку, а не чистим всё в сервисе
       unsubscribe()
       wsService.disconnect()
     }
-  }, [games.length])
+    // пустой массив — эффект один раз
+  }, [])
 
   return {
     games,
