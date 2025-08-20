@@ -51,7 +51,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       };
     };
 
-    const startRound = (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
+    const startRound = async (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
       if (!app) return;
 
       speedUpFramesRemaining.current = 0;
@@ -141,8 +141,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       onGameStart?.();
     };
 
-    const startGame = (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
-      startRound(gameData);
+    const startGame = async (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
+      await startRound(gameData);
 
       if (speedUpTime > 0) {
         isSpeedingUp.current = true;

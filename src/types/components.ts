@@ -15,7 +15,7 @@ export interface Ball {
 }
 
 export interface GameCanvasRef {
-  startGame: () => void;
+  startGame: (gameData: { seed: string; mapId: number[] | number; participants: any[]; }) => Promise<void>;
   resetGame: () => void;
   gameState: 'waiting' | 'playing' | 'finished';
   setCameraMode: (mode: 'leader' | 'swipe') => void;

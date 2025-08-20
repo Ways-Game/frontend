@@ -26,6 +26,8 @@ export function GameScreen() {
   const [scrollY, setScrollY] = useState(0)
   const [maxScrollY, setMaxScrollY] = useState(0)
   const [touchStartY, setTouchStartY] = useState(0) 
+ const [gameData, setGameData] = useState({ seed: "", mapId: 0, participants: [] })
+
 
   const handleClose = () => {
     navigate('/')
@@ -64,34 +66,35 @@ export function GameScreen() {
     console.log(`Ball ${ballId} (${playerId}) won!`)
   }
 
-  const startGame = (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
-    const countdownDuration = 4
+
+  const startGame = () => {
+    const countdownDuration = 4;
     
     if (speedUpTime >= countdownDuration) {
-      handleGameStart()
-      gameCanvasRef.current?.startGame(gameData)
+      handleGameStart();
+      gameCanvasRef.current?.startGame(gameData);
     } else {
-      setShowCountdown(true)
+      setShowCountdown(true);
       
-      const remainingCountdown = countdownDuration - speedUpTime - 1
-      let count = Math.max(1, remainingCountdown)
+      const remainingCountdown = countdownDuration - speedUpTime - 1;
+      let count = Math.max(1, remainingCountdown);
       
       const countdown = () => {
         if (count > 0) {
-          setCountdownText(count.toString())
-          count--
-          setTimeout(countdown, 1000)
+          setCountdownText(count.toString());
+          count--;
+          setTimeout(countdown, 1000);
         } else {
-          setCountdownText("LET'S GO!")
+          setCountdownText("LET'S GO!");
           setTimeout(() => {
-            setShowCountdown(false)
-            gameCanvasRef.current?.startGame(gameData)
-          }, 1000)
+            setShowCountdown(false);
+            gameCanvasRef.current?.startGame(gameData);
+          }, 1000);
         }
-      }
-      countdown()
+      };
+      countdown();
     }
-  }
+  };
 
   // Функция для переключения режима камеры
   const toggleCameraMode = () => {
