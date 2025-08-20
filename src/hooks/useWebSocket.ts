@@ -12,6 +12,7 @@ export function useGames() {
 
     const unsubscribes = [
       wsService.subscribe('games_list', (data: GameDetailResponse[]) => {
+        console.log('Received games:', data)
         setGames(data)
       })
     ]

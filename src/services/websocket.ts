@@ -1,9 +1,6 @@
 import type { GameDetailResponse } from '@/types/api'
 const API_BASE_URL = import.meta.env.VITE_API_URL
-interface GamesListMessage {
-  type: 'games_list'
-  data: GameDetailResponse[]
-}
+
 
 class WebSocketService {
   private ws: WebSocket | null = null
@@ -19,14 +16,15 @@ class WebSocketService {
       this.ws = new WebSocket(wsUrl)
       
       this.ws.onopen = () => {
-        console.log('WebSocket connected')
+        console.log('WebSocket connected to:', wsUrl)
         this.reconnectAttempts = 0
       }
       
       this.ws.onmessage = (event) => {
         try {
-          const message: GamesListMessage = JSON.parse(event.data)
-          this.notifyListeners(message.type, message.data)
+          const message = JSON.parse(event.data)
+          console.log('WebSocket message received:', message)
+          this.notifyListeners(message.event, message.data)
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error)
         }

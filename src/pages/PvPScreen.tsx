@@ -136,14 +136,10 @@ export function PvPScreen() {
           </div>
           <button 
             onClick={handleConnect}
-            className={`h-8 px-3 py-2 rounded-[20px] flex items-center gap-1.5 ${
-              isConnected ? 'bg-green-600' : 'bg-[#007AFF]'
-            }`}
+            className="h-8 px-3 py-2 bg-[#007AFF] rounded-[20px] flex items-center gap-1.5"
           >
-            {isConnected ? <Wifi className="w-4 h-4 text-white" /> : <WifiOff className="w-4 h-4 text-white" />}
-            <span className="text-white text-base font-semibold">
-              {isConnected ? 'Connected' : 'Connect'}
-            </span>
+            <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
+            <span className="text-white text-base font-semibold">Connect</span>
           </button>
         </div>
       </div>
@@ -292,11 +288,6 @@ export function PvPScreen() {
           <div className="flex items-center gap-px">
             <span className="text-white text-xs font-medium">1 ballz = 30</span>
             <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
-          </div>
-          <div className="flex items-center gap-2 text-xs text-neutral-400">
-            <span>Balance: {userStats?.balance || 0}</span>
-            <span>•</span>
-            <span>Ballz: {user?.balls_count || 0}</span>
           </div>
         </div>
       </div>

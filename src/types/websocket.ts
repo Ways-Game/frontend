@@ -20,9 +20,8 @@ export interface Player {
 }
 
 export interface WebSocketMessage {
-  type: 'game_update' | 'player_joined' | 'player_left' | 'game_started' | 'game_ended' | 'error'
+  event: 'games_list'
   data: any
-  timestamp?: number
 }
 
 export interface GameEvents {
