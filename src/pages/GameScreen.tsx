@@ -12,7 +12,7 @@ import { TabBar } from "@/components/navigation/TabBar"
 
 export function GameScreen() {
   const navigate = useNavigate()
-  const { webApp } = useTelegram()
+  const { webApp, shareGameStory } = useTelegram()
   const gameCanvasRef = useRef<GameCanvasRef>(null)
   const [timeLeft, setTimeLeft] = useState(60)
   const [soundEnabled, setSoundEnabled] = useState(true)
@@ -21,7 +21,7 @@ export function GameScreen() {
   const [gameStarted, setGameStarted] = useState(false)
   const [showCountdown, setShowCountdown] = useState(false)
   const [countdownText, setCountdownText] = useState('3')
-
+ const [speedUpTime, setSpeedUpTime] = useState(0) 
   useEffect(() => {
     if (!gameStarted) return
     
@@ -42,16 +42,13 @@ export function GameScreen() {
   }
 
   const handlePlayAgain = () => {
-    setGameModal(null)
-    setGameResult(null)
-    setTimeLeft(60)
-    setGameStarted(false)
-    setShowCountdown(false)
-    gameCanvasRef.current?.resetGame()
+    navigate('/')
   }
 
-  const handleShare = () => {
-    MockApi.shareResult('current-game')
+  const handleShare = async () => {
+    if (gameResult) {
+      await shareGameStory(gameResult.result === 'win')
+    }
   }
 
   const handleGameStart = () => {
@@ -72,24 +69,34 @@ export function GameScreen() {
   }
 
   const startGame = () => {
-    setShowCountdown(true)
+    const countdownDuration = 4 // Countdown takes 4 seconds (3 + 1 for "LET'S GO!")
     
-    // Countdown sequence
-    let count = 3
-    const countdown = () => {
-      if (count > 0) {
-        setCountdownText(count.toString())
-        count--
-        setTimeout(countdown, 1000)
-      } else {
-        setCountdownText("LET'S GO!")
-        setTimeout(() => {
-          setShowCountdown(false)
-          gameCanvasRef.current?.startGame()
-        }, 1000)
+    if (speedUpTime >= countdownDuration) {
+      // Skip countdown entirely for long speed-ups
+      handleGameStart()
+      gameCanvasRef.current?.startGame()
+    } else {
+      setShowCountdown(true)
+      
+      // Adjust countdown based on speed-up time
+      const remainingCountdown = countdownDuration - speedUpTime - 1 // -1 for "LET'S GO!"
+      let count = Math.max(1, remainingCountdown)
+      
+      const countdown = () => {
+        if (count > 0) {
+          setCountdownText(count.toString())
+          count--
+          setTimeout(countdown, 1000)
+        } else {
+          setCountdownText("LET'S GO!")
+          setTimeout(() => {
+            setShowCountdown(false)
+            gameCanvasRef.current?.startGame()
+          }, 1000)
+        }
       }
+      countdown()
     }
-    countdown()
   }
 
   const testModal = () => {
@@ -108,6 +115,7 @@ export function GameScreen() {
         onGameStart={handleGameStart}
         onGameEnd={handleGameEnd}
         className="absolute inset-0 w-full h-full"
+        speedUpTime={speedUpTime - 4}
       />
       
       {/* Start Game Button */}

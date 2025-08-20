@@ -25,6 +25,7 @@ interface UseTelegramReturn {
   showAlert: (message: string) => void
   hapticFeedback: (type: 'light' | 'medium' | 'heavy') => void
   loadUserProfile: () => Promise<void>
+  shareGameStory: (isWinner: boolean) => Promise<void>
 }
 
 const BOT_USERNAME = 'ways_ball_bot'
@@ -120,6 +121,16 @@ export const useTelegram = (): UseTelegramReturn => {
     WebApp.HapticFeedback.impactOccurred(type)
   }
 
+  const shareGameStory = async (isWinner: boolean): Promise<void> => {
+    if (!user?.id) return
+    
+    try {
+      await api.shareGameStory(user.id, isWinner)
+    } catch (error) {
+      console.error('Failed to share game story:', error)
+    }
+  }
+
   return {
     user,
     webApp: WebApp,
@@ -128,6 +139,7 @@ export const useTelegram = (): UseTelegramReturn => {
     getUserDisplayName,
     showAlert,
     hapticFeedback,
-    loadUserProfile
+    loadUserProfile,
+    shareGameStory
   }
 }

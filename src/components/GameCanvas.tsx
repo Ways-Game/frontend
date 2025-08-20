@@ -24,6 +24,7 @@ interface GameCanvasProps {
   onGameEnd?: () => void;
   ballImages?: string[];
   className?: string;
+  speedUpTime?: number;
 }
 
 export interface GameCanvasRef {
@@ -33,7 +34,7 @@ export interface GameCanvasRef {
 }
 
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
-  ({ onBallWin, onGameStart, onGameEnd, ballImages = [], className }, ref) => {
+  ({ onBallWin, onGameStart, onGameEnd, ballImages = [], className, speedUpTime = 0 }, ref) => {
     const canvasRef = useRef<HTMLDivElement>(null);
     const [app, setApp] = useState<PIXI.Application | null>(null);
     const ballsRef = useRef<Ball[]>([]);
@@ -46,6 +47,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const rngRef = useRef<(() => number) | null>(null);
     const texturesRef = useRef<PIXI.Texture[]>([]);
     const mapDataRef = useRef<MapData | null>(null);
+    const speedUpFramesRemaining = useRef(0);
+    const isSpeedingUp = useRef(false);
 
     // Seeded random number generator
     const createRNG = (seed: string) => {
@@ -64,6 +67,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     const startRound = (playerCount: number = 150, seed: string = Date.now().toString()) => {
       if (!app) return;
+
+      speedUpFramesRemaining.current = 0;
+      isSpeedingUp.current = false;
 
       const rng = createRNG(seed);
       rngRef.current = rng;
@@ -145,7 +151,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     const startGame = () => {
       const seed = Date.now().toString();
-      startRound(150, seed); // Уменьшено количество мячей для оптимизации
+      startRound(150, seed);
+      
+      if (speedUpTime > 0) {
+        isSpeedingUp.current = true;
+        speedUpFramesRemaining.current = speedUpTime * 60;
+      }
     };
 
     const resetGame = () => {
@@ -171,9 +182,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Initialize PIXI
     useEffect(() => {
-      if (!canvasRef.current || canvasRef.current.firstChild) return;
+      if (!canvasRef.current || app) return;
 
       const initGame = async () => {
+        if (!canvasRef.current) return;
+        
         const deviceWidth = window.innerWidth;
         const deviceHeight = window.innerHeight;
         
@@ -186,7 +199,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           antialias: true,
         });
 
-        canvasRef.current!.appendChild(pixiApp.canvas);
+        if (canvasRef.current && pixiApp.canvas) {
+          canvasRef.current.appendChild(pixiApp.canvas);
+        } else {
+          return;
+        }
 
         // Load ball textures from props
         if (ballImages.length > 0) {
@@ -434,8 +451,22 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         // Animation loop
         const gameLoop = () => {
-          if (ballsRef.current.length > 0) {
-            updateBalls();
+          if (isSpeedingUp.current && speedUpFramesRemaining.current > 0) {
+            const framesToProcess = Math.min(speedUpFramesRemaining.current, 10);
+            for (let i = 0; i < framesToProcess; i++) {
+              if (ballsRef.current.length > 0) {
+                updateBalls();
+              }
+              speedUpFramesRemaining.current--;
+            }
+            
+            if (speedUpFramesRemaining.current <= 0) {
+              isSpeedingUp.current = false;
+            }
+          } else {
+            if (ballsRef.current.length > 0) {
+              updateBalls();
+            }
           }
           
           // Scale and center the game field - keep same zoom for wider map
@@ -497,14 +528,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       initGame();
 
       return () => {
-        if (app) {
-          app.destroy(true);
-        }
-        if (canvasRef.current && canvasRef.current.firstChild) {
-          canvasRef.current.removeChild(canvasRef.current.firstChild);
+        try {
+          if (app) {
+            if (app.ticker) {
+              app.ticker.destroy();
+            }
+            app.destroy({ removeView: true, stageOptions: true });
+            setApp(null);
+          }
+        } catch (error) {
+          console.error('Error during cleanup:', error);
         }
       };
-    }, [ballImages]);
+    }, []);
 
     return (
       <div className={className}>

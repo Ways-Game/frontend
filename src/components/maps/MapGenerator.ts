@@ -46,7 +46,7 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
 
   // Generate random blocks with max 2 repetitions per block type
   let currentY = screenHeight + 100; // Начинаем после стартовой секции
-  const numBlocks = 6 + Math.floor(rng() * 3); // 10-12 blocks
+  const numBlocks = 16 + Math.floor(rng() * 3); // 10-12 blocks
   const blockCounts = new Map<string, number>();
   const selectedBlocks: typeof MAP_BLOCKS[0][] = [];
 

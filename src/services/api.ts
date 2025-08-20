@@ -74,6 +74,13 @@ class ApiService {
       body: JSON.stringify({ user_id, avatar_url }),
     });
   }
+
+  async shareGameStory(user_id: number, is_winner: boolean): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>('/stories/share_game_story', {
+      method: 'POST',
+      body: JSON.stringify({ user_id, is_winner }),
+    });
+  }
 }
 
 export const api = new ApiService();
