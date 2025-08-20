@@ -18,7 +18,8 @@ class WebSocketService {
       this.ws.onopen = () => {
         console.log('WebSocket connected to:', wsUrl)
         this.reconnectAttempts = 0
-        // Сервер автоматически отправляет games_list при подключении
+        // Сервер отправляет games_list сразу, но можно запросить обновление
+        setTimeout(() => this.requestGames(), 100)
       }
       
       this.ws.onmessage = (event) => {
@@ -100,9 +101,9 @@ class WebSocketService {
 
   requestGames() {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      // Отправляем любое сообщение чтобы сервер ответил
-      this.ws.send('ping')
-      console.log('отправил сообщение на сервер')
+      // Отправляем get_games для получения данных
+      this.ws.send('get_games')
+      console.log('отправил get_games на сервер')
     }
   }
 }
