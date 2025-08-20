@@ -1,35 +1,8 @@
 import { useEffect, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { api, type UserProfile } from '@/services/api'
+import { api } from '@/services/api'
+import { ExtendedUser, UseTelegramReturn, UserProfile } from '@/types'
 
-interface ExtendedUser {
-  id: number
-  first_name: string
-  last_name?: string
-  username?: string
-  photo_url?: string
-  balance?: number
-  start_link?: string
-  balls_count?: number
-  avatar_url?: string
-  wallet_address?: string
-  referrals?: any[]
-  count_story_current_day?: number
-}
-
-interface UseTelegramReturn {
-  user: ExtendedUser | null
-  webApp: typeof WebApp
-  isReady: boolean
-  getUserDisplayName: () => string
-  inviteFriends: () => void
-  showAlert: (message: string) => void
-  hapticFeedback: (type: 'light' | 'medium' | 'heavy') => void
-  loadUserProfile: () => Promise<void>
-  shareGameStory: (isWinner: boolean) => Promise<void>
-}
-
-const BOT_USERNAME = 'ways_ball_bot'
 
 export const useTelegram = (): UseTelegramReturn => {
   const [isReady, setIsReady] = useState(false)

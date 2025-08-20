@@ -1,22 +1,7 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import * as PIXI from "pixi.js";
-import { generateRandomMap, MapData, Obstacle, Spinner } from "./maps";
-
-
-
-interface Ball {
-  id: string;
-  x: number;
-  y: number;
-  dx: number;
-  dy: number;
-  graphics: PIXI.Graphics;
-  color: number;
-  playerId: string;
-  finished?: boolean;
-  indicator?: PIXI.Graphics;
-  bounceCount?: number;
-}
+import { generateRandomMap } from "./maps";
+import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
 
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
@@ -27,15 +12,6 @@ interface GameCanvasProps {
   speedUpTime?: number;
   initialCameraMode?: 'leader' | 'swipe';
   scrollY?: number;
-}
-
-export interface GameCanvasRef {
-  startGame: () => void;
-  resetGame: () => void;
-  gameState: 'waiting' | 'playing' | 'finished';
-  setCameraMode: (mode: 'leader' | 'swipe') => void;
-  setScrollY: (y: number) => void;
-  getGameSize: () => { width: number; height: number };
 }
 
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(

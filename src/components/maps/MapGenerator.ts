@@ -1,15 +1,6 @@
 import * as PIXI from "pixi.js";
 import { MAP_BLOCKS } from "./MapBlocks";
-import { Obstacle, Spinner } from "./MapTypes";
-
-export interface MapData {
-  obstacles: Obstacle[];
-  spinners: Spinner[];
-  mapWidth: number;
-  mapHeight: number;
-  winY: number;
-  deathY: number;
-}
+import { Obstacle, Spinner, MapData } from "@/types/maps";
 
 export const generateRandomMap = (app: PIXI.Application, seed: string) => {
   const mapWidth = 1200;

@@ -1,12 +1,5 @@
 import * as PIXI from "pixi.js";
-import { Obstacle, Spinner } from "./MapTypes";
-
-export interface MapBlock {
-  id: string;
-  name: string;
-  height: number;
-  createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => { obstacles: Obstacle[], spinners: Spinner[] };
-}
+import { Obstacle, Spinner, MapBlock } from "@/types/maps";
 
 export const MAP_BLOCKS: MapBlock[] = [
   {

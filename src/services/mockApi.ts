@@ -1,45 +1,5 @@
 // Mock API service for development
-export interface Player {
-  id: string
-  name: string
-  ballz: number
-  avatar?: string
-  isYou?: boolean
-}
-
-export interface GameData {
-  id: string
-  players: Player[]
-  prizePool: number
-  timeLeft: number
-  status: 'waiting' | 'active' | 'finished'
-}
-
-export interface UserStats {
-  balance: number
-  totalGames: number
-  wins: number
-  referrals: number
-  claimableAmount: number
-  totalClaimed: number
-}
-
-export interface ReferralUser {
-  id: string
-  username: string
-  firstName: string
-  earnings: number
-  joinedAt: string
-}
-
-export interface UserProfile {
-  id: number
-  username?: string
-  balance: number
-  start_link: string
-  balls_count: number
-  referrers_id?: number[]
-}
+import { Player, GameData, UserStats, ReferralUser, UserProfile } from '@/types';
 
 // Mock data
 const mockPlayers: Player[] = [

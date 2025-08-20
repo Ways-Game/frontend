@@ -5,9 +5,13 @@ import { WaysButton } from "@/components/ui/ways-button"
 import { PlayerItem } from "@/components/game/PlayerItem"
 import { ProgressChip } from "@/components/game/ProgressChip"
 import { TimerChip } from "@/components/game/TimerChip"
-import { Cable, RotateCcw, Smile, Clock } from "lucide-react"
+import { ConnectionStatus } from "@/components/game/ConnectionStatus"
+import { Cable, RotateCcw, Smile, Clock, Wifi, WifiOff } from "lucide-react"
 import { useLiveTimer } from "@/hooks/useLiveTimer"
-import { MockApi, type GameData, type UserStats } from "@/services/mockApi"
+import { useGames } from "@/hooks/useWebSocket"
+import { MockApi } from "@/services/mockApi"
+import { GameState } from "@/types/api"
+import type { UserStats, GameDetailResponse } from "@/types/api"
 import { useTelegram } from "@/hooks/useTelegram"
 
 const quickActions = ["210", "5", "10", "X2"]
@@ -18,19 +22,25 @@ export function PvPScreen() {
   const { isActive: isLiveActive, timeLeft } = useLiveTimer(30)
   
   const [activeAction, setActiveAction] = useState<string | null>(null)
-  const [gameData, setGameData] = useState<GameData | null>(null)
+  const [selectedGame, setSelectedGame] = useState<GameDetailResponse | null>(null)
   const [userStats, setUserStats] = useState<UserStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  
+  const { games, isConnected } = useGames()
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [game, stats] = await Promise.all([
-          MockApi.getCurrentGame(),
-          MockApi.getUserStats()
-        ])
-        setGameData(game)
+        const stats = await MockApi.getUserStats()
         setUserStats(stats)
+        
+        // Select first waiting game by default
+        if (games.length > 0 && !selectedGame) {
+          const waitingGame = games.find(g => g.status === GameState.WAITING)
+          if (waitingGame) {
+            setSelectedGame(waitingGame)
+          }
+        }
       } catch (error) {
         console.error('Failed to load data:', error)
       } finally {
@@ -39,12 +49,13 @@ export function PvPScreen() {
     }
 
     loadData()
-  }, [])
+  }, [games, selectedGame])
 
   const handleStartGame = async () => {
     try {
-      await MockApi.startGame()
-      navigate('/game')
+      if (selectedGame?.status === GameState.ACTIVE) {
+        navigate('/game')
+      }
     } catch (error) {
       console.error('Failed to start game:', error)
     }
@@ -89,33 +100,50 @@ export function PvPScreen() {
         <div className="w-full flex justify-start items-center gap-5 relative">
           <div className="flex-1 relative flex justify-start items-center gap-3 overflow-hidden">
             <div className="flex gap-3 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {[24, 15, 8, 32, 12].map((count, index) => (
-                <div key={index} onClick={handleStartGame} className="h-8 px-3 py-2 bg-red-500 rounded-[20px] flex items-center gap-2 relative overflow-hidden flex-shrink-0">
+              {games.map((game) => {
+                const isActive = game.status === GameState.ACTIVE
+                const isSelected = selectedGame?.seed === game.seed
+                return (
                   <div 
-                    className="absolute inset-0 bg-white/20 transition-all duration-500 ease-out"
-                    style={{
-                      width: `${((30 - timeLeft) / 30) * 100}%`,
-  
-                    }}
-                  />
-                  <div className="flex items-center gap-1.5 relative z-10">
-                    <Smile className="w-4 h-4 text-white" />
-                    <span className="text-white text-base font-semibold">LIVE</span>
+                    key={game.seed} 
+                    onClick={() => isActive ? handleStartGame() : setSelectedGame(game)}
+                    className={`h-8 px-3 py-2 rounded-[20px] flex items-center gap-2 relative overflow-hidden flex-shrink-0 cursor-pointer ${
+                      isActive ? 'bg-red-500' : isSelected ? 'bg-gray-600' : 'bg-gray-500'
+                    }`}
+                  >
+                    {isActive && (
+                      <div 
+                        className="absolute inset-0 bg-white/20 transition-all duration-500 ease-out"
+                        style={{
+                          width: `${((30 - timeLeft) / 30) * 100}%`,
+                        }}
+                      />
+                    )}
+                    <div className="flex items-center gap-1.5 relative z-10">
+                      <Smile className="w-4 h-4 text-white" />
+                      <span className="text-white text-base font-semibold">
+                        {isActive ? 'LIVE' : 'WAIT'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 relative z-10">
+                      <span className="text-white/80 text-base font-semibold">{game.participants.length}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 relative z-10">
-                    <span className="text-white/80 text-base font-semibold">{count}</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             <div className="w-5 h-8 bg-gradient-to-l from-black to-black/0 absolute right-[-2px]" />
           </div>
           <button 
             onClick={handleConnect}
-            className="h-8 px-3 py-2 bg-[#007AFF] rounded-[20px] flex items-center gap-1.5"
+            className={`h-8 px-3 py-2 rounded-[20px] flex items-center gap-1.5 ${
+              isConnected ? 'bg-green-600' : 'bg-[#007AFF]'
+            }`}
           >
-            <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
-            <span className="text-white text-base font-semibold">Connect</span>
+            {isConnected ? <Wifi className="w-4 h-4 text-white" /> : <WifiOff className="w-4 h-4 text-white" />}
+            <span className="text-white text-base font-semibold">
+              {isConnected ? 'Connected' : 'Connect'}
+            </span>
           </button>
         </div>
       </div>
@@ -126,16 +154,26 @@ export function PvPScreen() {
           {/* Game Info Row */}
           <div className="flex justify-between items-start">
             <div className="h-8 px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
-              <span className="text-white text-base">GAME #{gameData?.id || '23245'}</span>
+              <span className="text-white text-base">GAME #{selectedGame?.seed.slice(-5) || '-----'}</span>
+              <div className={`w-2 h-2 rounded-full ${
+                selectedGame?.status === GameState.ACTIVE ? 'bg-green-500' :
+                selectedGame?.status === GameState.WAITING ? 'bg-yellow-500' : 'bg-gray-500'
+              }`} />
             </div>
             <div className="flex items-center gap-2">
+              <ConnectionStatus 
+                isConnected={isConnected}
+                playersCount={selectedGame?.participants.length || 0}
+                maxPlayers={6}
+                gameStatus={selectedGame?.status || GameState.WAITING}
+              />
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-400" />
-                <span className="text-neutral-50 text-sm">{gameData?.timeLeft || 15}s</span>
+                <span className="text-neutral-50 text-sm">15s</span>
               </div>
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
                 <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
-                <span className="text-neutral-50 text-sm">{gameData?.prizePool || 110}<span className="text-neutral-50/40">/300</span></span>
+                <span className="text-neutral-50 text-sm">{selectedGame?.total_price || 0}<span className="text-neutral-50/40">/{selectedGame?.total_balls || 0}</span></span>
               </div>
             </div>
           </div>
@@ -152,39 +190,46 @@ export function PvPScreen() {
               <span className="text-neutral-50 text-base">Prize:</span>
               <div className="flex items-center gap-0.5">
                 <img src="/src/assets/icons/star.svg" className="w-6 h-6" alt="star" />
-                <span className="text-neutral-50 text-base">{gameData?.prizePool || 110}</span>
+                <span className="text-neutral-50 text-base">{selectedGame?.total_price || 0}</span>
               </div>
             </div>
           </div>
 
           {/* Players List */}
           <div className="flex-1 py-6 flex flex-col gap-2">
-            <div className="px-2.5 py-2 bg-blue-600 rounded-[37px] flex justify-between items-center">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-bold text-blue-600">TG</span>
-                </div>
-                <span className="text-neutral-50 text-sm">{getUserDisplayName()}</span>
-              </div>
-              <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
-                <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
-                <span className="text-neutral-50 text-sm">{user?.balls_count || 0} ballz</span>
-              </div>
-            </div>
-            {gameData?.players.filter(p => !p.isYou).slice(0, 3).map((player, index) => (
-              <div key={player.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-bold text-blue-600">TG</span>
+            {selectedGame?.participants.length ? (
+              selectedGame.participants.slice(0, 4).map((participant, index) => (
+                <div key={participant.id} className={`px-2.5 py-2 rounded-[37px] flex justify-between items-center ${
+                  index === 0 ? 'bg-blue-600' : 'bg-white/5'
+                }`}>
+                  <div className="flex items-center gap-2.5">
+                    {participant.avatar_url ? (
+                      <img 
+                        src={participant.avatar_url} 
+                        className="w-7 h-7 rounded-full object-cover" 
+                        alt="avatar" 
+                      />
+                    ) : (
+                      <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                        <span className="text-xs font-bold text-blue-600">TG</span>
+                      </div>
+                    )}
+                    <span className="text-neutral-50 text-sm">{participant.username || `User${participant.id}`}</span>
                   </div>
-                  <span className="text-neutral-50 text-sm">@{player.name}</span>
+                  <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
+                    <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
+                    <span className="text-neutral-50 text-sm">{participant.balls_count} ballz</span>
+                  </div>
                 </div>
-                <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
-                  <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
-                  <span className="text-neutral-50 text-sm">{player.ballz} ballz</span>
-                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-neutral-400 text-sm">Waiting for players...</p>
+                <p className="text-neutral-500 text-xs mt-1">
+                  0/6 players
+                </p>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -244,13 +289,15 @@ export function PvPScreen() {
       {/* Balance Info */}
       <div className="px-6 flex flex-col gap-2.5">
         <div className="px-14 py-2.5 bg-black/30 rounded-[243px] flex flex-col items-center justify-center gap-1">
-         
-              <div className="flex items-center gap-px">
-                <span className="text-white text-xs font-medium">1 ballz = 30</span>
-                <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
-              </div>
-
-          
+          <div className="flex items-center gap-px">
+            <span className="text-white text-xs font-medium">1 ballz = 30</span>
+            <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
+          </div>
+          <div className="flex items-center gap-2 text-xs text-neutral-400">
+            <span>Balance: {userStats?.balance || 0}</span>
+            <span>•</span>
+            <span>Ballz: {user?.balls_count || 0}</span>
+          </div>
         </div>
       </div>
     </div>

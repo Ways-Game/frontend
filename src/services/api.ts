@@ -1,16 +1,4 @@
-import { Player, GameData, UserStats } from './mockApi';
-
-export interface UserProfile {
-  id: number;
-  username?: string;
-  balance: number;
-  start_link: string;
-  balls_count: number;
-  avatar_url?: string;
-  wallet_address?: string;
-  referrals?: UserProfile[];
-  count_story_current_day?: number;
-}
+import { Player, GameData, UserStats, UserProfile } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://bot.guarant.network/api';
 
