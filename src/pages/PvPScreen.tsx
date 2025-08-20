@@ -148,7 +148,22 @@ export function PvPScreen() {
 
       {/* Main Game Card */}
       <div className="flex-1 p-2.5 flex flex-col gap-2.5">
-        <div className="flex-1 p-2.5 bg-zinc-900/60 rounded-tl-[20px] rounded-bl-[20px] rounded-br-[20px] flex flex-col gap-5">
+        <div className="relative flex-1 p-2.5 bg-zinc-900/60 rounded-tl-[20px] rounded-bl-[20px] rounded-br-[20px] flex flex-col gap-5">
+          {/* Dev start button (small) - starts game with this card's data */}
+          <button
+            onClick={() => {
+              if (!selectedGame) return
+              navigate('/game', { state: {
+                seed: selectedGame.seed,
+                mapId: selectedGame.map_id,
+                participants: selectedGame.participants,
+                autoStart: true
+              }})
+            }}
+            className="absolute left-1/2 -translate-x-1/2 -top-4 z-20 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-xs"
+          >
+            Dev
+          </button>
           {/* Game Info Row */}
           <div className="flex justify-between items-start">
             <div className="h-8 px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">

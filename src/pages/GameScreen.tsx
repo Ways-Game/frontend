@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { Chip } from "@/components/ui/ways-chip"
 import { WaysButton } from "@/components/ui/ways-button"
 import { CircularTimer } from "@/components/game/TimerChip"
@@ -95,6 +95,22 @@ export function GameScreen() {
       countdown();
     }
   };
+
+  // If navigated with state (from PvPScreen dev button), apply it and auto-start
+  const location = useLocation()
+  useEffect(() => {
+    const state: any = (location && (location as any).state) || null
+    if (state && state.seed) {
+      setGameData({ seed: state.seed || "", mapId: state.mapId || 0, participants: state.participants || [] })
+      if (state.autoStart) {
+        // give a tick for setState to apply
+        setTimeout(() => {
+          startGame()
+          gameCanvasRef.current?.startGame({ seed: state.seed, mapId: state.mapId, participants: state.participants || [] })
+        }, 50)
+      }
+    }
+  }, [location.state])
 
   // Функция для переключения режима камеры
   const toggleCameraMode = () => {
