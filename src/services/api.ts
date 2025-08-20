@@ -6,7 +6,9 @@ export interface UserProfile {
   balance: number;
   start_link: string;
   balls_count: number;
-  referrers_id?: number[];
+  avatar_url?: string;
+  wallet_address?: string;
+  referrals?: UserProfile[];
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://bot.guarant.network/api';
@@ -64,6 +66,13 @@ class ApiService {
 
   async getUserProfile(id: number): Promise<UserProfile> {
     return this.request<UserProfile>(`/profile/me/${id}`);
+  }
+
+  async updateUserPhoto(user_id: number, avatar_url: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>('/profile/update_photo/', {
+      method: 'PUT',
+      body: JSON.stringify({ user_id, avatar_url }),
+    });
   }
 }
 

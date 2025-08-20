@@ -11,7 +11,9 @@ interface ExtendedUser {
   balance?: number
   start_link?: string
   balls_count?: number
-  referrers_id?: any[]
+  avatar_url?: string
+  wallet_address?: string
+  referrals?: any[]
 }
 
 interface UseTelegramReturn {
@@ -52,15 +54,19 @@ export const useTelegram = (): UseTelegramReturn => {
           setUser(baseUser)
           
           try {
-            console.log('Loading user profile for:', telegramUser.id)
+            if (telegramUser.photo_url) {
+              await api.updateUserPhoto(telegramUser.id, telegramUser.photo_url)
+            }
+            
             const profile = await api.getUserProfile(telegramUser.id)
-            console.log('Loaded user profile:', profile)
             setUser({
               ...baseUser,
               balance: profile.balance,
               start_link: profile.start_link,
               balls_count: profile.balls_count,
-              referrers_id: profile.referrers_id
+              avatar_url: profile.avatar_url,
+              wallet_address: profile.wallet_address,
+              referrals: profile.referrals
             })
           } catch (error) {
             console.error('Failed to load user profile:', error)
@@ -85,7 +91,7 @@ export const useTelegram = (): UseTelegramReturn => {
         balance: profile.balance,
         start_link: profile.start_link,
         balls_count: profile.balls_count,
-        referrers_id: profile.referrers_id
+        referrers_id: profile.referrals
       } : null)
     } catch (error) {
       console.error('Failed to load user profile:', error)
@@ -101,7 +107,6 @@ export const useTelegram = (): UseTelegramReturn => {
   const inviteFriends = (): void => {
     if (!user) return
     const referralUrl = user.start_link
-    console.log('Inviting friends with referral link:', user.start_link)
     const shareText = `🎮 Play Ways Ball Game with me! 🎁`
     WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(shareText)}`)
     WebApp.HapticFeedback.impactOccurred('medium')

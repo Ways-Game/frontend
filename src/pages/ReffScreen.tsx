@@ -6,15 +6,29 @@ import { Users, UserPlus, X, User, Link } from "lucide-react"
 import { useTelegram } from "@/hooks/useTelegram"
 import { api } from "@/services/api"
 
+const generateMockWallet = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let result = 'UQ'
+  for (let i = 0; i < 46; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+const formatWallet = (wallet: string) => {
+  if (wallet.length < 6) return wallet
+  return `${wallet.slice(0, 3)}...${wallet.slice(-3)}`
+}
+
 export function ReffScreen() {
   const { user, getUserDisplayName, inviteFriends } = useTelegram()
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
-      <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5 h-[154px]">
+      <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5 ">
         {/* Hero Banner */}
         <div 
-          className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden"
+          className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden h-[154px]"
           style={{
             backgroundImage: 'url(/src/assets/ref_back.png)',
             backgroundSize: 'cover',
@@ -39,8 +53,8 @@ export function ReffScreen() {
           {/* User Info Row */}
           <div className="flex justify-between items-center h-8">
             <div className="flex items-center gap-2.5 px-3 py-2">
-              {user?.photo_url ? (
-                <img src={user.photo_url} className="w-7 h-7 rounded-full object-cover" alt="avatar" />
+              {user?.avatar_url || user?.photo_url ? (
+                <img src={user.avatar_url || user.photo_url} className="w-7 h-7 rounded-full object-cover" alt="avatar" />
               ) : (
                 <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
                   <span className="text-xs font-bold text-blue-600">TG</span>
@@ -51,7 +65,9 @@ export function ReffScreen() {
             
             <div className="px-1.5 py-2 bg-[#4378FF20] rounded-[20px] flex items-center gap-1.5 h-8">
               <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
-              <span className="text-blue-400 text-base font-semibold">ref_{user?.id || '0000'}</span>
+              <span className="text-blue-400 text-base font-semibold">
+                {formatWallet(user?.wallet_address || generateMockWallet())}
+              </span>
               <button 
                 onClick={inviteFriends}
                 className="w-5 h-5 bg-[#4378FF20] rounded-full flex items-center justify-center hover:bg-[#4378FF40] transition-colors"
@@ -71,19 +87,19 @@ export function ReffScreen() {
             <span className="text-neutral-500 text-xs">invited users</span>
             <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2 w-fit">
               <Users className="w-4 h-4 text-gray-400" />
-              <span className="text-neutral-50 text-sm">{user?.referrers_id?.length || 0}</span>
+              <span className="text-neutral-50 text-sm">{user?.referrals?.length || 0}</span>
             </div>
           </div>
 
           {/* Referral Users */}
           <div className="flex flex-col gap-2">
-            <span className="text-neutral-500 text-xs">Referral users ({user?.referrers_id?.length || 0})</span>
+            <span className="text-neutral-500 text-xs">Referral users ({user?.referrals?.length || 0})</span>
             
-            {user?.referrers_id?.map((referralUser) => (
+            {user?.referrals?.map((referralUser) => (
               <div key={referralUser.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
-                  {referralUser.photo_url ? (
-                    <img src={referralUser.photo_url} className="w-7 h-7 rounded-full object-cover" alt="avatar" />
+                  {referralUser.avatar_url ? (
+                    <img src={referralUser.avatar_url} className="w-7 h-7 rounded-full object-cover" alt="avatar" />
                   ) : (
                     <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
                       <span className="text-xs font-bold text-blue-600">TG</span>
@@ -98,7 +114,7 @@ export function ReffScreen() {
               </div>
             ))}
 
-            {(!user?.referrers_id || user.referrers_id.length === 0) && (
+            {(!user?.referrals || user.referrals.length === 0) && (
               <div className="text-center py-4 text-neutral-500 text-sm">
                 No referrals yet. Invite friends to start earning!
               </div>
