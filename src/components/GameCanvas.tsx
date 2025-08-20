@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import * as PIXI from "pixi.js";
-import { generateRandomMap } from "./maps";
+import { generateRandomMap, generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
 
 interface GameCanvasProps {
@@ -51,13 +51,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       };
     };
 
-    const startRound = (playerCount: number = 150, seed: string = Date.now().toString()) => {
+    const startRound = (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
       if (!app) return;
 
       speedUpFramesRemaining.current = 0;
       isSpeedingUp.current = false;
 
-      const rng = createRNG(seed);
+      const rng = createRNG(gameData.seed);
       rngRef.current = rng;
 
       // Clear previous game
@@ -70,55 +70,61 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      // Generate new random map
-      const mapData = generateRandomMap(app, seed);
+      // Generate map from mapId
+      const mapData = generateMapFromId(app, gameData.mapId, gameData.seed);
       obstaclesRef.current = mapData.obstacles;
       spinnersRef.current = mapData.spinners;
       mapDataRef.current = mapData;
 
-      // Create balls with deterministic positioning
-      const colors = [0xff6b6b, 0x4ecdc4, 0x45b7d1, 0xf9ca24, 0xf0932b, 0xeb4d4b, 0x9b59b6, 0xe67e22, 0x2ecc71];
+      // Create balls from participants data
       const newBalls: Ball[] = [];
-      for (let i = 0; i < playerCount; i++) {
-        const color = colors[i % colors.length];
+      let ballIndex = 0;
+      
+      // Create balls for each participant based on their balls_count
+      for (const participant of gameData.participants) {
+        for (let i = 0; i < participant.balls_count; i++) {
+          const ballGraphics = new PIXI.Graphics();
+          
+          // Use participant avatar if available
+          if (participant.avatar_url) {
+            try {
+              const texture = await PIXI.Assets.load(participant.avatar_url);
+              ballGraphics.circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
+            } catch {
+              ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
+            }
+          } else {
+            ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
+          }
 
-        let ballGraphics = new PIXI.Graphics();
+          const indicator = new PIXI.Graphics();
+          indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
+          indicator.fill(0xFFD700).stroke({ width: 2, color: 0xFFA500 });
+          indicator.visible = false;
 
-        // Use loaded texture or fallback to color
-        if (texturesRef.current.length > 0) {
-          const texture = texturesRef.current[i % texturesRef.current.length];
-          ballGraphics.circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
-        } else {
-          ballGraphics.circle(0, 0, 24).fill(color).stroke({ width: 2, color: 0xffffff });
+          const screenHeight = (mapData as any).screenHeight || 800;
+          const startX = 50 + rng() * 1100;
+          const startY = 50 + rng() * (screenHeight - 100);
+          ballGraphics.position.set(startX, startY);
+          indicator.position.set(startX, startY - 40);
+
+          app.stage.addChild(ballGraphics);
+          app.stage.addChild(indicator);
+
+          newBalls.push({
+            id: `${gameData.seed}_${ballIndex}`,
+            x: startX,
+            y: startY,
+            dx: (rng() - 0.5) * 2,
+            dy: 0,
+            graphics: ballGraphics,
+            color: 0x4ecdc4,
+            playerId: participant.id.toString(),
+            finished: false,
+            indicator: indicator
+          });
+          ballIndex++;
         }
-
-        // Create leader indicator
-        const indicator = new PIXI.Graphics();
-        indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
-        indicator.fill(0xFFD700).stroke({ width: 2, color: 0xFFA500 });
-        indicator.visible = false;
-
-        const screenHeight = (mapData as any).screenHeight || 800;
-        const startX = 50 + rng() * 1100; // По всей ширине поля
-        const startY = 50 + rng() * (screenHeight - 100); // По всей высоте экрана
-        ballGraphics.position.set(startX, startY);
-        indicator.position.set(startX, startY - 40);
-
-        app.stage.addChild(ballGraphics);
-        app.stage.addChild(indicator);
-
-        newBalls.push({
-          id: `${seed}_${i}`,
-          x: startX,
-          y: startY,
-          dx: (rng() - 0.5) * 2,
-          dy: 0,
-          graphics: ballGraphics,
-          color,
-          playerId: `player_${i + 1}`,
-          finished: false,
-          indicator: indicator
-        });
       }
 
       ballsRef.current = newBalls;
@@ -135,9 +141,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       onGameStart?.();
     };
 
-    const startGame = () => {
-      const seed = Date.now().toString();
-      startRound(150, seed);
+    const startGame = (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
+      startRound(gameData);
 
       if (speedUpTime > 0) {
         isSpeedingUp.current = true;

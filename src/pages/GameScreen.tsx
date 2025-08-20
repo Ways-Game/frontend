@@ -7,7 +7,7 @@ import { GameResultModal } from "@/components/modals/GameResultModal"
 import { GameCanvas } from "@/components/GameCanvas"
 import {GameCanvasRef} from "@/types/components"
 import { Trophy, Volume2, VolumeX, X, Star, ChevronLeft, ChevronRight } from "lucide-react"
-import { MockApi } from "@/services/mockApi"
+import { api } from "@/services/api"
 import { useTelegram } from "@/hooks/useTelegram"
 import { TabBar } from "@/components/navigation/TabBar"
 
@@ -54,7 +54,7 @@ export function GameScreen() {
 
   const handleGameEnd = () => {
     // Game canvas finished, show result
-    MockApi.getGameResult().then(result => {
+    api.getGameResult().then(result => {
       setGameResult(result)
       setGameModal(result.result)
     })
@@ -64,18 +64,16 @@ export function GameScreen() {
     console.log(`Ball ${ballId} (${playerId}) won!`)
   }
 
-  const startGame = () => {
-    const countdownDuration = 4 // Countdown takes 4 seconds (3 + 1 for "LET'S GO!")
+  const startGame = (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
+    const countdownDuration = 4
     
     if (speedUpTime >= countdownDuration) {
-      // Skip countdown entirely for long speed-ups
       handleGameStart()
-      gameCanvasRef.current?.startGame()
+      gameCanvasRef.current?.startGame(gameData)
     } else {
       setShowCountdown(true)
       
-      // Adjust countdown based on speed-up time
-      const remainingCountdown = countdownDuration - speedUpTime - 1 // -1 for "LET'S GO!"
+      const remainingCountdown = countdownDuration - speedUpTime - 1
       let count = Math.max(1, remainingCountdown)
       
       const countdown = () => {
@@ -87,7 +85,7 @@ export function GameScreen() {
           setCountdownText("LET'S GO!")
           setTimeout(() => {
             setShowCountdown(false)
-            gameCanvasRef.current?.startGame()
+            gameCanvasRef.current?.startGame(gameData)
           }, 1000)
         }
       }
@@ -165,7 +163,7 @@ export function GameScreen() {
   }
 
   const testModal = () => {
-    MockApi.getGameResult().then(result => {
+    api.getGameResult().then(result => {
       setGameResult(result)
       setGameModal(result.result)
     })

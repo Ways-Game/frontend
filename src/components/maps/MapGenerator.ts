@@ -2,7 +2,134 @@ import * as PIXI from "pixi.js";
 import { MAP_BLOCKS } from "./MapBlocks";
 import { Obstacle, Spinner, MapData } from "@/types/maps";
 
-export const generateRandomMap = (app: PIXI.Application, seed: string) => {
+export const generateMapFromId = (app: PIXI.Application, mapId: number[] | number, seed: string) => {
+  const mapWidth = 1200;
+  const obstacles: Obstacle[] = [];
+  const spinners: Spinner[] = [];
+
+  // Create RNG from seed
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  const rng = () => {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+
+  // Clear stage
+  app.stage.removeChildren();
+
+  const screenHeight = typeof window !== 'undefined' ? window.innerHeight - 80 : 800;
+  const startSection = new PIXI.Graphics();
+  startSection.rect(0, 0, mapWidth, screenHeight).fill(0x2c3e50);
+  app.stage.addChild(startSection);
+  
+  const gateBarrier = { x: mapWidth / 2, y: screenHeight, width: mapWidth, height: 20, type: 'barrier' as const };
+  obstacles.push(gateBarrier);
+
+  // Generate map from mapId
+  let currentY = screenHeight + 100;
+  const selectedBlocks: typeof MAP_BLOCKS[0][] = [];
+  
+  const blockIndices = [];
+  let tempMapId = mapId;
+  for (let i = 0; i < 12; i++) {
+    blockIndices.push(tempMapId % MAP_BLOCKS.length);
+    tempMapId = Math.floor(tempMapId / MAP_BLOCKS.length);
+  }
+  
+  blockIndices.forEach(blockIndex => {
+    if (blockIndex < MAP_BLOCKS.length) {
+      selectedBlocks.push(MAP_BLOCKS[blockIndex]);
+    }
+  });
+
+  selectedBlocks.forEach(block => {
+    const { obstacles: blockObstacles, spinners: blockSpinners } = block.createBlock(app, currentY, mapWidth);
+    obstacles.push(...blockObstacles);
+    spinners.push(...blockSpinners);
+    currentY += block.height + 150;
+  });
+
+  // Funnel logic (same as before)
+  const funnelWidthBottom = 80;
+  const funnelHeight = 600;
+  const verticalPassage = 200;
+  const topY = currentY;
+  const bottomY = currentY + funnelHeight;
+  const passageBottomY = bottomY + verticalPassage;
+
+  const blueFunnel = new PIXI.Graphics();
+  blueFunnel.beginFill(0x4ecdc4);
+  blueFunnel.moveTo(-5, topY);
+  blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, bottomY);
+  blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, passageBottomY);
+  blueFunnel.lineTo(-5, passageBottomY);
+  blueFunnel.closePath();
+  blueFunnel.moveTo(mapWidth + 5, topY);
+  blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, bottomY);
+  blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, passageBottomY);
+  blueFunnel.lineTo(mapWidth + 5, passageBottomY);
+  blueFunnel.closePath();
+  blueFunnel.endFill();
+  app.stage.addChild(blueFunnel);
+
+  const leftTopX = -5;
+  const rightTopX = mapWidth + 5;
+  const leftBottomX = mapWidth / 2 - funnelWidthBottom / 2;
+  const rightBottomX = mapWidth / 2 + funnelWidthBottom / 2;
+  
+  const segments = 250;
+  for (let i = 0; i < segments; i++) {
+    const t = i / (segments - 1);
+    const x1 = leftTopX + (leftBottomX - leftTopX) * t;
+    const x2 = rightTopX + (rightBottomX - rightTopX) * t;
+    const y = topY + funnelHeight * t;
+    
+    obstacles.push(
+      { x: x1 - 45, y: y, width: 80, height: 50, type: 'barrier' },
+      { x: x2 + 45, y: y, width: 80, height: 50, type: 'barrier' }
+    );
+  }
+  
+  const passageSegments = 20;
+  for (let i = 0; i < passageSegments; i++) {
+    const y = bottomY + (verticalPassage / passageSegments) * i;
+    obstacles.push(
+      { x: leftBottomX - 25, y: y, width: 60, height: 40, type: 'barrier' },
+      { x: rightBottomX + 25, y: y, width: 60, height: 40, type: 'barrier' }
+    );
+  }
+
+  const finishY = bottomY + verticalPassage / 2;
+  const stripeHeight = 40;
+  const cellSize = 20;
+
+  const finishLine = new PIXI.Graphics();
+  for (let x = 0; x < mapWidth; x += cellSize) {
+    for (let y = 0; y < stripeHeight; y += cellSize) {
+      const isBlack = ((x / cellSize) + (y / cellSize)) % 2 === 0;
+      finishLine.beginFill(isBlack ? 0x000000 : 0xffffff, 0.8);
+      finishLine.drawRect(x, finishY + y, cellSize, cellSize);
+      finishLine.endFill();
+    }
+  }
+  app.stage.addChild(finishLine);
+
+  const winY = finishY + stripeHeight;
+  const deathY = winY + 200;
+
+  const mapData = { obstacles, spinners, mapWidth, mapHeight: currentY + funnelHeight + verticalPassage + 100, winY, deathY };
+  (mapData as any).gateBarrier = gateBarrier;
+  (mapData as any).screenHeight = screenHeight;
+  return mapData;
+};
+
+export const generateRandomMap = (app: PIXI.Application, mapId: number[] | number, seed: string) => {
   const mapWidth = 1200;
   const obstacles: Obstacle[] = [];
   const spinners: Spinner[] = [];
@@ -35,28 +162,19 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
   const gateBarrier = { x: mapWidth / 2, y: screenHeight, width: mapWidth, height: 20, type: 'barrier' as const };
   obstacles.push(gateBarrier);
 
-  // Generate random blocks with max 2 repetitions per block type
-  let currentY = screenHeight + 100; // Начинаем после стартовой секции
-  const numBlocks = 12; 
-  const blockCounts = new Map<string, number>();
+  // Generate blocks by indices from mapId array
+  let currentY = screenHeight + 100;
   const selectedBlocks: typeof MAP_BLOCKS[0][] = [];
-
-  // Select blocks ensuring max 2 repetitions
-  for (let i = 0; i < numBlocks; i++) {
-    let attempts = 0;
-    let block;
-    
-    do {
-      const blockIndex = Math.floor(rng() * MAP_BLOCKS.length);
-      block = MAP_BLOCKS[blockIndex];
-      attempts++;
-    } while ((blockCounts.get(block.id) || 0) >= 2 && attempts < 50);
-    
-    if (attempts < 50) {
-      blockCounts.set(block.id, (blockCounts.get(block.id) || 0) + 1);
-      selectedBlocks.push(block);
+  
+  // Use mapId as array of block indices
+  const blockIndices = Array.isArray(mapId) ? mapId : [3, 4, 1, 2, 1, 7, 11, 6, 9, 10, 5, 0];
+  
+  // Select blocks by indices
+  blockIndices.forEach(blockIndex => {
+    if (blockIndex < MAP_BLOCKS.length) {
+      selectedBlocks.push(MAP_BLOCKS[blockIndex]);
     }
-  }
+  });
 
   // Create the selected blocks with larger spacing
   selectedBlocks.forEach(block => {

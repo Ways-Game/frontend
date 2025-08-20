@@ -28,14 +28,14 @@ export function ReffScreen() {
       <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5 ">
         {/* Hero Banner */}
         <div 
-          className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden h-[154px]"
+          className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden"
           style={{
             backgroundImage: 'url(/src/assets/ref_back.png)',
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
         >
-          <div className="text-neutral-50 text-3xl font-bold w-[60%]">
+          <div className="text-neutral-50 text-3xl font-bold w-[80%]">
             Post videos and earn money
           </div>
           <div className="flex ">

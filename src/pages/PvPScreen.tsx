@@ -9,7 +9,7 @@ import { ConnectionStatus } from "@/components/game/ConnectionStatus"
 import { Cable, RotateCcw, Smile, Clock, Wifi, WifiOff } from "lucide-react"
 import { useLiveTimer } from "@/hooks/useLiveTimer"
 import { useGames } from "@/hooks/useWebSocket"
-import { MockApi } from "@/services/mockApi"
+import { api } from "@/services/api"
 import { GameState } from "@/types/api"
 import type { UserStats, GameDetailResponse } from "@/types/api"
 import { useTelegram } from "@/hooks/useTelegram"
@@ -32,7 +32,7 @@ export function PvPScreen() {
     console.log('Games list: ', games, "is connected ", isConnected)
     const loadData = async () => {
       try {
-        const stats = await MockApi.getUserStats()
+        const stats = await api.getUserStats()
         setUserStats(stats)
         
         // Select first waiting game by default
@@ -67,18 +67,23 @@ export function PvPScreen() {
     hapticFeedback('light')
   }
 
-  const handleBuyBallz = async () => {
-    if (!activeAction) return
+  const handleBuyBallz = async (countBalls: number) => {
+    if (!selectedGame || !user) return
     
     try {
-      const amount = parseInt(activeAction) || 210
-      await MockApi.buyBallz(amount)
-      // Refresh data after purchase
-      const updatedStats = await MockApi.getUserStats()
-      setUserStats(updatedStats)
+      const result = await api.buyBalls(
+        webApp.initDataUnsafe.query_id || '',
+        user.id,
+        countBalls,
+        webApp.initData,
+        selectedGame.id
+      )
+      
+      webApp.openInvoice(result.url)
+      hapticFeedback('light')
     } catch (error) {
-      console.error('Failed to buy ballz:', error)
-      showAlert('Insufficient balance!')
+      console.error('Failed to buy balls:', error)
+      showAlert('Failed to create payment!')
       hapticFeedback('heavy')
     }
   }
@@ -225,7 +230,7 @@ export function PvPScreen() {
       {/* Purchase Options */}
       <div className="px-6 flex flex-col gap-2.5">
         <div className="self-stretch h-24 inline-flex justify-center items-start gap-2.5">
-          <div className="min-h-14 inline-flex flex-col justify-start items-center gap-1.5">
+          <button onClick={() => handleBuyBallz(1)} className="min-h-14 inline-flex flex-col justify-start items-center gap-1.5">
             <div className="w-14 min-h-14 bg-gradient-to-b from-amber-300 to-yellow-600 rounded-[28px] shadow-[inset_6px_9px_8.800000190734863px_0px_rgba(255,255,255,0.25)] outline outline-2 outline-offset-[-2px] outline-white/40 flex items-center justify-center">
               <div className="text-neutral-700 text-xl font-black">1</div>
             </div>
@@ -233,8 +238,8 @@ export function PvPScreen() {
               <img src="/src/assets/icons/star.svg" className="w-3 h-3" alt="star" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">30</div>
             </div>
-          </div>
-          <div className="min-h-14 inline-flex flex-col justify-start items-center gap-1.5">
+          </button>
+          <button onClick={() => handleBuyBallz(3)} className="min-h-14 inline-flex flex-col justify-start items-center gap-1.5">
             <div className="w-14 min-h-14 bg-gradient-to-b from-amber-300 to-yellow-600 rounded-[28px] shadow-[inset_6px_9px_8.800000190734863px_0px_rgba(255,255,255,0.25)] outline outline-2 outline-offset-[-2px] outline-white/40 flex items-center justify-center">
               <div className="text-neutral-700 text-xl font-black">3</div>
             </div>
@@ -242,8 +247,8 @@ export function PvPScreen() {
               <img src="/src/assets/icons/star.svg" className="w-3 h-3" alt="star" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">90</div>
             </div>
-          </div>
-          <div className="h-16 inline-flex flex-col justify-start items-center gap-1.5">
+          </button>
+          <button onClick={() => handleBuyBallz(5)} className="h-16 inline-flex flex-col justify-start items-center gap-1.5">
             <div className="w-16 min-h-16 bg-gradient-to-b from-amber-300 to-yellow-600 rounded-[32px] shadow-[inset_6px_9px_8.800000190734863px_0px_rgba(255,255,255,0.25)] outline outline-2 outline-offset-[-2px] outline-white/40 flex flex-col items-center justify-center gap-0">
               <div className="text-neutral-700 text-3xl font-black">5</div>
               <div className="text-neutral-700 text-[10px] font-black uppercase -mt-1">balls</div>
@@ -252,8 +257,8 @@ export function PvPScreen() {
               <img src="/src/assets/icons/star.svg" className="w-3 h-3" alt="star" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">150</div>
             </div>
-          </div>
-          <div className="min-h-14 inline-flex flex-col justify-start items-center gap-1.5">
+          </button>
+          <button onClick={() => handleBuyBallz(10)} className="min-h-14 inline-flex flex-col justify-start items-center gap-1.5">
             <div className="w-14 min-h-14 bg-gradient-to-b from-amber-300 to-yellow-600 rounded-[28px] shadow-[inset_6px_9px_8.800000190734863px_0px_rgba(255,255,255,0.25)] outline outline-2 outline-offset-[-2px] outline-white/40 flex items-center justify-center">
               <div className="text-neutral-700 text-xl font-black">10</div>
             </div>
@@ -261,7 +266,7 @@ export function PvPScreen() {
               <img src="/src/assets/icons/star.svg" className="w-3 h-3" alt="star" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">300</div>
             </div>
-          </div>
+          </button>
           <div className="min-h-14 inline-flex flex-col justify-start items-center gap-1.5">
             <div className="w-14 min-h-14 bg-gradient-to-b from-green-400 to-green-700 rounded-[28px] shadow-[inset_6px_9px_8.800000190734863px_0px_rgba(255,255,255,0.25)] flex items-center justify-center">
               <div className="text-white text-xl font-black">X2</div>
