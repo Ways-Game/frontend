@@ -15,7 +15,12 @@ export function useGames() {
     wsService.connect()
 
     const checkConnection = () => {
-      setIsConnected(wsService.isConnected())
+      const connected = wsService.isConnected()
+      setIsConnected(connected)
+      // Запрашиваем данные при подключении
+      if (connected && games.length === 0) {
+        wsService.requestGames()
+      }
     }
     
     const interval = setInterval(checkConnection, 1000)
@@ -26,7 +31,7 @@ export function useGames() {
       unsubscribe()
       wsService.disconnect()
     }
-  }, [])
+  }, [games.length])
 
   return {
     games,

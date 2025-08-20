@@ -18,6 +18,8 @@ class WebSocketService {
       this.ws.onopen = () => {
         console.log('WebSocket connected to:', wsUrl)
         this.reconnectAttempts = 0
+        // Отправляем любое сообщение чтобы получить данные
+        this.ws?.send('get_games')
       }
       
       this.ws.onmessage = (event) => {
@@ -93,6 +95,12 @@ class WebSocketService {
 
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN
+  }
+
+  requestGames() {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send('get_games')
+    }
   }
 }
 
