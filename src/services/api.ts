@@ -9,6 +9,7 @@ export interface UserProfile {
   avatar_url?: string;
   wallet_address?: string;
   referrals?: UserProfile[];
+  count_story_current_day?: number;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://bot.guarant.network/api';
@@ -26,7 +27,8 @@ class ApiService {
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(errorText || `API Error: ${response.status}`);
     }
 
     return response.json();

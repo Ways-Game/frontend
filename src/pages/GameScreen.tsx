@@ -5,7 +5,7 @@ import { WaysButton } from "@/components/ui/ways-button"
 import { CircularTimer } from "@/components/game/TimerChip"
 import { GameResultModal } from "@/components/modals/GameResultModal"
 import { GameCanvas, GameCanvasRef } from "@/components/GameCanvas"
-import { Trophy, Volume2, VolumeX, X, Star } from "lucide-react"
+import { Trophy, Volume2, VolumeX, X, Star, ChevronLeft, ChevronRight } from "lucide-react"
 import { MockApi } from "@/services/mockApi"
 import { useTelegram } from "@/hooks/useTelegram"
 import { TabBar } from "@/components/navigation/TabBar"
@@ -14,28 +14,17 @@ export function GameScreen() {
   const navigate = useNavigate()
   const { webApp, shareGameStory } = useTelegram()
   const gameCanvasRef = useRef<GameCanvasRef>(null)
-  const [timeLeft, setTimeLeft] = useState(60)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [gameModal, setGameModal] = useState<"win" | "lose" | null>(null)
   const [gameResult, setGameResult] = useState<{ result: 'win' | 'lose'; prize?: number } | null>(null)
   const [gameStarted, setGameStarted] = useState(false)
   const [showCountdown, setShowCountdown] = useState(false)
   const [countdownText, setCountdownText] = useState('3')
- const [speedUpTime, setSpeedUpTime] = useState(0) 
-  useEffect(() => {
-    if (!gameStarted) return
-    
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-    
-    return () => clearInterval(timer)
-  }, [gameStarted])
+  const [speedUpTime, setSpeedUpTime] = useState(0)
+  const [cameraMode, setCameraMode] = useState<'leader' | 'swipe'>('leader')
+  const [scrollY, setScrollY] = useState(0)
+  const [maxScrollY, setMaxScrollY] = useState(0)
+  const [touchStartY, setTouchStartY] = useState(0) 
 
   const handleClose = () => {
     navigate('/')
@@ -53,7 +42,13 @@ export function GameScreen() {
 
   const handleGameStart = () => {
     setGameStarted(true)
-    setTimeLeft(60)
+    if (gameCanvasRef.current && cameraMode === 'swipe') {
+      const gameSize = gameCanvasRef.current.getGameSize()
+      const containerHeight = window.innerHeight - 80
+      const scale = window.innerWidth / 1000
+      const scaledHeight = gameSize.height * scale
+      setMaxScrollY(Math.max(0, scaledHeight - containerHeight))
+    }
   }
 
   const handleGameEnd = () => {
@@ -99,6 +94,75 @@ export function GameScreen() {
     }
   }
 
+  // Функция для переключения режима камеры
+  const toggleCameraMode = () => {
+    const newMode = cameraMode === 'leader' ? 'swipe' : 'leader'
+    setCameraMode(newMode)
+    
+    // Передаем новый режим в GameCanvas
+    if (gameCanvasRef.current) {
+      gameCanvasRef.current.setCameraMode(newMode)
+      
+      if (newMode === 'swipe') {
+        const gameSize = gameCanvasRef.current.getGameSize()
+        const containerHeight = window.innerHeight - 80
+        const scale = window.innerWidth / 1000
+        const scaledHeight = gameSize.height * scale
+        setMaxScrollY(Math.max(0, scaledHeight - containerHeight))
+      }
+    }
+  }
+
+  const handleScrollUp = () => {
+    const newY = Math.max(0, scrollY - 200)
+    setScrollY(newY)
+    if (gameCanvasRef.current) {
+      gameCanvasRef.current.setScrollY(newY)
+    }
+  }
+
+  const handleScrollDown = () => {
+    const newY = Math.min(maxScrollY, scrollY + 200)
+    setScrollY(newY)
+    if (gameCanvasRef.current) {
+      gameCanvasRef.current.setScrollY(newY)
+    }
+  }
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (cameraMode === 'swipe') {
+      const newY = Math.max(0, Math.min(maxScrollY, scrollY + e.deltaY))
+      setScrollY(newY)
+      if (gameCanvasRef.current) {
+        gameCanvasRef.current.setScrollY(newY)
+      }
+    }
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (cameraMode === 'swipe') {
+      setTouchStartY(e.touches[0].clientY)
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (cameraMode === 'swipe' && touchStartY !== 0) {
+      e.preventDefault()
+      const touchY = e.touches[0].clientY
+      const deltaY = touchStartY - touchY
+      const newY = Math.max(0, Math.min(maxScrollY, scrollY + deltaY * 2))
+      setScrollY(newY)
+      if (gameCanvasRef.current) {
+        gameCanvasRef.current.setScrollY(newY)
+      }
+      setTouchStartY(touchY)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    setTouchStartY(0)
+  }
+
   const testModal = () => {
     MockApi.getGameResult().then(result => {
       setGameResult(result)
@@ -109,14 +173,57 @@ export function GameScreen() {
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
       {/* Game Canvas - Full Screen */}
-      <GameCanvas
-        ref={gameCanvasRef}
-        onBallWin={handleBallWin}
-        onGameStart={handleGameStart}
-        onGameEnd={handleGameEnd}
-        className="absolute inset-0 w-full h-full"
-        speedUpTime={speedUpTime - 4}
-      />
+      <div 
+        className="absolute inset-0 w-full h-full overflow-hidden"
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <GameCanvas
+          ref={gameCanvasRef}
+          onBallWin={handleBallWin}
+          onGameStart={handleGameStart}
+          onGameEnd={handleGameEnd}
+          className="absolute inset-0 w-full h-full"
+          speedUpTime={speedUpTime - 4}
+          initialCameraMode={cameraMode}
+          scrollY={cameraMode === 'swipe' ? scrollY : 0}
+        />
+      </div>
+      
+      {/* Кнопки прокрутки (только в режиме swipe) */}
+      {cameraMode === 'swipe' && maxScrollY > 0 && (
+        <>
+          {scrollY > 0 && (
+            <button 
+              onClick={handleScrollUp}
+              className="absolute left-1/2 transform -translate-x-1/2 top-20 z-30 w-12 h-8 bg-gray-800/70 rounded-full flex items-center justify-center backdrop-blur-sm"
+            >
+              <ChevronLeft className="w-5 h-5 text-white transform rotate-90" />
+            </button>
+          )}
+          {scrollY < maxScrollY && (
+            <button 
+              onClick={handleScrollDown}
+              className="absolute left-1/2 transform -translate-x-1/2 bottom-32 z-30 w-12 h-8 bg-gray-800/70 rounded-full flex items-center justify-center backdrop-blur-sm"
+            >
+              <ChevronRight className="w-5 h-5 text-white transform rotate-90" />
+            </button>
+          )}
+        </>
+      )}
+      
+      {/* Полоса прокрутки (только в режиме swipe) */}
+      {cameraMode === 'swipe' && maxScrollY > 0 && (
+        <div className="absolute right-2 top-20 bottom-32 z-30 w-2 bg-gray-800/50 rounded-full">
+          <div 
+            className="w-full bg-yellow-500 rounded-full transition-all duration-300"
+            style={{ height: `${(scrollY / maxScrollY) * 100}%` }}
+          />
+        </div>
+      )}
+      
       
       {/* Start Game Button */}
       {!gameStarted && !showCountdown && (
@@ -162,9 +269,14 @@ export function GameScreen() {
       {/* Bottom Controls */}
       <div className="absolute bottom-20 left-0 right-0 z-20">
         <div className=" flex items-center justify-between px-4 py-3">
-          <WaysButton variant="close" className=" h-10 flex items-center gap-1.5 bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-4 py-3">
+          {/* Кнопка переключения режима камеры */}
+          <WaysButton 
+            variant="close" 
+            className="h-10 flex items-center gap-1.5 bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-4 py-3"
+            onClick={toggleCameraMode}
+          >
             <Trophy className="w-4 h-4" />
-            Leader
+            {cameraMode === 'leader' ? 'Leader' : 'Swipe'}
           </WaysButton>
           
           <div className="flex items-center gap-2">

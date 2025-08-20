@@ -244,29 +244,13 @@ export function PvPScreen() {
       {/* Balance Info */}
       <div className="px-6 flex flex-col gap-2.5">
         <div className="px-14 py-2.5 bg-black/30 rounded-[243px] flex flex-col items-center justify-center gap-1">
-          {user?.balance && user.balance > 0 ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-white text-xs font-medium">You have</span>
-                <div className="flex items-center gap-0.5">
-                  <img src="/src/assets/icons/star.svg" className="w-4 h-4" alt="star" />
-                  <span className="text-neutral-50 text-xs">{user.balance}<span className="text-neutral-50/50"> ballz</span></span>
-                </div>
-              </div>
+         
               <div className="flex items-center gap-px">
                 <span className="text-white text-xs font-medium">1 ballz = 30</span>
                 <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
               </div>
-            </>
-          ) : (
-            <>
-              <div className="text-white text-xs font-medium">You don't have any ballz</div>
-              <div className="flex items-center gap-px">
-                <span className="text-white text-xs font-medium">1 ballz = 30</span>
-                <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
-              </div>
-            </>
-          )}
+
+          
         </div>
       </div>
     </div>

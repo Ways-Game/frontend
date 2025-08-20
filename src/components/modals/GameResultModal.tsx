@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import { WaysButton } from "@/components/ui/ways-button"
 import { Chip } from "@/components/ui/ways-chip"
 import { Trophy, Share, Medal, CheckCircle, X } from "lucide-react"
+import { useTelegram } from "@/hooks/useTelegram"
 
 interface GameResultModalProps {
   type: "win" | "lose"
@@ -13,6 +14,8 @@ interface GameResultModalProps {
 
 export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose }: GameResultModalProps) {
   const [countdown, setCountdown] = useState(10)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const { user, shareGameStory } = useTelegram()
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -96,7 +99,18 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose }: 
           </button>
           
           <button 
-            onClick={onShare}
+            onClick={async () => {
+              try {
+                await shareGameStory(type === "win")
+                onShare()
+              } catch (error: any) {
+                if (error.message?.includes('maximum number of stories')) {
+                  setShareError('Достигнуто максимальное количество историй в день')
+                } else {
+                  setShareError('Ошибка при отправке истории')
+                }
+              }
+            }}
             className="w-full h-12 px-3 py-3.5 bg-zinc-800 rounded-2xl flex items-center justify-center gap-2.5 text-white text-base font-semibold relative overflow-hidden"
             style={{
               backgroundImage: 'url(/src/assets/share_back.png)',
@@ -111,19 +125,30 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose }: 
           <div className="px-3.5 pt-2.5 pb-0.5 bg-zinc-900/50 rounded-[20px] backdrop-blur-sm flex flex-col items-center">
             <div className="text-center">
               <span className="text-neutral-400 text-base">Share a story </span>
-              <span className="text-white text-base">1</span>
+              <span className="text-white text-base">{user?.count_story_current_day || 0}</span>
               <span className="text-neutral-400 text-base">/3 times a day</span>
             </div>
             <div className="w-80 p-3 flex gap-2">
-              <div className="flex-1 h-[3px] bg-blue-500 rounded-sm" />
-              <div className="flex-1 h-[3px] bg-gray-600 rounded-sm" />
-              <div className="flex-1 h-[3px] bg-gray-600 rounded-sm" />
+              {[0, 1, 2].map(i => (
+                <div 
+                  key={i}
+                  className={`flex-1 h-[3px] rounded-sm ${
+                    i < (user?.count_story_current_day || 0) ? 'bg-blue-500' : 'bg-gray-600'
+                  }`} 
+                />
+              ))}
             </div>
           </div>
           
-          <div className="w-64 text-center text-neutral-50 text-sm mx-auto">
-            You can share a story and get some stars back on your balance
-          </div>
+          {shareError ? (
+            <div className="w-64 text-center text-red-400 text-sm mx-auto">
+              {shareError}
+            </div>
+          ) : (
+            <div className="w-64 text-center text-neutral-50 text-sm mx-auto">
+              You can share a story and get some stars back on your balance
+            </div>
+          )}
         </div>
       </div>
     </div>

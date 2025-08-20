@@ -14,6 +14,7 @@ interface ExtendedUser {
   avatar_url?: string
   wallet_address?: string
   referrals?: any[]
+  count_story_current_day?: number
 }
 
 interface UseTelegramReturn {
@@ -67,7 +68,8 @@ export const useTelegram = (): UseTelegramReturn => {
               balls_count: profile.balls_count,
               avatar_url: profile.avatar_url,
               wallet_address: profile.wallet_address,
-              referrals: profile.referrals
+              referrals: profile.referrals,
+              count_story_current_day: profile.count_story_current_day
             })
           } catch (error) {
             console.error('Failed to load user profile:', error)
@@ -92,7 +94,8 @@ export const useTelegram = (): UseTelegramReturn => {
         balance: profile.balance,
         start_link: profile.start_link,
         balls_count: profile.balls_count,
-        referrers_id: profile.referrals
+        referrers_id: profile.referrals,
+        count_story_current_day: profile.count_story_current_day
       } : null)
     } catch (error) {
       console.error('Failed to load user profile:', error)
@@ -126,8 +129,11 @@ export const useTelegram = (): UseTelegramReturn => {
     
     try {
       await api.shareGameStory(user.id, isWinner)
-    } catch (error) {
+      // Обновляем профиль после успешной отправки истории
+      await loadUserProfile()
+    } catch (error: any) {
       console.error('Failed to share game story:', error)
+      throw error
     }
   }
 

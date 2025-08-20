@@ -25,16 +25,21 @@ interface GameCanvasProps {
   ballImages?: string[];
   className?: string;
   speedUpTime?: number;
+  initialCameraMode?: 'leader' | 'swipe';
+  scrollY?: number;
 }
 
 export interface GameCanvasRef {
   startGame: () => void;
   resetGame: () => void;
   gameState: 'waiting' | 'playing' | 'finished';
+  setCameraMode: (mode: 'leader' | 'swipe') => void;
+  setScrollY: (y: number) => void;
+  getGameSize: () => { width: number; height: number };
 }
 
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
-  ({ onBallWin, onGameStart, onGameEnd, ballImages = [], className, speedUpTime = 0 }, ref) => {
+  ({ onBallWin, onGameStart, onGameEnd, ballImages = [], className, speedUpTime = 0, initialCameraMode = 'leader', scrollY = 0 }, ref) => {
     const canvasRef = useRef<HTMLDivElement>(null);
     const [app, setApp] = useState<PIXI.Application | null>(null);
     const ballsRef = useRef<Ball[]>([]);
@@ -42,6 +47,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const spinnersRef = useRef<Spinner[]>([]);
     const [gameState, setGameState] = useState<'waiting' | 'playing' | 'finished'>('waiting');
     const [cameraY, setCameraY] = useState(0);
+    const [cameraMode, setCameraMode] = useState<'leader' | 'swipe'>(initialCameraMode);
     const [actualWinners, setActualWinners] = useState<string[]>([]);
     const actualWinnersRef = useRef<string[]>([]);
     const rngRef = useRef<(() => number) | null>(null);
@@ -49,6 +55,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const mapDataRef = useRef<MapData | null>(null);
     const speedUpFramesRemaining = useRef(0);
     const isSpeedingUp = useRef(false);
+
+    // Refs to keep latest values inside PIXI loop (fix closure issue)
+    const cameraModeRef = useRef<'leader' | 'swipe'>(initialCameraMode);
+    const scrollYRef = useRef<number>(scrollY);
 
     // Seeded random number generator
     const createRNG = (seed: string) => {
@@ -95,9 +105,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       const newBalls: Ball[] = [];
       for (let i = 0; i < playerCount; i++) {
         const color = colors[i % colors.length];
-        
+
         let ballGraphics = new PIXI.Graphics();
-        
+
         // Use loaded texture or fallback to color
         if (texturesRef.current.length > 0) {
           const texture = texturesRef.current[i % texturesRef.current.length];
@@ -105,19 +115,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         } else {
           ballGraphics.circle(0, 0, 24).fill(color).stroke({ width: 2, color: 0xffffff });
         }
-        
+
         // Create leader indicator
         const indicator = new PIXI.Graphics();
         indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
         indicator.fill(0xFFD700).stroke({ width: 2, color: 0xFFA500 });
         indicator.visible = false;
-        
+
         const screenHeight = (mapData as any).screenHeight || 800;
         const startX = 50 + rng() * 1100; // По всей ширине поля
         const startY = 50 + rng() * (screenHeight - 100); // По всей высоте экрана
         ballGraphics.position.set(startX, startY);
         indicator.position.set(startX, startY - 40);
-        
+
         app.stage.addChild(ballGraphics);
         app.stage.addChild(indicator);
 
@@ -144,7 +154,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           obstaclesRef.current.splice(index, 1);
         }
       }
-      
+
       setGameState('playing');
       onGameStart?.();
     };
@@ -152,7 +162,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const startGame = () => {
       const seed = Date.now().toString();
       startRound(150, seed);
-      
+
       if (speedUpTime > 0) {
         isSpeedingUp.current = true;
         speedUpFramesRemaining.current = speedUpTime * 60;
@@ -174,11 +184,58 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       setGameState('waiting');
     };
 
+    // Helper to update camera mode both in state and ref
+    const setCameraModeSafe = (mode: 'leader' | 'swipe') => {
+      setCameraMode(mode);
+      cameraModeRef.current = mode;
+
+      // If switching to swipe, immediately apply swipe camera transform and hide any leader indicators
+      if (app && mode === 'swipe') {
+        // compute center X based on current scale and map width
+        const deviceWidth = window.innerWidth;
+        const scale = deviceWidth / 1000; // same formula as in gameLoop
+        const mapWidth = mapDataRef.current?.mapWidth || 1200;
+        const centerX = (mapWidth * scale - deviceWidth) / 2;
+        app.stage.x = -Math.max(0, centerX);
+        app.stage.y = -scrollYRef.current;
+
+        // hide indicators
+        ballsRef.current.forEach(ball => {
+          if (ball.indicator) ball.indicator.visible = false;
+        });
+      }
+
+      // If switching to leader, ensure indicators will be updated by the loop immediately
+    };
+
     useImperativeHandle(ref, () => ({
       startGame,
       resetGame,
-      gameState
+      gameState,
+      setCameraMode: (mode: 'leader' | 'swipe') => {
+        setCameraModeSafe(mode);
+      },
+      setScrollY: (y: number) => {
+        scrollYRef.current = y;
+        if (app && cameraModeRef.current === 'swipe') {
+          app.stage.y = -y;
+        }
+      },
+      getGameSize: () => {
+        return {
+          width: mapDataRef.current?.mapWidth || 1200,
+          height: mapDataRef.current?.mapHeight || 2500
+        };
+      }
     }));
+
+    // Keep scrollY prop in sync with ref
+    useEffect(() => {
+      scrollYRef.current = scrollY;
+      if (app && cameraModeRef.current === 'swipe') {
+        app.stage.y = -scrollY;
+      }
+    }, [scrollY, app]);
 
     // Initialize PIXI
     useEffect(() => {
@@ -186,10 +243,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       const initGame = async () => {
         if (!canvasRef.current) return;
-        
+
         const deviceWidth = window.innerWidth;
         const deviceHeight = window.innerHeight;
-        
+
         // Create PIXI Application with device dimensions
         const pixiApp = new PIXI.Application();
         await pixiApp.init({
@@ -226,56 +283,60 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         obstaclesRef.current = [];
         spinnersRef.current = [];
 
+        // initialize refs for closure safety
+        cameraModeRef.current = cameraMode;
+        scrollYRef.current = scrollY;
+
         let frameCount = 0;
-        
+
         // Professional physics update function
         const updateBalls = () => {
           if (!rngRef.current) return;
-          
+
           ballsRef.current.forEach(ball => {
             if (ball.finished) return;
-            
+
             if (!ball.bounceCount) ball.bounceCount = 0;
-            
-            // Apply gravity with realistic acceleration
-            ball.dy += 0.15;
-            
+
+            // Apply gravity with realistic acceleration (slowed down further)
+            ball.dy += 0.08;
+
             // Air resistance (minimal)
             ball.dx *= 0.9995;
             ball.dy *= 0.9995;
-            
+
             // Store previous position for collision detection
             const prevX = ball.x;
             const prevY = ball.y;
-            
+
             // Update position
             ball.x += ball.dx;
             ball.y += ball.dy;
-            
+
             // Collision detection with obstacles
             for (let i = 0; i < obstaclesRef.current.length; i++) {
               const obstacle = obstaclesRef.current[i];
               if (obstacle.destroyed) continue;
-              
+
               if (obstacle.type === 'peg') {
                 const dx = ball.x - obstacle.x;
                 const dy = ball.y - obstacle.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                
+
                 if (distance < 36) { // 12 + 24 (peg radius + ball radius)
                   // Calculate collision normal
                   const normalX = dx / distance;
                   const normalY = dy / distance;
-                  
+
                   // Move ball outside of peg
                   ball.x = obstacle.x + normalX * 36;
                   ball.y = obstacle.y + normalY * 36;
-                  
+
                   // Reflect velocity with energy loss
                   const dotProduct = ball.dx * normalX + ball.dy * normalY;
                   ball.dx = ball.dx - 2 * dotProduct * normalX;
                   ball.dy = ball.dy - 2 * dotProduct * normalY;
-                  
+
                   // Energy loss on bounce - увеличиваю отскок
                   const restitution = 0.85;
                   ball.dx *= restitution;
@@ -284,11 +345,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               } else if (obstacle.type === 'barrier') {
                 const halfW = obstacle.width / 2;
                 const halfH = obstacle.height / 2;
-                
+
                 // Check if ball is inside barrier bounds
                 if (Math.abs(ball.x - obstacle.x) < halfW + 24 && 
                     Math.abs(ball.y - obstacle.y) < halfH + 24) {
-                  
+
                   // Special case for gate barrier
                   const screenHeight = mapDataRef.current ? (mapDataRef.current as any).screenHeight || 800 : 800;
                   if (obstacle.y === screenHeight) {
@@ -296,11 +357,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     ball.dy = 0;
                     continue;
                   }
-                  
+
                   // Calculate which side was hit
                   const overlapX = (halfW + 24) - Math.abs(ball.x - obstacle.x);
                   const overlapY = (halfH + 24) - Math.abs(ball.y - obstacle.y);
-                  
+
                   if (overlapX < overlapY) {
                     // Hit left or right side
                     if (ball.x < obstacle.x) {
@@ -322,16 +383,16 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               } else if (obstacle.type === 'brick') {
                 const halfW = obstacle.width / 2;
                 const halfH = obstacle.height / 2;
-                
+
                 if (Math.abs(ball.x - obstacle.x) < halfW + 24 && 
                     Math.abs(ball.y - obstacle.y) < halfH + 24) {
                   obstacle.destroyed = true;
                   if (obstacle.graphics) pixiApp.stage.removeChild(obstacle.graphics);
-                  
+
                   // Bounce off destroyed brick
                   const overlapX = (halfW + 24) - Math.abs(ball.x - obstacle.x);
                   const overlapY = (halfH + 24) - Math.abs(ball.y - obstacle.y);
-                  
+
                   if (overlapX < overlapY) {
                     ball.dx = -ball.dx * 0.8;
                   } else {
@@ -342,63 +403,63 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 const dx = ball.x - obstacle.x;
                 const dy = ball.y - obstacle.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                
+
                 if (distance < 48) { // Уменьшаю радиус коллизии воронки
                   const normalX = dx / distance;
                   const normalY = dy / distance;
-                  
+
                   // Move ball outside spinner
                   ball.x = obstacle.x + normalX * 48;
                   ball.y = obstacle.y + normalY * 48;
-                  
+
                   // Add spin effect
                   const tangentX = -normalY;
                   const tangentY = normalX;
                   const spinForce = 2;
-                  
+
                   ball.dx = normalX * Math.abs(ball.dx) * 0.85 + tangentX * spinForce;
                   ball.dy = normalY * Math.abs(ball.dy) * 0.85 + tangentY * spinForce;
                 }
               }
             }
-            
+
             // Ball-to-ball collisions with proper physics
             ballsRef.current.forEach(otherBall => {
               if (otherBall === ball || otherBall.finished) return;
-              
+
               const dx = ball.x - otherBall.x;
               const dy = ball.y - otherBall.y;
               const distance = Math.sqrt(dx * dx + dy * dy);
-              
+
               if (distance < 48 && distance > 0) {
                 const normalX = dx / distance;
                 const normalY = dy / distance;
-                
+
                 // Separate balls
                 const overlap = 48 - distance;
                 ball.x += normalX * overlap * 0.5;
                 ball.y += normalY * overlap * 0.5;
                 otherBall.x -= normalX * overlap * 0.5;
                 otherBall.y -= normalY * overlap * 0.5;
-                
+
                 // Calculate relative velocity
                 const relativeVelX = ball.dx - otherBall.dx;
                 const relativeVelY = ball.dy - otherBall.dy;
                 const relativeSpeed = relativeVelX * normalX + relativeVelY * normalY;
-                
+
                 if (relativeSpeed > 0) return; // Balls moving apart
-                
+
                 // Collision response (assuming equal mass)
                 const restitution = 0.8;
                 const impulse = relativeSpeed * restitution;
-                
+
                 ball.dx -= impulse * normalX * 0.5;
                 ball.dy -= impulse * normalY * 0.5;
                 otherBall.dx += impulse * normalX * 0.5;
                 otherBall.dy += impulse * normalY * 0.5;
               }
             });
-            
+
             // Boundary collisions with proper physics
             if (ball.x < 24) { 
               ball.x = 24; 
@@ -408,43 +469,43 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               ball.x = 1176; 
               ball.dx = -Math.abs(ball.dx) * 0.85; 
             }
-            
+
             // Check win/death zones - dynamic based on map
             if (mapDataRef.current) {
               const { winY, deathY, mapWidth } = mapDataRef.current;
-              
+
               if (ball.y > winY && ball.y < winY + 30) {
                 if (ball.x > mapWidth/2 - 80 && ball.x < mapWidth/2 + 80 && actualWinnersRef.current.length === 0) {
                   // Первый победитель - сразу заканчиваем игру
                   actualWinnersRef.current = [ball.id];
                   setActualWinners(actualWinnersRef.current);
                   ball.finished = true;
-                  
+
                   if (onBallWin) {
                     onBallWin(ball.id, ball.playerId);
                   }
-                  
+
                   setGameState('finished');
                   onGameEnd?.();
                 }
               }
-              
+
               // Death zones - instant destruction on red lines
               if (ball.y > deathY && ball.y < deathY + 30) {
                 ball.finished = true;
                 pixiApp.stage.removeChild(ball.graphics);
               }
             }
-            
+
             // Update graphics
             ball.graphics.position.set(ball.x, ball.y);
-            
+
             // Update indicator position if exists
             if (ball.indicator) {
               ball.indicator.position.set(ball.x, ball.y - 40);
             }
           });
-          
+
           // Remove finished balls
           ballsRef.current = ballsRef.current.filter(ball => !ball.finished || actualWinnersRef.current.includes(ball.id));
         };
@@ -459,7 +520,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               }
               speedUpFramesRemaining.current--;
             }
-            
+
             if (speedUpFramesRemaining.current <= 0) {
               isSpeedingUp.current = false;
             }
@@ -468,50 +529,67 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               updateBalls();
             }
           }
-          
+
           // Scale and center the game field - keep same zoom for wider map
+          const deviceWidth = window.innerWidth;
+          const deviceHeight = window.innerHeight;
           const scale = deviceWidth / 1000;
           pixiApp.stage.scale.set(scale);
-          
-          // Camera follow and leader indicator
+
+          // Camera follow and leader indicator (use refs to read latest mode)
           if (ballsRef.current.length > 0) {
             const activeBalls = ballsRef.current.filter(ball => !ball.finished);
             if (activeBalls.length > 0) {
               const leadingBall = activeBalls.reduce((leader, ball) => 
                 ball.y > leader.y ? ball : leader
               );
-              
+
               // Update leader indicators
               ballsRef.current.forEach(ball => {
                 if (ball.indicator) {
-                  if (ball === leadingBall && !ball.finished) {
-                    ball.indicator.visible = true;
+                  if (cameraModeRef.current === 'leader') {
+                    if (ball === leadingBall && !ball.finished) {
+                      ball.indicator.visible = true;
+                    } else {
+                      ball.indicator.visible = false;
+                    }
                   } else {
+                    // in swipe mode hide indicators
                     ball.indicator.visible = false;
                   }
                 }
               });
-              
-              // Vertical camera follow
-              const maxCameraY = mapDataRef.current ? mapDataRef.current.mapHeight * scale - deviceHeight + 60 : 2500 * scale;
-              const targetCameraY = Math.max(0, Math.min(maxCameraY, leadingBall.y * scale - 320));
-              
-              const currentCameraY = -pixiApp.stage.y;
-              const newCameraY = currentCameraY + (targetCameraY - currentCameraY) * 0.03;
-              setCameraY(newCameraY);
-              pixiApp.stage.y = -newCameraY;
-              
-              // Horizontal camera follow with boundaries
-              const mapWidth = mapDataRef.current?.mapWidth || 1200;
-              const targetCameraX = leadingBall.x * scale - deviceWidth / 2;
-              const minCameraX = 0;
-              const maxCameraX = mapWidth * scale - deviceWidth;
-              const clampedCameraX = Math.max(minCameraX, Math.min(maxCameraX, targetCameraX));
-              
-              const currentCameraX = -pixiApp.stage.x;
-              const newCameraX = currentCameraX + (clampedCameraX - currentCameraX) * 0.03;
-              pixiApp.stage.x = -newCameraX;
+
+              if (cameraModeRef.current === 'leader') {
+                // Vertical camera follow
+                const maxCameraY = mapDataRef.current ? mapDataRef.current.mapHeight * scale - deviceHeight + 60 : 2500 * scale;
+                const targetCameraY = Math.max(0, Math.min(maxCameraY, leadingBall.y * scale - 320));
+
+                const currentCameraY = -pixiApp.stage.y;
+                const newCameraY = currentCameraY + (targetCameraY - currentCameraY) * 0.03;
+                setCameraY(newCameraY);
+                pixiApp.stage.y = -newCameraY;
+
+                // Horizontal camera follow with boundaries
+                const mapWidth = mapDataRef.current?.mapWidth || 1200;
+                const targetCameraX = leadingBall.x * scale - deviceWidth / 2;
+                const minCameraX = 0;
+                const maxCameraX = mapWidth * scale - deviceWidth;
+                const clampedCameraX = Math.max(minCameraX, Math.min(maxCameraX, targetCameraX));
+
+                const currentCameraX = -pixiApp.stage.x;
+                const newCameraX = currentCameraX + (clampedCameraX - currentCameraX) * 0.03;
+                pixiApp.stage.x = -newCameraX;
+              }
             }
+          }
+
+          // Manual scroll mode - completely separate from camera logic
+          if (cameraModeRef.current === 'swipe') {
+            // Keep horizontal position centered
+            const mapWidth = mapDataRef.current?.mapWidth || 1200;
+            const centerX = (mapWidth * scale - deviceWidth) / 2;
+            pixiApp.stage.x = -Math.max(0, centerX);
           }
 
           // Update spinner rotations
@@ -533,7 +611,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             if (app.ticker) {
               app.ticker.destroy();
             }
-            app.destroy({ removeView: true, stageOptions: true });
+            app.destroy({ removeView: true });
             setApp(null);
           }
         } catch (error) {

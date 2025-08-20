@@ -46,7 +46,7 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
 
   // Generate random blocks with max 2 repetitions per block type
   let currentY = screenHeight + 100; // Начинаем после стартовой секции
-  const numBlocks = 16 + Math.floor(rng() * 3); // 10-12 blocks
+  const numBlocks = 12; 
   const blockCounts = new Map<string, number>();
   const selectedBlocks: typeof MAP_BLOCKS[0][] = [];
 
@@ -73,7 +73,7 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
     obstacles.push(...blockObstacles);
     spinners.push(...blockSpinners);
     
-    currentY += block.height + 300; // Увеличено расстояние между блоками
+    currentY += block.height + 150; // Уменьшено расстояние между блоками
   });
 
   // Воронка с сужением от самого верха
@@ -179,7 +179,7 @@ export const generateRandomMap = (app: PIXI.Application, seed: string) => {
   const winY = finishY + stripeHeight;
   const deathY = winY + 200;
 
-  const mapData = { obstacles, spinners, mapWidth, mapHeight: currentY + funnelHeight + verticalPassage + 300, winY, deathY };
+  const mapData = { obstacles, spinners, mapWidth, mapHeight: currentY + funnelHeight + verticalPassage + 100, winY, deathY };
   (mapData as any).gateBarrier = gateBarrier;
   (mapData as any).screenHeight = screenHeight;
   return mapData;
