@@ -18,12 +18,13 @@ class WebSocketService {
       this.ws.onopen = () => {
         console.log('WebSocket connected to:', wsUrl)
         this.reconnectAttempts = 0
-        // Отправляем любое сообщение чтобы получить данные
-        this.ws?.send('get_games')
+        // Отправляем JSON сообщение
+        this.ws?.send(JSON.stringify({event: 'get_games'}))
       }
       
       this.ws.onmessage = (event) => {
         try {
+          console.log('Raw message:', event.data)
           const message = JSON.parse(event.data)
           console.log('WebSocket message received:', message)
           this.notifyListeners(message.event, message.data)
@@ -99,7 +100,7 @@ class WebSocketService {
 
   requestGames() {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send('get_games')
+      this.ws.send(JSON.stringify({event: 'get_games'}))
     }
   }
 }
