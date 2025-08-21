@@ -31,6 +31,9 @@ export function GameScreen() {
   const [touchStartY, setTouchStartY] = useState(0) 
  const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0 })
 
+// ref to defer autoStart until gameData is applied
+const autoStartPendingRef = useRef(false);
+
 
   const handleClose = () => {
     navigate('/')
@@ -137,14 +140,20 @@ export function GameScreen() {
     if (state && state.seed) {
       setGameData({ game_id: state.game_id ?? state.gameId ?? 0, seed: state.seed || "", mapId: state.mapId || 0, participants: state.participants || [], prize: state.prize ?? state.total_price ?? 0, total_balls: state.total_balls ?? state.totalBalls ?? 0 })
       if (state.autoStart) {
-        // give a tick for setState to apply; only call our startGame (it handles countdown)
-        setTimeout(() => {
-          startGame(state);
-          console.log('startGame called', gameData)
-        }, 50)
+        // mark pending auto-start; we'll trigger when gameData updates
+        autoStartPendingRef.current = true;
       }
     }
   }, [location.state])
+
+  // trigger auto-start after gameData has been applied
+  useEffect(() => {
+    if (autoStartPendingRef.current && gameData && (gameData.seed || gameData.game_id)) {
+      startGame(gameData);
+      autoStartPendingRef.current = false;
+      console.log('auto start triggered with', gameData);
+    }
+  }, [gameData]);
 
   // Функция для переключения режима камеры
   const toggleCameraMode = () => {
