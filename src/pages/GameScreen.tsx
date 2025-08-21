@@ -86,7 +86,8 @@ const autoStartPendingRef = useRef<any | null>(null);
       console.log('currentGameData at win:', currentGameData)
       if (currentGameData && currentGameData.game_id) {
         console.log('update game winner', currentGameData.game_id, +playerId)
-        await api.updateGameWinner(currentGameData.game_id, +playerId)
+        // for a bit we turn off this logic 1221
+        //await api.updateGameWinner(currentGameData.game_id, +playerId)
       }
 
       // fetch winner profile for display (works for both win and lose)

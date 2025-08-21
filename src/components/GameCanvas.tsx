@@ -46,6 +46,10 @@ interface GameCanvasProps {
 
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
   ({ onBallWin, onGameStart, ballImages = [], className, speedUpTime = 0, initialCameraMode = 'leader', scrollY = 0, soundEnabled = true }, ref) => {
+    // fixed timestep refs for deterministic physics
+    const fixedTimeStep = useRef(1000 / 60); // ms per physics step (60 FPS)
+    const accumulator = useRef(0);
+    const lastTime = useRef<number | null>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
     const [app, setApp] = useState<PIXI.Application | null>(null);
     const ballsRef = useRef<Ball[]>([]);
@@ -554,10 +558,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         // Create PIXI Application with device dimensions
         const pixiApp = new PIXI.Application();
         await pixiApp.init({
-          width: deviceWidth * 2,
+          width: deviceWidth,
           height: deviceHeight - 80,
+          // Use fixed resolution and disable autoDensity for deterministic rendering
+          resolution: 1,
+          autoDensity: false,
           backgroundColor: 0x1a1a2e,
-          antialias: true,
+          antialias: false,
         });
 
         if (canvasRef.current && pixiApp.canvas) {
@@ -571,7 +578,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           try {
             const textures = await Promise.all(
               ballImages.map(async (imgSrc) => {
-                return await PIXI.Assets.load(imgSrc);
+                try {
+                  return await PIXI.Assets.load(imgSrc);
+                } catch (e) {
+                  // fallback to simple load
+                  return await PIXI.Assets.load(imgSrc);
+                }
               })
             );
             texturesRef.current = textures;
@@ -594,7 +606,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         let frameCount = 0;
 
         // Professional physics update function
-        const updateBalls = () => {
+        const updateBalls = (frameMultiplier = 1) => {
           if (!rngRef.current) return;
 
           ballsRef.current.forEach(ball => {
@@ -602,10 +614,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
             if (!ball.bounceCount) ball.bounceCount = 0;
 
-            // Apply gravity with realistic acceleration
+            // Apply gravity (deterministic - independent of FPS)
             ball.dy += 0.08;
 
-            // Air resistance (minimal)
+            // Air resistance (minimal) deterministic
             ball.dx *= 0.9998;
             ball.dy *= 0.9998;
 
@@ -627,7 +639,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               ball.dx *= 0.997;
               if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
 
-              // Move horizontally along surface
+              // Move horizontally along surface (deterministic)
               ball.x += ball.dx;
               // Add tiny randomness to avoid perfect sticking
               if (Math.abs(ball.dx) < 0.1) {
@@ -644,7 +656,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
               // skip normal collision handling for this frame
             } else {
-              // Normal movement
+              // Normal movement (deterministic)
               ball.x += ball.dx;
               ball.y += ball.dy;
             }
@@ -862,37 +874,40 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ballsRef.current = ballsRef.current.filter(ball => !ball.finished || actualWinnersRef.current.includes(ball.id));
         };
 
-        // Animation loop
+        // Animation loop (fixed timestep for deterministic physics)
         const gameLoop = () => {
-          if (isSpeedingUp.current && speedUpFramesRemaining.current > 0) {
-            const framesToProcess = Math.min(speedUpFramesRemaining.current, 10);
-            for (let i = 0; i < framesToProcess; i++) {
-              if (ballsRef.current.length > 0) {
-                updateBalls();
-              }
-              speedUpFramesRemaining.current--;
-            }
-
-            if (speedUpFramesRemaining.current <= 0) {
-              isSpeedingUp.current = false;
-            }
-          } else {
-            if (ballsRef.current.length > 0) {
-              updateBalls();
-            }
+          const now = performance.now();
+          if (!lastTime.current) {
+            lastTime.current = now;
+            return;
           }
 
-          // Scale and center the game field - keep same zoom for wider map
+          let deltaTime = now - (lastTime.current || now);
+          // clamp big delta to avoid spiraling
+          if (deltaTime > 1000) deltaTime = 1000;
+          lastTime.current = now;
+
+          accumulator.current += deltaTime;
+          const step = fixedTimeStep.current;
+
+          // step physics in fixed increments
+          while (accumulator.current >= step) {
+            if (ballsRef.current.length > 0) {
+              updateBalls(1);
+            }
+            accumulator.current -= step;
+          }
+
+          // After physics steps, perform rendering-related transforms
           const deviceWidth = window.innerWidth;
           const deviceHeight = window.innerHeight;
           const scale = deviceWidth / 1000;
           pixiApp.stage.scale.set(scale);
 
-          // Camera follow and leader indicator (use refs to read latest mode)
           if (ballsRef.current.length > 0) {
             const activeBalls = ballsRef.current.filter(ball => !ball.finished);
             if (activeBalls.length > 0) {
-              const leadingBall = activeBalls.reduce((leader, ball) => 
+              const leadingBall = activeBalls.reduce((leader, ball) =>
                 ball.y > leader.y ? ball : leader
               );
 
@@ -900,20 +915,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               ballsRef.current.forEach(ball => {
                 if (ball.indicator) {
                   if (cameraModeRef.current === 'leader') {
-                    if (ball === leadingBall && !ball.finished) {
-                      ball.indicator.visible = true;
-                    } else {
-                      ball.indicator.visible = false;
-                    }
+                    ball.indicator.visible = (ball === leadingBall && !ball.finished);
                   } else {
-                    // in swipe mode hide indicators
                     ball.indicator.visible = false;
                   }
                 }
               });
 
               if (cameraModeRef.current === 'leader') {
-                // Vertical camera follow
                 const maxCameraY = mapDataRef.current ? mapDataRef.current.mapHeight * scale - deviceHeight + 60 : 2500 * scale;
                 const targetCameraY = Math.max(0, Math.min(maxCameraY, leadingBall.y * scale - 320));
 
@@ -922,7 +931,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 setCameraY(newCameraY);
                 pixiApp.stage.y = -newCameraY;
 
-                // Horizontal camera follow with boundaries
                 const mapWidth = mapDataRef.current?.mapWidth || 1200;
                 const targetCameraX = leadingBall.x * scale - deviceWidth / 2;
                 const minCameraX = 0;
@@ -936,9 +944,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             }
           }
 
-          // Manual scroll mode - completely separate from camera logic
           if (cameraModeRef.current === 'swipe') {
-            // Keep horizontal position centered
             const mapWidth = mapDataRef.current?.mapWidth || 1200;
             const centerX = (mapWidth * scale - deviceWidth) / 2;
             pixiApp.stage.x = -Math.max(0, centerX);
