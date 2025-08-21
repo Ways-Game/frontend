@@ -101,12 +101,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           if (avatarUrl) {
             try {
               const encodedUrl = encodeURI(avatarUrl);
-              const proxyUrl = "https://cors-anywhere.herokuapp.com/";
-              const finalUrl = proxyUrl + encodedUrl;
               console.log('game canvas avatarUrl', encodedUrl)
               const img = new Image();
               img.crossOrigin = "Anonymous";
-              img.src = finalUrl;
+              img.src = encodedUrl;
               await new Promise((resolve) => (img.onload = resolve));
               const texture = PIXI.Texture.from(img);
               ballGraphics.circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
