@@ -30,8 +30,8 @@ export function GameScreen() {
   const [touchStartY, setTouchStartY] = useState(0) 
  const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0 })
 
-// ref to defer autoStart until gameData is applied
-const autoStartPendingRef = useRef(false);
+// ref to defer autoStart until gameData is applied; store pending payload
+const autoStartPendingRef = useRef<any | null>(null);
 
 
   const handleClose = () => {
@@ -59,11 +59,7 @@ const autoStartPendingRef = useRef(false);
     }
   }
 
-  const handleGameEnd = () => {
-    // Game canvas finished, show loss modal using gameData
-    setGameResult({ result: 'lose', prize: gameData.prize })
-    setGameModal('lose')
-  }
+  // game end handled via handleBallWin when a ball wins
 
   const handleBallWin = async (ballId: string, playerId: string) => {
     console.log(`Ball ${ballId} (${playerId}) won!`)
@@ -148,21 +144,32 @@ const autoStartPendingRef = useRef(false);
   const location = useLocation()
   useEffect(() => {
     const state: any = (location && (location as any).state) || null
-    if (state && state.seed) {
-      setGameData({ game_id: state.game_id ?? state.gameId ?? 0, seed: state.seed || "", mapId: state.mapId || 0, participants: state.participants || [], prize: state.prize ?? state.total_price ?? 0, total_balls: state.total_balls ?? state.totalBalls ?? 0 })
+    if (state) {
+      // support two shapes: fullGame passed or flat state
+      const payload = state.fullGame || state;
+      const nextGameData = {
+        game_id: payload.game_id ?? payload.gameId ?? 0,
+        seed: payload.seed || state.seed || "",
+        mapId: payload.map_id ?? payload.mapId ?? state.mapId ?? 0,
+        participants: payload.participants || state.participants || [],
+        prize: payload.total_price ?? payload.total_price ?? payload.prize ?? state.prize ?? 0,
+        total_balls: payload.total_balls ?? payload.totalBalls ?? state.total_balls ?? 0
+      };
+      setGameData(nextGameData as any);
       if (state.autoStart) {
-        // mark pending auto-start; we'll trigger when gameData updates
-        autoStartPendingRef.current = true;
+        autoStartPendingRef.current = nextGameData;
       }
     }
   }, [location.state])
 
   // trigger auto-start after gameData has been applied
   useEffect(() => {
-    if (autoStartPendingRef.current && gameData && (gameData.seed || gameData.game_id)) {
-      startGame(gameData);
-      autoStartPendingRef.current = false;
-      console.log('auto start triggered with', gameData);
+    const pending = autoStartPendingRef.current;
+    if (pending && gameData && (gameData.seed || gameData.game_id)) {
+      // start with the fully-initialized data object we stored
+      startGame(pending);
+      autoStartPendingRef.current = null;
+      console.log('auto start triggered with', pending);
     }
   }, [gameData]);
 
@@ -257,7 +264,7 @@ const autoStartPendingRef = useRef(false);
           ref={gameCanvasRef}
           onBallWin={handleBallWin}
           onGameStart={handleGameStart}
-          onGameEnd={handleGameEnd}
+          onGameEnd={undefined}
           className="absolute inset-0 w-full h-full"
           speedUpTime={speedUpTime - 4}
           initialCameraMode={cameraMode}
