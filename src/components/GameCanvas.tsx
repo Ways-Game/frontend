@@ -95,9 +95,12 @@ function deterministicNoise(seedNum: number, ballIndex: number, step: number) {
   return (h >>> 0) / 4294967296;
 }
 
-// Квантование для детерминированности
-const QS = FIXED_POINT_SCALE;
-function qNum(v: number) { return Math.round(v * QS) / QS; }
+// Пиксель-перфектная арифметика (только целые числа)
+const PIXEL_SCALE = 1000; // Масштаб для субпиксельной точности
+function toPixel(v: number) { return Math.round(v * PIXEL_SCALE); }
+function fromPixel(v: number) { return v / PIXEL_SCALE; }
+function pixelAdd(a: number, b: number) { return a + b; }
+function pixelMul(a: number, b: number) { return Math.round((a * b) / PIXEL_SCALE); }
 
 const deterministicMath = {
   sqrt: (x: number): number => {
@@ -599,6 +602,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             y: startY,
             dx: (rngRef.current!() - 0.5) * 2,
             dy: 0,
+            // Пиксель-перфектные координаты
+            pixelX: toPixel(startX),
+            pixelY: toPixel(startY),
+            pixelDX: toPixel((rngRef.current!() - 0.5) * 2),
+            pixelDY: toPixel(0),
             graphics: ballGraphics,
             color: 0x4ecdc4,
             playerId: playerId,
@@ -610,7 +618,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             renderY: startY,
             prevX: startX,
             prevY: startY,
-          } as Ball & { index: number; renderX: number; renderY: number; prevX: number; prevY: number });
+          } as Ball & { 
+            index: number; 
+            renderX: number; 
+            renderY: number; 
+            prevX: number; 
+            prevY: number;
+            pixelX: number;
+            pixelY: number;
+            pixelDX: number;
+            pixelDY: number;
+          });
           ballIndex++;
         }
       }
@@ -841,21 +859,26 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         let frameCount = 0;
 
-        // Professional physics update function
+        // Пиксель-перфектная физика (только целые числа)
         const updateBalls = () => {
           if (!rngRef.current) return;
 
           const step = physicsStepCount.current;
 
           ballsRef.current.forEach((ball, ballIndex) => {
+            const ballPixel = ball as Ball & {
+              pixelX: number; pixelY: number; pixelDX: number; pixelDY: number;
+              renderX: number; renderY: number; prevX: number; prevY: number;
+              index: number;
+            };
             if (ball.finished) return;
 
             if (!ball.bounceCount) ball.bounceCount = 0;
 
-            // Apply gravity (квантованная арифметика)
-            ball.dy = qNum(ball.dy + 0.08);
-            ball.dx = qNum(ball.dx * 0.9998);
-            ball.dy = qNum(ball.dy * 0.9998);
+            // Apply gravity (пиксель-перфектная арифметика)
+            ballPixel.pixelDY = pixelAdd(ballPixel.pixelDY, toPixel(0.08));
+            ballPixel.pixelDX = pixelMul(ballPixel.pixelDX, toPixel(0.9998));
+            ballPixel.pixelDY = pixelMul(ballPixel.pixelDY, toPixel(0.9998));
 
             // Store previous position for collision detection
             const prevX = ball.x;
@@ -875,13 +898,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               ball.dx *= 0.997;
               if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
 
-              // Move horizontally along surface
-              ball.x = qNum(ball.x + ball.dx);
+              // Move horizontally along surface (пиксель-перфектно)
+              ballPixel.pixelX = pixelAdd(ballPixel.pixelX, ballPixel.pixelDX);
               // Детерминированный шум без условного RNG
-              const ballIdx = (ball as any).index || ballIndex;
+              const ballIdx = ballPixel.index || ballIndex;
               const noise = deterministicNoise(seedNumRef.current, ballIdx, step);
-              if (Math.abs(ball.dx) < 0.1) {
-                ball.dx = qNum(ball.dx + (noise - 0.5) * 0.2);
+              if (Math.abs(ballPixel.pixelDX) < toPixel(0.1)) {
+                ballPixel.pixelDX = pixelAdd(ballPixel.pixelDX, toPixel((noise - 0.5) * 0.2));
               }
 
               // If ball moved beyond obstacle edges or obstacle destroyed — fall off
@@ -898,9 +921,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
               // skip normal collision handling for this frame
             } else {
-              // Normal movement
-              ball.x = qNum(ball.x + ball.dx);
-              ball.y = qNum(ball.y + ball.dy);
+              // Normal movement (пиксель-перфектно)
+              ballPixel.pixelX = pixelAdd(ballPixel.pixelX, ballPixel.pixelDX);
+              ballPixel.pixelY = pixelAdd(ballPixel.pixelY, ballPixel.pixelDY);
             }
 
             // Collision detection with obstacles
@@ -909,22 +932,29 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               if (obstacle.destroyed) continue;
 
               if (obstacle.type === "peg") {
-                const dx = ball.x - obstacle.x;
-                const dy = ball.y - obstacle.y;
-                const distance = deterministicMath.sqrt(dx * dx + dy * dy);
+                const obsPixelX = toPixel(obstacle.x);
+                const obsPixelY = toPixel(obstacle.y);
+                const dx = ballPixel.pixelX - obsPixelX;
+                const dy = ballPixel.pixelY - obsPixelY;
+                const distSq = dx * dx + dy * dy;
+                const collisionThresh = toPixel(36) * toPixel(36);
 
-                if (distance < 36) {
-                  const normalX = dx / distance;
-                  const normalY = dy / distance;
+                if (distSq < collisionThresh) {
+                  // Целочисленный квадратный корень
+                  let dist = Math.floor(Math.sqrt(distSq));
+                  if (dist === 0) dist = 1;
+                  
+                  const normalX = Math.round((dx * PIXEL_SCALE) / dist);
+                  const normalY = Math.round((dy * PIXEL_SCALE) / dist);
 
-                  // Move ball outside of peg
-                  ball.x = qNum(obstacle.x + normalX * 36);
-                  ball.y = qNum(obstacle.y + normalY * 36);
+                  // Move ball outside of peg (пиксель-перфектно)
+                  ballPixel.pixelX = obsPixelX + Math.round((normalX * toPixel(36)) / PIXEL_SCALE);
+                  ballPixel.pixelY = obsPixelY + Math.round((normalY * toPixel(36)) / PIXEL_SCALE);
 
-                  // Reflect velocity with energy loss
-                  const dotProduct = ball.dx * normalX + ball.dy * normalY;
-                  ball.dx = qNum((ball.dx - 2 * dotProduct * normalX) * 0.95);
-                  ball.dy = qNum((ball.dy - 2 * dotProduct * normalY) * 0.95);
+                  // Reflect velocity with energy loss (целочисленно)
+                  const dotProduct = Math.round((ballPixel.pixelDX * normalX + ballPixel.pixelDY * normalY) / PIXEL_SCALE);
+                  ballPixel.pixelDX = Math.round((ballPixel.pixelDX - 2 * dotProduct * normalX / PIXEL_SCALE) * 0.95);
+                  ballPixel.pixelDY = Math.round((ballPixel.pixelDY - 2 * dotProduct * normalY / PIXEL_SCALE) * 0.95);
                   playMelodyNote();
                 }
               } else if (obstacle.type === "barrier") {
@@ -951,33 +981,33 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
-                    // Hit left or right side
-                    if (ball.x < obstacle.x) {
-                      ball.x = qNum(obstacle.x - halfW - 24);
+                    // Hit left or right side (pixel-perfect)
+                    if (ballPixel.pixelX < toPixel(obstacle.x)) {
+                      ballPixel.pixelX = toPixel(obstacle.x - halfW - 24);
                     } else {
-                      ball.x = qNum(obstacle.x + halfW + 24);
+                      ballPixel.pixelX = toPixel(obstacle.x + halfW + 24);
                     }
                     // consider barrier angle
                     const barrierAngle = deterministicMath.atan2(
                       (obstacle as any).y - (obstacle as any).prevY || 0,
                       (obstacle as any).x - (obstacle as any).prevX || 0
                     );
-                    ball.dx = qNum(-ball.dx * 0.9 + deterministicMath.sin(barrierAngle) * 0.5);
-                    ball.dy = qNum(ball.dy - deterministicMath.cos(barrierAngle) * 0.5);
+                    ballPixel.pixelDX = Math.round((-fromPixel(ballPixel.pixelDX) * 0.9 + deterministicMath.sin(barrierAngle) * 0.5) * PIXEL_SCALE);
+                    ballPixel.pixelDY = Math.round((fromPixel(ballPixel.pixelDY) - deterministicMath.cos(barrierAngle) * 0.5) * PIXEL_SCALE);
                     playMelodyNote();
                   } else {
-                    // Hit top or bottom side
-                    if (ball.y < obstacle.y) {
+                    // Hit top or bottom side (pixel-perfect)
+                    if (ballPixel.pixelY < toPixel(obstacle.y)) {
                       // place on top and start rolling along surface
-                      ball.y = qNum(obstacle.y - halfH - 24);
+                      ballPixel.pixelY = toPixel(obstacle.y - halfH - 24);
                       (ball as any).onSurface = true;
                       (ball as any).surfaceObstacle = obstacle;
                       // zero vertical velocity and reduce horizontal speed a bit
-                      ball.dy = 0;
-                      ball.dx = qNum(ball.dx * 0.95);
+                      ballPixel.pixelDY = 0;
+                      ballPixel.pixelDX = Math.round(ballPixel.pixelDX * 0.95);
                     } else {
-                      ball.y = qNum(obstacle.y + halfH + 24);
-                      ball.dy = qNum(-ball.dy * 0.9);
+                      ballPixel.pixelY = toPixel(obstacle.y + halfH + 24);
+                      ballPixel.pixelDY = Math.round(-ballPixel.pixelDY * 0.9);
                       playMelodyNote();
                     }
                   }
@@ -999,9 +1029,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
-                    ball.dx = qNum(-ball.dx * 0.9);
+                    ballPixel.pixelDX = Math.round(-ballPixel.pixelDX * 0.9);
                   } else {
-                    ball.dy = qNum(-ball.dy * 0.9);
+                    ballPixel.pixelDY = Math.round(-ballPixel.pixelDY * 0.9);
                   }
                   playMelodyNote();
                 }
@@ -1015,17 +1045,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const normalX = dx / distance;
                   const normalY = dy / distance;
 
-                  // Move ball outside spinner
-                  ball.x = qNum(obstacle.x + normalX * 48);
-                  ball.y = qNum(obstacle.y + normalY * 48);
+                  // Move ball outside spinner (pixel-perfect)
+                  ballPixel.pixelX = toPixel(obstacle.x + normalX * 48);
+                  ballPixel.pixelY = toPixel(obstacle.y + normalY * 48);
 
                   // Add spin effect
                   const tangentX = -normalY;
                   const tangentY = normalX;
                   const spinForce = 1.6;
 
-                  ball.dx = qNum(normalX * Math.abs(ball.dx) * 0.75 + tangentX * spinForce);
-                  ball.dy = qNum(normalY * Math.abs(ball.dy) * 0.75 + tangentY * spinForce);
+                  ballPixel.pixelDX = Math.round((normalX * Math.abs(fromPixel(ballPixel.pixelDX)) * 0.75 + tangentX * spinForce) * PIXEL_SCALE);
+                  ballPixel.pixelDY = Math.round((normalY * Math.abs(fromPixel(ballPixel.pixelDY)) * 0.75 + tangentY * spinForce) * PIXEL_SCALE);
                   playMelodyNote();
                 }
               }
@@ -1043,42 +1073,61 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 const normalX = dx / distance;
                 const normalY = dy / distance;
 
-                // Separate balls
-                const overlap = 48 - distance;
-                ball.x = qNum(ball.x + normalX * overlap * 0.5);
-                ball.y = qNum(ball.y + normalY * overlap * 0.5);
-                otherBall.x = qNum(otherBall.x - normalX * overlap * 0.5);
-                otherBall.y = qNum(otherBall.y - normalY * overlap * 0.5);
-
-                // Calculate relative velocity
-                const relativeVelX = ball.dx - otherBall.dx;
-                const relativeVelY = ball.dy - otherBall.dy;
-                const relativeSpeed =
-                  relativeVelX * normalX + relativeVelY * normalY;
-
-                if (relativeSpeed > 0) return; // Balls moving apart
-
-                // Collision response (assuming equal mass)
-                const restitution = 0.92;
-                const impulse = relativeSpeed * restitution;
-
-                ball.dx = qNum(ball.dx - impulse * normalX * 0.5);
-                ball.dy = qNum(ball.dy - impulse * normalY * 0.5);
-                otherBall.dx = qNum(otherBall.dx + impulse * normalX * 0.5);
-                otherBall.dy = qNum(otherBall.dy + impulse * normalY * 0.5);
+                // Ball-to-ball collisions (pixel-perfect)
+                const ballPixel2 = ball as Ball & { pixelX: number; pixelY: number; pixelDX: number; pixelDY: number };
+                const otherPixel = otherBall as Ball & { pixelX: number; pixelY: number; pixelDX: number; pixelDY: number };
+                
+                const dx2 = ballPixel2.pixelX - otherPixel.pixelX;
+                const dy2 = ballPixel2.pixelY - otherPixel.pixelY;
+                const distSq2 = dx2 * dx2 + dy2 * dy2;
+                const collisionThresh2 = toPixel(48) * toPixel(48);
+                
+                if (distSq2 < collisionThresh2 && distSq2 > 0) {
+                  let dist2 = Math.floor(Math.sqrt(distSq2));
+                  if (dist2 === 0) dist2 = 1;
+                  
+                  const normalX2 = Math.round((dx2 * PIXEL_SCALE) / dist2);
+                  const normalY2 = Math.round((dy2 * PIXEL_SCALE) / dist2);
+                  
+                  // Separate balls
+                  const overlap2 = toPixel(48) - dist2;
+                  const halfOverlap = Math.round(overlap2 / 2);
+                  
+                  ballPixel2.pixelX += Math.round((normalX2 * halfOverlap) / PIXEL_SCALE);
+                  ballPixel2.pixelY += Math.round((normalY2 * halfOverlap) / PIXEL_SCALE);
+                  otherPixel.pixelX -= Math.round((normalX2 * halfOverlap) / PIXEL_SCALE);
+                  otherPixel.pixelY -= Math.round((normalY2 * halfOverlap) / PIXEL_SCALE);
+                  
+                  // Calculate relative velocity
+                  const relVelX = ballPixel2.pixelDX - otherPixel.pixelDX;
+                  const relVelY = ballPixel2.pixelDY - otherPixel.pixelDY;
+                  const relSpeed = Math.round((relVelX * normalX2 + relVelY * normalY2) / PIXEL_SCALE);
+                  
+                  if (relSpeed > 0) return; // Balls moving apart
+                  
+                  // Collision response
+                  const impulse2 = Math.round(relSpeed * 0.92);
+                  
+                  ballPixel2.pixelDX -= Math.round((impulse2 * normalX2) / (2 * PIXEL_SCALE));
+                  ballPixel2.pixelDY -= Math.round((impulse2 * normalY2) / (2 * PIXEL_SCALE));
+                  otherPixel.pixelDX += Math.round((impulse2 * normalX2) / (2 * PIXEL_SCALE));
+                  otherPixel.pixelDY += Math.round((impulse2 * normalY2) / (2 * PIXEL_SCALE));
+                  
+                  playMelodyNote();
+                }
                 playMelodyNote();
               }
             });
 
-            // Boundary collisions with proper physics
-            if (ball.x < 24) {
-              ball.x = qNum(24);
-              ball.dx = qNum(Math.abs(ball.dx) * 0.95);
+            // Boundary collisions (pixel-perfect)
+            if (ballPixel.pixelX < toPixel(24)) {
+              ballPixel.pixelX = toPixel(24);
+              ballPixel.pixelDX = Math.round(Math.abs(ballPixel.pixelDX) * 0.95);
               playCollisionSound();
             }
-            if (ball.x > 1176) {
-              ball.x = qNum(1176);
-              ball.dx = qNum(-Math.abs(ball.dx) * 0.95);
+            if (ballPixel.pixelX > toPixel(1176)) {
+              ballPixel.pixelX = toPixel(1176);
+              ballPixel.pixelDX = Math.round(-Math.abs(ballPixel.pixelDX) * 0.95);
               playCollisionSound();
             }
 
@@ -1108,12 +1157,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               }
             }
 
-            // Сохраняем предыдущую позицию для интерполяции
-            const ballExt = ball as Ball & { renderX: number; renderY: number; prevX: number; prevY: number };
-            ballExt.prevX = ballExt.renderX || ball.x;
-            ballExt.prevY = ballExt.renderY || ball.y;
-            ballExt.renderX = ball.x;
-            ballExt.renderY = ball.y;
+            // Обновляем legacy координаты и сохраняем для интерполяции
+            ballPixel.prevX = ballPixel.renderX || fromPixel(ballPixel.pixelX);
+            ballPixel.prevY = ballPixel.renderY || fromPixel(ballPixel.pixelY);
+            ballPixel.renderX = fromPixel(ballPixel.pixelX);
+            ballPixel.renderY = fromPixel(ballPixel.pixelY);
+            
+            // Синхронизируем legacy свойства
+            ball.x = ballPixel.renderX;
+            ball.y = ballPixel.renderY;
+            ball.dx = fromPixel(ballPixel.pixelDX);
+            ball.dy = fromPixel(ballPixel.pixelDY);
           });
 
           // Remove finished balls
@@ -1126,7 +1180,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           physicsStepCount.current++;
         };
 
-        // Animation loop (fixed timestep for deterministic physics)
+        // Пиксель-перфектный игровой цикл
         const gameLoop = () => {
           const now = performance.now();
           if (!lastTime.current) {
@@ -1134,23 +1188,24 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             return;
           }
 
-          let deltaTime = now - (lastTime.current || now);
-          if (deltaTime > 1000) deltaTime = 1000;
+          // Фиксированный шаг времени (строго 16.67ms)
+          const FIXED_STEP = 16.666666666666668; // 1000/60
+          let deltaTime = now - lastTime.current;
+          if (deltaTime > 100) deltaTime = FIXED_STEP; // Защита от больших скачков
           lastTime.current = now;
 
           accumulator.current += deltaTime;
-          const step = fixedTimeStep.current;
 
-          // Выполняем фиксированные шаги физики
-          while (accumulator.current >= step) {
+          // Выполняем строго фиксированные шаги физики
+          while (accumulator.current >= FIXED_STEP) {
             if (ballsRef.current.length > 0) {
               updateBalls();
             }
-            accumulator.current -= step;
+            accumulator.current -= FIXED_STEP;
           }
 
           // Плавная интерполяция для рендеринга
-          const alpha = accumulator.current / step;
+          const alpha = accumulator.current / FIXED_STEP;
           ballsRef.current.forEach((ball) => {
             const ballExt = ball as Ball & { renderX: number; renderY: number; prevX: number; prevY: number };
             if (ballExt.prevX !== undefined && ballExt.prevY !== undefined) {
@@ -1239,9 +1294,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             pixiApp.stage.x = -Math.max(0, centerX);
           }
 
-          // Update spinner rotations
+          // Update spinner rotations (pixel-perfect)
           spinnersRef.current.forEach((spinner) => {
-            spinner.rotation = qNum(spinner.rotation + 0.08);
+            spinner.rotation = Math.round((spinner.rotation + 0.08) * PIXEL_SCALE) / PIXEL_SCALE;
             spinner.graphics.rotation = spinner.rotation;
           });
         };
