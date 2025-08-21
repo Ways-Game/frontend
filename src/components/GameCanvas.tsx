@@ -500,8 +500,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     }) => {
       if (!app) return;
       console.log("game canvas game started", gameData);
+      
+      // Сброс всех счетчиков и состояния
+      physicsStepCount.current = 0;
+      accumulator.current = 0;
+      lastTime.current = null;
       speedUpFramesRemaining.current = 0;
       isSpeedingUp.current = false;
+      gamePlayingRef.current = false;
 
       const seedNum = stringToSeed(gameData.seed);
       rngRef.current = mulberry32(seedNum);
@@ -833,7 +839,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const updateBalls = () => {
           if (!rngRef.current) return;
 
-          physicsStepCount.current++;
           const step = physicsStepCount.current;
 
           ballsRef.current.forEach((ball, ballIndex) => {
@@ -908,19 +913,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const normalX = dx / distance;
                   const normalY = dy / distance;
 
-                  // Move ball outside of peg
-                  ball.x = obstacle.x + normalX * 36;
-                  ball.y = obstacle.y + normalY * 36;
+                  // Move ball outside of peg (квантованное)
+                  ball.x = qNum(obstacle.x + normalX * 36);
+                  ball.y = qNum(obstacle.y + normalY * 36);
 
                   // Reflect velocity with energy loss
                   const dotProduct = ball.dx * normalX + ball.dy * normalY;
-                  ball.dx = ball.dx - 2 * dotProduct * normalX;
-                  ball.dy = ball.dy - 2 * dotProduct * normalY;
-
-                  // Energy loss on bounce - tuned for stronger bounces
                   const restitution = 0.95;
-                  ball.dx *= restitution;
-                  ball.dy *= restitution;
+                  ball.dx = qNum((ball.dx - 2 * dotProduct * normalX) * restitution);
+                  ball.dy = qNum((ball.dy - 2 * dotProduct * normalY) * restitution);
                   playMelodyNote();
                 }
               } else if (obstacle.type === "barrier") {
@@ -949,33 +950,31 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   if (overlapX < overlapY) {
                     // Hit left or right side
                     if (ball.x < obstacle.x) {
-                      ball.x = obstacle.x - halfW - 24;
+                      ball.x = qNum(obstacle.x - halfW - 24);
                     } else {
-                      ball.x = obstacle.x + halfW + 24;
+                      ball.x = qNum(obstacle.x + halfW + 24);
                     }
                     // consider barrier angle
                     const barrierAngle = deterministicMath.atan2(
                       (obstacle as any).y - (obstacle as any).prevY || 0,
                       (obstacle as any).x - (obstacle as any).prevX || 0
                     );
-                    ball.dx =
-                      -ball.dx * 0.9 +
-                      deterministicMath.sin(barrierAngle) * 0.5;
-                    ball.dy -= deterministicMath.cos(barrierAngle) * 0.5;
+                    ball.dx = qNum(-ball.dx * 0.9 + deterministicMath.sin(barrierAngle) * 0.5);
+                    ball.dy = qNum(ball.dy - deterministicMath.cos(barrierAngle) * 0.5);
                     playMelodyNote();
                   } else {
                     // Hit top or bottom side
                     if (ball.y < obstacle.y) {
                       // place on top and start rolling along surface
-                      ball.y = obstacle.y - halfH - 24;
+                      ball.y = qNum(obstacle.y - halfH - 24);
                       (ball as any).onSurface = true;
                       (ball as any).surfaceObstacle = obstacle;
                       // zero vertical velocity and reduce horizontal speed a bit
                       ball.dy = 0;
-                      ball.dx *= 0.95;
+                      ball.dx = qNum(ball.dx * 0.95);
                     } else {
-                      ball.y = obstacle.y + halfH + 24;
-                      ball.dy = -ball.dy * 0.9;
+                      ball.y = qNum(obstacle.y + halfH + 24);
+                      ball.dy = qNum(-ball.dy * 0.9);
                       playMelodyNote();
                     }
                   }
@@ -997,9 +996,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
-                    ball.dx = -ball.dx * 0.9;
+                    ball.dx = qNum(-ball.dx * 0.9);
                   } else {
-                    ball.dy = -ball.dy * 0.9;
+                    ball.dy = qNum(-ball.dy * 0.9);
                   }
                   playMelodyNote();
                 }
@@ -1014,18 +1013,16 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const normalY = dy / distance;
 
                   // Move ball outside spinner
-                  ball.x = obstacle.x + normalX * 48;
-                  ball.y = obstacle.y + normalY * 48;
+                  ball.x = qNum(obstacle.x + normalX * 48);
+                  ball.y = qNum(obstacle.y + normalY * 48);
 
                   // Add spin effect
                   const tangentX = -normalY;
                   const tangentY = normalX;
                   const spinForce = 1.6;
 
-                  ball.dx =
-                    normalX * Math.abs(ball.dx) * 0.75 + tangentX * spinForce;
-                  ball.dy =
-                    normalY * Math.abs(ball.dy) * 0.75 + tangentY * spinForce;
+                  ball.dx = qNum(normalX * Math.abs(ball.dx) * 0.75 + tangentX * spinForce);
+                  ball.dy = qNum(normalY * Math.abs(ball.dy) * 0.75 + tangentY * spinForce);
                   playMelodyNote();
                 }
               }
@@ -1045,10 +1042,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
                 // Separate balls
                 const overlap = 48 - distance;
-                ball.x += normalX * overlap * 0.5;
-                ball.y += normalY * overlap * 0.5;
-                otherBall.x -= normalX * overlap * 0.5;
-                otherBall.y -= normalY * overlap * 0.5;
+                ball.x = qNum(ball.x + normalX * overlap * 0.5);
+                ball.y = qNum(ball.y + normalY * overlap * 0.5);
+                otherBall.x = qNum(otherBall.x - normalX * overlap * 0.5);
+                otherBall.y = qNum(otherBall.y - normalY * overlap * 0.5);
 
                 // Calculate relative velocity
                 const relativeVelX = ball.dx - otherBall.dx;
@@ -1062,23 +1059,23 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 const restitution = 0.92;
                 const impulse = relativeSpeed * restitution;
 
-                ball.dx -= impulse * normalX * 0.5;
-                ball.dy -= impulse * normalY * 0.5;
-                otherBall.dx += impulse * normalX * 0.5;
-                otherBall.dy += impulse * normalY * 0.5;
+                ball.dx = qNum(ball.dx - impulse * normalX * 0.5);
+                ball.dy = qNum(ball.dy - impulse * normalY * 0.5);
+                otherBall.dx = qNum(otherBall.dx + impulse * normalX * 0.5);
+                otherBall.dy = qNum(otherBall.dy + impulse * normalY * 0.5);
                 playMelodyNote();
               }
             });
 
             // Boundary collisions with proper physics
             if (ball.x < 24) {
-              ball.x = 24;
-              ball.dx = Math.abs(ball.dx) * 0.95;
+              ball.x = qNum(24);
+              ball.dx = qNum(Math.abs(ball.dx) * 0.95);
               playCollisionSound();
             }
             if (ball.x > 1176) {
-              ball.x = 1176;
-              ball.dx = -Math.abs(ball.dx) * 0.95;
+              ball.x = qNum(1176);
+              ball.dx = qNum(-Math.abs(ball.dx) * 0.95);
               playCollisionSound();
             }
 
@@ -1122,6 +1119,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             (ball) =>
               !ball.finished || actualWinnersRef.current.includes(ball.id)
           );
+          
+          // Инкремент счетчика в конце
+          physicsStepCount.current++;
         };
 
         // Animation loop (fixed timestep for deterministic physics)
@@ -1213,7 +1213,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           // Update spinner rotations
           spinnersRef.current.forEach((spinner) => {
-            spinner.rotation += 0.08;
+            spinner.rotation = qNum(spinner.rotation + 0.08);
             spinner.graphics.rotation = spinner.rotation;
           });
         };
