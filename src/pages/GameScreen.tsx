@@ -264,7 +264,6 @@ const autoStartPendingRef = useRef<any | null>(null);
           ref={gameCanvasRef}
           onBallWin={handleBallWin}
           onGameStart={handleGameStart}
-          onGameEnd={undefined}
           className="absolute inset-0 w-full h-full"
           speedUpTime={speedUpTime - 4}
           initialCameraMode={cameraMode}

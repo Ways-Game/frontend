@@ -1,13 +1,12 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react";
 import * as PIXI from "pixi.js";
 import { generateRandomMap, generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
-import collisionSound from "@/assets/collision.wav";
+import HARRY_POTTER_RTTTL from "@/assets/Theme - Harry Potter.txt";
 
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
   onGameStart?: () => void;
-  onGameEnd?: () => void;
   ballImages?: string[];
   className?: string;
   speedUpTime?: number;
@@ -17,7 +16,7 @@ interface GameCanvasProps {
 }
 
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
-  ({ onBallWin, onGameStart, onGameEnd, ballImages = [], className, speedUpTime = 0, initialCameraMode = 'leader', scrollY = 0, soundEnabled = true }, ref) => {
+  ({ onBallWin, onGameStart, ballImages = [], className, speedUpTime = 0, initialCameraMode = 'leader', scrollY = 0, soundEnabled = true }, ref) => {
     const canvasRef = useRef<HTMLDivElement>(null);
     const [app, setApp] = useState<PIXI.Application | null>(null);
     const ballsRef = useRef<Ball[]>([]);
@@ -35,9 +34,16 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const isSpeedingUp = useRef(false);
     const gamePlayingRef = useRef(false);
 
-    // Audio for collisions
-    const collisionSoundRef = useRef<HTMLAudioElement | null>(null);
+    // Audio for collisions (legacy wav removed in favor of WebAudio melody)
     const lastCollisionAtRef = useRef<number>(0);
+
+    // WebAudio melody refs
+    interface Note { frequency: number; duration: number }
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const oscillatorRef = useRef<OscillatorNode | null>(null);
+    const melodyNotesRef = useRef<Note[]>([]);
+    const currentNoteIndexRef = useRef(0);
+    const isPlayingRef = useRef(false);
 
     // Refs to keep latest values inside PIXI loop (fix closure issue)
     const cameraModeRef = useRef<'leader' | 'swipe'>(initialCameraMode);
@@ -58,43 +64,172 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       };
     };
 
-    // Initialize collision sound
-    useEffect(() => {
+    // RTTTL parser (returns array of {frequency, duration(ms)})
+    const parseRTTTL = (rtttl: string) => {
       try {
-        collisionSoundRef.current = new Audio(collisionSound as any);
-        if (collisionSoundRef.current) collisionSoundRef.current.volume = 0.3;
-      } catch (e) {
-        collisionSoundRef.current = null;
-      }
+        const [name, settingsStr, notesStr] = rtttl.split(':');
+        const settings: any = {};
+        settingsStr.split(',').forEach(s => {
+          const [key, value] = s.split('=');
+          settings[key] = value;
+        });
 
+        const defaultDuration = parseInt(settings.d) || 4;
+        const defaultOctave = parseInt(settings.o) || 5;
+        const bpm = parseInt(settings.b) || 63;
+
+        const notes = notesStr.split(',').map(noteStr => {
+          let duration = defaultDuration;
+          let noteChar = '';
+          let dot = false;
+          let octave = defaultOctave;
+
+          let rest = noteStr.trim();
+
+          // Parse duration
+          const durationMatch = rest.match(/^\d+/);
+          if (durationMatch) {
+            duration = parseInt(durationMatch[0]);
+            rest = rest.substring(durationMatch[0].length);
+          }
+
+          // Parse note
+          if (rest[0] === 'p') {
+            noteChar = 'p';
+            rest = rest.substring(1);
+          } else {
+            noteChar = rest[0];
+            rest = rest.substring(1);
+            if (rest[0] === '#' || rest[0] === 'b') {
+              noteChar += rest[0];
+              rest = rest.substring(1);
+            }
+          }
+
+          // Parse dot
+          if (rest[0] === '.') {
+            dot = true;
+            rest = rest.substring(1);
+          }
+
+          // Parse octave
+          if (rest.length > 0) {
+            const oct = parseInt(rest);
+            if (!isNaN(oct)) octave = oct;
+          }
+
+          // Calculate duration in ms
+          const durationMs = (240000 / bpm) * (1 / duration) * (dot ? 1.5 : 1);
+
+          // Calculate frequency
+          let frequency = 0;
+          if (noteChar !== 'p') {
+            const noteMap: { [key: string]: number } = {
+              'c': 0, 'c#': 1, 'db': 1, 'd': 2, 'd#': 3, 'eb': 3, 'e': 4, 'f': 5, 'f#': 6, 'gb': 6, 'g': 7, 'g#': 8, 'ab': 8, 'a': 9, 'a#': 10, 'bb': 10, 'b': 11
+            };
+            const noteValue = noteMap[noteChar.toLowerCase()];
+            if (noteValue === undefined) {
+              console.warn(`Unknown note: ${noteChar}`);
+            } else {
+              const semitone = (octave + 1) * 12 + noteValue;
+              frequency = 440 * Math.pow(2, (semitone - 49) / 12);
+            }
+          }
+
+          return { frequency, duration: durationMs };
+        });
+
+        return notes;
+      } catch (error) {
+        console.error('Failed to parse RTTTL:', error);
+        return [];
+      }
+    };
+
+    // Cleanup audio resources on unmount
+    useEffect(() => {
       return () => {
-        if (collisionSoundRef.current) {
-          collisionSoundRef.current.pause();
-          collisionSoundRef.current = null;
-        }
+        try {
+          if (oscillatorRef.current) {
+            oscillatorRef.current.stop();
+          }
+        } catch (e) {}
+        try {
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+          }
+        } catch (e) {}
       };
     }, []);
 
     const playCollisionSound = (intensity = 0.5) => {
+      // Legacy function retained for compatibility but no longer plays wav.
+      // Keep a minimal rate limiter so earlier logic relying on this doesn't spam.
       if (!soundEnabled) return;
       const now = Date.now();
-      const minInterval = 120; // ms between played sounds to avoid cacophony
+      const minInterval = 60;
       if (now - lastCollisionAtRef.current < minInterval) return;
-
-      // probability grows with intensity
-      const chance = Math.min(1, 0.25 + intensity * 0.75);
-      if (Math.random() > chance) return;
-
-      const audio = collisionSoundRef.current;
-      if (!audio) return;
-      try {
-        lastCollisionAtRef.current = now;
-        audio.currentTime = 0;
-        void audio.play();
-      } catch (e) {
-        // noop
-      }
+      lastCollisionAtRef.current = now;
     };
+
+    // Play a single melody note using WebAudio
+    const playMelodyNote = useCallback(() => {
+      if (!soundEnabled || isPlayingRef.current) return;
+
+      const notes = melodyNotesRef.current;
+      if (currentNoteIndexRef.current >= notes.length) {
+        currentNoteIndexRef.current = 0;
+      }
+
+      const note = notes[currentNoteIndexRef.current];
+      if (!note) return;
+
+      // Pause (rest)
+      if (note.frequency === 0) {
+        isPlayingRef.current = true;
+        setTimeout(() => {
+          isPlayingRef.current = false;
+          currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+        }, note.duration);
+        return;
+      }
+
+      try {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+
+        const context = audioContextRef.current;
+        if (context.state === 'suspended') {
+          context.resume();
+        }
+
+        const oscillator = context.createOscillator();
+        oscillatorRef.current = oscillator;
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(note.frequency, context.currentTime);
+
+        const gainNode = context.createGain();
+        gainNode.gain.setValueAtTime(0.18, context.currentTime);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+
+        oscillator.start();
+        oscillator.stop(context.currentTime + note.duration / 1000);
+
+        isPlayingRef.current = true;
+
+        oscillator.onended = () => {
+          isPlayingRef.current = false;
+          currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+        };
+      } catch (error) {
+        console.error('Failed to play note:', error);
+        isPlayingRef.current = false;
+      }
+    }, [soundEnabled]);
 
     const startRound = async (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
       if (!app) return;
@@ -203,6 +338,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       setGameState('playing');
       gamePlayingRef.current = true;
       onGameStart?.();
+      // initialize melody notes from imported RTTTL
+      try {
+        if (HARRY_POTTER_RTTTL) {
+          melodyNotesRef.current = parseRTTTL(HARRY_POTTER_RTTTL as string);
+          currentNoteIndexRef.current = 0;
+        }
+      } catch (e) {
+        console.warn('Failed to init melody notes', e);
+      }
     };
 
     const startGame = async (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
@@ -419,7 +563,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const restitution = 0.95;
                   ball.dx *= restitution;
                   ball.dy *= restitution;
-                  playCollisionSound();
+                  playMelodyNote();
                 }
               } else if (obstacle.type === 'barrier') {
                 const halfW = obstacle.width / 2;
@@ -452,7 +596,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     const barrierAngle = Math.atan2((obstacle as any).y - (obstacle as any).prevY || 0, (obstacle as any).x - (obstacle as any).prevX || 0);
                     ball.dx = -ball.dx * 0.9 + Math.sin(barrierAngle) * 0.5;
                     ball.dy -= Math.cos(barrierAngle) * 0.5;
-                    playCollisionSound();
+                    playMelodyNote();
                   } else {
                     // Hit top or bottom side
                     if (ball.y < obstacle.y) {
@@ -466,7 +610,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     } else {
                       ball.y = obstacle.y + halfH + 24;
                       ball.dy = -ball.dy * 0.9;
-                      playCollisionSound();
+                      playMelodyNote();
                     }
                   }
                 }
@@ -488,7 +632,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   } else {
                     ball.dy = -ball.dy * 0.9;
                   }
-                  playCollisionSound();
+                  playMelodyNote();
                 }
               } else if (obstacle.type === 'spinner') {
                 const dx = ball.x - obstacle.x;
@@ -510,7 +654,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
                   ball.dx = normalX * Math.abs(ball.dx) * 0.75 + tangentX * spinForce;
                   ball.dy = normalY * Math.abs(ball.dy) * 0.75 + tangentY * spinForce;
-                  playCollisionSound();
+                  playMelodyNote();
                 }
               }
             }
@@ -549,7 +693,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 ball.dy -= impulse * normalY * 0.5;
                 otherBall.dx += impulse * normalX * 0.5;
                 otherBall.dy += impulse * normalY * 0.5;
-                playCollisionSound();
+                playMelodyNote();
               }
             });
 
@@ -569,19 +713,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             if (mapDataRef.current) {
               const { winY, deathY, mapWidth } = mapDataRef.current;
 
-              if (ball.y > winY && ball.y < winY + 30) {
-                if (ball.x > mapWidth/2 - 80 && ball.x < mapWidth/2 + 80 && actualWinnersRef.current.length === 0) {
-                  // Первый победитель - сразу заканчиваем игру
+              // If any ball crosses the finish Y, mark it as the winner and finish the game
+              if (ball.y > winY) {
+                if (actualWinnersRef.current.length === 0) {
                   actualWinnersRef.current = [ball.id];
-                  setActualWinners(actualWinnersRef.current);
+                  setActualWinners([...actualWinnersRef.current]);
                   ball.finished = true;
 
-                  if (onBallWin) {
-                    onBallWin(ball.id, ball.playerId);
-                  }
+                  // Notify parent about the winning ball
+                  onBallWin?.(ball.id, ball.playerId);
 
                   setGameState('finished');
-                  onGameEnd?.();
+                  gamePlayingRef.current = false;
                 }
               }
 
