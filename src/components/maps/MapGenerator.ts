@@ -35,18 +35,16 @@ export const generateMapFromId = (app: PIXI.Application, mapId: number[] | numbe
   let currentY = screenHeight + 100;
   const selectedBlocks: typeof MAP_BLOCKS[0][] = [];
   
-  const blockIndices = [];
-  let tempMapId = mapId;
-  for (let i = 0; i < 12; i++) {
-    blockIndices.push(tempMapId % MAP_BLOCKS.length);
-    tempMapId = Math.floor(tempMapId / MAP_BLOCKS.length);
-  }
   
-  blockIndices.forEach(blockIndex => {
-    if (blockIndex < MAP_BLOCKS.length) {
-      selectedBlocks.push(MAP_BLOCKS[blockIndex]);
-    }
-  });
+  if (Array.isArray(mapId)) {
+    mapId.forEach((id)=>{
+      selectedBlocks.push(MAP_BLOCKS[id])
+    })
+  } else {
+    MAP_BLOCKS.forEach((_, index)=>{
+      selectedBlocks.push(MAP_BLOCKS[index])
+    })
+  }
 
   selectedBlocks.forEach(block => {
     const { obstacles: blockObstacles, spinners: blockSpinners } = block.createBlock(app, currentY, mapWidth);

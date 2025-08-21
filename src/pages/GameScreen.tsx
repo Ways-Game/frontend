@@ -67,12 +67,14 @@ export function GameScreen() {
   }
 
 
-  const startGame = () => {
+  const startGame = (dataFromState?: { seed: string; mapId: number[] | number; participants: any[] }) => {
     const countdownDuration = 4;
     
+    const currentRoundGameData = dataFromState || gameData;
+
     if (speedUpTime >= countdownDuration) {
       handleGameStart();
-      gameCanvasRef.current?.startGame(gameData);
+      gameCanvasRef.current?.startGame(currentRoundGameData);
     } else {
       setShowCountdown(true);
       
@@ -88,7 +90,7 @@ export function GameScreen() {
           setCountdownText("LET'S GO!");
           setTimeout(() => {
             setShowCountdown(false);
-            gameCanvasRef.current?.startGame(gameData);
+            gameCanvasRef.current?.startGame(currentRoundGameData);
           }, 1000);
         }
       };
@@ -105,8 +107,10 @@ export function GameScreen() {
       if (state.autoStart) {
         // give a tick for setState to apply
         setTimeout(() => {
-          gameCanvasRef.current?.startGame({ seed: state.seed, mapId: state.mapId, participants: state.participants || [] })
-          startGame()
+          gameCanvasRef.current?.startGame({ seed: state.seed, mapId: state.mapId, participants: state.participants || [] });
+          // The startGame function in GameScreen.tsx also handles the countdown.
+          // It should be called with the same gameData to ensure consistency.
+          startGame(state); 
           console.log('startGame called', state)
          
         }, 50)

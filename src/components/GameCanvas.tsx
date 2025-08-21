@@ -53,7 +53,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     const startRound = async (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
       if (!app) return;
-
+      console.log('game canvas game started', gameData)
       speedUpFramesRemaining.current = 0;
       isSpeedingUp.current = false;
 
