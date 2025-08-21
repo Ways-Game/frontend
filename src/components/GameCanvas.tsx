@@ -173,6 +173,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     }, []);
 
     const playCollisionSound = (intensity = 0.5) => {
+      if (!soundEnabled || isPlayingRef.current) return;
+
       // Legacy function retained for compatibility but no longer plays wav.
       // Keep a minimal rate limiter so earlier logic relying on this doesn't spam.
       if (!soundEnabled) return;
