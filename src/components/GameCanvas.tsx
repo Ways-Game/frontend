@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+  useCallback,
+} from "react";
 import * as PIXI from "pixi.js";
 import { generateRandomMap, generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
@@ -19,18 +26,24 @@ const useGameSound = (initialEnabled = true) => {
         audioContextRef.current.close();
         audioContextRef.current = null;
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }, []);
 
   const getAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
     }
     return audioContextRef.current;
   }, []);
 
-  return { soundEnabledRef, audioContextRef, getAudioContext, enableSound, disableSound };
+  return {
+    soundEnabledRef,
+    audioContextRef,
+    getAudioContext,
+    enableSound,
+    disableSound,
+  };
 };
 
 interface GameCanvasProps {
@@ -39,13 +52,62 @@ interface GameCanvasProps {
   ballImages?: string[];
   className?: string;
   speedUpTime?: number;
-  initialCameraMode?: 'leader' | 'swipe';
+  initialCameraMode?: "leader" | "swipe";
   scrollY?: number;
   soundEnabled?: boolean;
 }
 
+const FIXED_POINT_SCALE = 1000;
+
+const deterministicMath = {
+  sqrt: (x: number): number => {
+    // Реализация квадратного корня через алгоритм Ньютона
+    if (x <= 0) return 0;
+    let guess = x;
+    for (let i = 0; i < 10; i++) {
+      guess = 0.5 * (guess + x / guess);
+    }
+    return guess;
+  },
+
+  atan2: (y: number, x: number): number => {
+    // Детерминированная реализация atan2
+    if (x > 0) return Math.atan(y / x);
+    if (x < 0) return Math.atan(y / x) + Math.PI;
+    return (y > 0 ? Math.PI : -Math.PI) / 2;
+  },
+
+  sin: (x: number): number => {
+    // Табличный синус с фиксированной точностью
+    x %= Math.PI * 2;
+    const table = [
+      0, 0.2588, 0.5, 0.7071, 0.866, 0.9659, 1, 0.9659, 0.866, 0.7071, 0.5,
+      0.2588, 0, -0.2588, -0.5, -0.7071, -0.866, -0.9659, -1, -0.9659, -0.866,
+      -0.7071, -0.5, -0.2588,
+    ];
+    const index = Math.round(x / (Math.PI / 12)) % table.length;
+    return table[index >= 0 ? index : table.length + index];
+  },
+
+  cos: (x: number): number => {
+    return deterministicMath.sin(x + Math.PI / 2);
+  },
+};
+
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
-  ({ onBallWin, onGameStart, ballImages = [], className, speedUpTime = 0, initialCameraMode = 'leader', scrollY = 0, soundEnabled = true }, ref) => {
+  (
+    {
+      onBallWin,
+      onGameStart,
+      ballImages = [],
+      className,
+      speedUpTime = 0,
+      initialCameraMode = "leader",
+      scrollY = 0,
+      soundEnabled = true,
+    },
+    ref
+  ) => {
     // fixed timestep refs for deterministic physics
     const fixedTimeStep = useRef(1000 / 60); // ms per physics step (60 FPS)
     const accumulator = useRef(0);
@@ -55,9 +117,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const ballsRef = useRef<Ball[]>([]);
     const obstaclesRef = useRef<Obstacle[]>([]);
     const spinnersRef = useRef<Spinner[]>([]);
-    const [gameState, setGameState] = useState<'waiting' | 'playing' | 'finished'>('waiting');
+    const [gameState, setGameState] = useState<
+      "waiting" | "playing" | "finished"
+    >("waiting");
     const [cameraY, setCameraY] = useState(0);
-    const [cameraMode, setCameraMode] = useState<'leader' | 'swipe'>(initialCameraMode);
+    const [cameraMode, setCameraMode] = useState<"leader" | "swipe">(
+      initialCameraMode
+    );
     const [actualWinners, setActualWinners] = useState<string[]>([]);
     const actualWinnersRef = useRef<string[]>([]);
     const rngRef = useRef<(() => number) | null>(null);
@@ -71,7 +137,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const lastCollisionAtRef = useRef<number>(0);
 
     // WebAudio melody refs
-    interface Note { frequency: number; duration: number }
+    interface Note {
+      frequency: number;
+      duration: number;
+    }
     const oscillatorRef = useRef<OscillatorNode | null>(null);
     const currentGainRef = useRef<GainNode | null>(null);
     const currentFilterRef = useRef<BiquadFilterNode | null>(null);
@@ -80,10 +149,16 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const isPlayingRef = useRef(false);
 
     // sound hook (stores enabled flag and audio context)
-    const { soundEnabledRef, audioContextRef, getAudioContext, enableSound, disableSound } = useGameSound(soundEnabled);
+    const {
+      soundEnabledRef,
+      audioContextRef,
+      getAudioContext,
+      enableSound,
+      disableSound,
+    } = useGameSound(soundEnabled);
 
     // Refs to keep latest values inside PIXI loop (fix closure issue)
-    const cameraModeRef = useRef<'leader' | 'swipe'>(initialCameraMode);
+    const cameraModeRef = useRef<"leader" | "swipe">(initialCameraMode);
     const scrollYRef = useRef<number>(scrollY);
 
     // Seeded random number generator
@@ -103,14 +178,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     const parseRTTTL = (rtttl: string) => {
       try {
-        if (!rtttl || typeof rtttl !== 'string') return [];
-        let raw = rtttl.replace(/^\uFEFF/, '').trim();
-        let parts = raw.split(':');
+        if (!rtttl || typeof rtttl !== "string") return [];
+        let raw = rtttl.replace(/^\uFEFF/, "").trim();
+        let parts = raw.split(":");
         let name: string, settingsStr: string, notesStr: string;
         if (parts.length >= 3) {
           name = parts[0];
           settingsStr = parts[1];
-          notesStr = parts.slice(2).join(':');
+          notesStr = parts.slice(2).join(":");
         } else {
           const m = raw.match(/^\s*([^:]+):([^:]+):([\s\S]+)$/);
           if (!m) return [];
@@ -119,8 +194,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           notesStr = m[3];
         }
         const settings: any = {};
-        settingsStr.split(',').forEach(s => {
-          const [key, value] = s.split('=');
+        settingsStr.split(",").forEach((s) => {
+          const [key, value] = s.split("=");
           settings[key] = value;
         });
 
@@ -128,9 +203,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const defaultOctave = parseInt(settings.o) || 5;
         const bpm = parseInt(settings.b) || 63;
 
-        const notes = notesStr.split(',').map(noteStr => {
+        const notes = notesStr.split(",").map((noteStr) => {
           let duration = defaultDuration;
-          let noteChar = '';
+          let noteChar = "";
           let dot = false;
           let octave = defaultOctave;
 
@@ -142,19 +217,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             rest = rest.substring(durationMatch[0].length);
           }
 
-          if (rest[0] === 'p') {
-            noteChar = 'p';
+          if (rest[0] === "p") {
+            noteChar = "p";
             rest = rest.substring(1);
           } else {
             noteChar = rest[0];
             rest = rest.substring(1);
-            if (rest[0] === '#' || rest[0] === 'b') {
+            if (rest[0] === "#" || rest[0] === "b") {
               noteChar += rest[0];
               rest = rest.substring(1);
             }
           }
 
-          if (rest[0] === '.') {
+          if (rest[0] === ".") {
             dot = true;
             rest = rest.substring(1);
           }
@@ -167,9 +242,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const durationMs = (240000 / bpm) * (1 / duration) * (dot ? 1.5 : 1);
 
           let frequency = 0;
-          if (noteChar !== 'p') {
+          if (noteChar !== "p") {
             const noteMap: { [key: string]: number } = {
-              'c': 0, 'c#': 1, 'db': 1, 'd': 2, 'd#': 3, 'eb': 3, 'e': 4, 'f': 5, 'f#': 6, 'gb': 6, 'g': 7, 'g#': 8, 'ab': 8, 'a': 9, 'a#': 10, 'bb': 10, 'b': 11
+              c: 0,
+              "c#": 1,
+              db: 1,
+              d: 2,
+              "d#": 3,
+              eb: 3,
+              e: 4,
+              f: 5,
+              "f#": 6,
+              gb: 6,
+              g: 7,
+              "g#": 8,
+              ab: 8,
+              a: 9,
+              "a#": 10,
+              bb: 10,
+              b: 11,
             };
             const noteValue = noteMap[noteChar.toLowerCase()];
             if (noteValue === undefined) {
@@ -185,7 +276,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         return notes;
       } catch (error) {
-        console.error('Failed to parse RTTTL:', error);
+        console.error("Failed to parse RTTTL:", error);
         return [];
       }
     };
@@ -237,14 +328,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         isPlayingRef.current = true;
         setTimeout(() => {
           isPlayingRef.current = false;
-          currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+          currentNoteIndexRef.current =
+            (currentNoteIndexRef.current + 1) % notes.length;
         }, note.duration);
         return;
       }
 
       try {
         const context = getAudioContext();
-        if (context.state === 'suspended') {
+        if (context.state === "suspended") {
           context.resume();
         }
 
@@ -252,11 +344,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         oscillatorRef.current = oscillator;
 
         // Softer waveform
-        oscillator.type = 'sine';
+        oscillator.type = "sine";
 
         // Low-pass filter to smooth high frequencies
         const filter = context.createBiquadFilter();
-        filter.type = 'lowpass';
+        filter.type = "lowpass";
         filter.frequency.value = 2000;
 
         // Gain node with gentle volume and exponential fade-out
@@ -266,9 +358,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         currentFilterRef.current = filter;
         gainNode.gain.setValueAtTime(0.12, context.currentTime);
         // Avoid ramping to zero (use a small value)
-        gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + note.duration / 1000);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.001,
+          context.currentTime + note.duration / 1000
+        );
 
-        oscillator.frequency.setValueAtTime(note.frequency, context.currentTime);
+        oscillator.frequency.setValueAtTime(
+          note.frequency,
+          context.currentTime
+        );
 
         // Chain: oscillator -> filter -> gain -> destination
         oscillator.connect(filter);
@@ -282,14 +380,31 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         oscillator.onended = () => {
           isPlayingRef.current = false;
-          currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+          currentNoteIndexRef.current =
+            (currentNoteIndexRef.current + 1) % notes.length;
           // cleanup nodes
-          try { if (currentGainRef.current) { try { currentGainRef.current.disconnect(); } catch (e) {} currentGainRef.current = null; } } catch (e) {}
-          try { if (currentFilterRef.current) { try { currentFilterRef.current.disconnect(); } catch (e) {} currentFilterRef.current = null; } } catch (e) {}
-          try { oscillatorRef.current = null; } catch (e) {}
+          try {
+            if (currentGainRef.current) {
+              try {
+                currentGainRef.current.disconnect();
+              } catch (e) {}
+              currentGainRef.current = null;
+            }
+          } catch (e) {}
+          try {
+            if (currentFilterRef.current) {
+              try {
+                currentFilterRef.current.disconnect();
+              } catch (e) {}
+              currentFilterRef.current = null;
+            }
+          } catch (e) {}
+          try {
+            oscillatorRef.current = null;
+          } catch (e) {}
         };
       } catch (error) {
-        console.error('Failed to play note:', error);
+        console.error("Failed to play note:", error);
         isPlayingRef.current = false;
       }
     }, [soundEnabled]);
@@ -301,16 +416,49 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       } else {
         disableSound();
         // immediate shutdown of existing nodes
-        try { if (currentGainRef.current) { try { currentGainRef.current.gain.cancelScheduledValues(0); currentGainRef.current.gain.setValueAtTime(0.0001, 0); currentGainRef.current.disconnect(); } catch (e) {} currentGainRef.current = null; } } catch (e) {}
-        try { if (currentFilterRef.current) { try { currentFilterRef.current.disconnect(); } catch (e) {} currentFilterRef.current = null; } } catch (e) {}
-        try { if (oscillatorRef.current) { try { oscillatorRef.current.onended = null; } catch (e) {} try { oscillatorRef.current.stop(); } catch (e) {} try { oscillatorRef.current.disconnect(); } catch (e) {} oscillatorRef.current = null; } } catch (e) {}
+        try {
+          if (currentGainRef.current) {
+            try {
+              currentGainRef.current.gain.cancelScheduledValues(0);
+              currentGainRef.current.gain.setValueAtTime(0.0001, 0);
+              currentGainRef.current.disconnect();
+            } catch (e) {}
+            currentGainRef.current = null;
+          }
+        } catch (e) {}
+        try {
+          if (currentFilterRef.current) {
+            try {
+              currentFilterRef.current.disconnect();
+            } catch (e) {}
+            currentFilterRef.current = null;
+          }
+        } catch (e) {}
+        try {
+          if (oscillatorRef.current) {
+            try {
+              oscillatorRef.current.onended = null;
+            } catch (e) {}
+            try {
+              oscillatorRef.current.stop();
+            } catch (e) {}
+            try {
+              oscillatorRef.current.disconnect();
+            } catch (e) {}
+            oscillatorRef.current = null;
+          }
+        } catch (e) {}
         isPlayingRef.current = false;
       }
     }, [soundEnabled, enableSound, disableSound]);
 
-    const startRound = async (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
+    const startRound = async (gameData: {
+      seed: string;
+      mapId: number[] | number;
+      participants: any[];
+    }) => {
       if (!app) return;
-      console.log('game canvas game started', gameData)
+      console.log("game canvas game started", gameData);
       speedUpFramesRemaining.current = 0;
       isSpeedingUp.current = false;
 
@@ -333,7 +481,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       spinnersRef.current = mapData.spinners;
       mapDataRef.current = mapData;
 
-      console.log('mapData', mapData)
+      console.log("mapData", mapData);
 
       // Create balls from participants data
       const newBalls: Ball[] = [];
@@ -343,11 +491,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       for (const rawParticipant of gameData.participants) {
         // normalize participant shape: support both { user: {...}, balls_count } and flat participant
         const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-        const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
-        const avatarUrl = rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
-        const playerId = (user.id ?? rawParticipant.id ?? '').toString();
+        const ballsCount = Number(
+          rawParticipant.balls_count ?? user.balls_count ?? 0
+        );
+        const avatarUrl =
+          rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
+        const playerId = (user.id ?? rawParticipant.id ?? "").toString();
 
-        console.log('game canvas participant', rawParticipant)
+        console.log("game canvas participant", rawParticipant);
 
         if (ballsCount <= 0) continue;
 
@@ -361,18 +512,27 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               const proxyUrl = "https://api.corsproxy.io/";
               const finalUrl = proxyUrl + encodedUrl;
               const texture = await PIXI.Assets.load(finalUrl);
-              ballGraphics.circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
-            } catch(error) {
-              console.log('game canvas avatarUrl error', error)
-              ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
+              ballGraphics
+                .circle(0, 0, 24)
+                .fill({ texture })
+                .stroke({ width: 2, color: 0xffffff });
+            } catch (error) {
+              console.log("game canvas avatarUrl error", error);
+              ballGraphics
+                .circle(0, 0, 24)
+                .fill(0x4ecdc4)
+                .stroke({ width: 2, color: 0xffffff });
             }
           } else {
-            ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
+            ballGraphics
+              .circle(0, 0, 24)
+              .fill(0x4ecdc4)
+              .stroke({ width: 2, color: 0xffffff });
           }
 
           const indicator = new PIXI.Graphics();
           indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
-          indicator.fill(0xFFD700).stroke({ width: 2, color: 0xFFA500 });
+          indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
           indicator.visible = false;
 
           const screenHeight = (mapData as any).screenHeight || 800;
@@ -394,13 +554,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             color: 0x4ecdc4,
             playerId: playerId,
             finished: false,
-            indicator: indicator
+            indicator: indicator,
           });
           ballIndex++;
         }
       }
 
-      console.log('game canvas balls', newBalls)
+      console.log("game canvas balls", newBalls);
 
       ballsRef.current = newBalls;
       // Убираем линию-барьер сразу
@@ -412,16 +572,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       }
 
-      setGameState('playing');
+      setGameState("playing");
       gamePlayingRef.current = true;
       onGameStart?.();
       // initialize melody notes from imported RTTTL
       try {
         // Initialize melody notes from imported RTTTL string. Use a hash to detect changes
-        if (RTTTL && typeof RTTTL === 'string') {
-          const raw = RTTTL.replace(/^\uFEFF/, '').trim();
+        if (RTTTL && typeof RTTTL === "string") {
+          const raw = RTTTL.replace(/^\uFEFF/, "").trim();
           // simple change-detection: compute a quick hash
-          const hash = raw.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString();
+          const hash = raw
+            .split("")
+            .reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)
+            .toString();
           // store hash on ref to compare later
           if ((melodyNotesRef as any)._sourceHash !== hash) {
             melodyNotesRef.current = parseRTTTL(raw as string);
@@ -430,11 +593,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
       } catch (e) {
-        console.warn('Failed to init melody notes', e);
+        console.warn("Failed to init melody notes", e);
       }
     };
 
-    const startGame = async (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
+    const startGame = async (gameData: {
+      seed: string;
+      mapId: number[] | number;
+      participants: any[];
+    }) => {
       await startRound(gameData);
 
       if (speedUpTime > 0) {
@@ -446,7 +613,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const resetGame = () => {
       if (!app) return;
 
-      ballsRef.current.forEach(ball => {
+      ballsRef.current.forEach((ball) => {
         app.stage.removeChild(ball.graphics);
         if (ball.indicator) {
           app.stage.removeChild(ball.indicator);
@@ -455,17 +622,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       ballsRef.current = [];
       setActualWinners([]);
       actualWinnersRef.current = [];
-      setGameState('waiting');
+      setGameState("waiting");
       gamePlayingRef.current = false;
     };
 
     // Helper to update camera mode both in state and ref
-    const setCameraModeSafe = (mode: 'leader' | 'swipe') => {
+    const setCameraModeSafe = (mode: "leader" | "swipe") => {
       setCameraMode(mode);
       cameraModeRef.current = mode;
 
       // If switching to swipe, immediately apply swipe camera transform and hide any leader indicators
-      if (app && mode === 'swipe') {
+      if (app && mode === "swipe") {
         // compute center X based on current scale and map width
         const deviceWidth = window.innerWidth;
         const scale = deviceWidth / 1000; // same formula as in gameLoop
@@ -475,7 +642,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         app.stage.y = -scrollYRef.current;
 
         // hide indicators
-        ballsRef.current.forEach(ball => {
+        ballsRef.current.forEach((ball) => {
           if (ball.indicator) ball.indicator.visible = false;
         });
       }
@@ -487,30 +654,33 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       startGame,
       resetGame,
       gameState,
-      setCameraMode: (mode: 'leader' | 'swipe') => {
+      setCameraMode: (mode: "leader" | "swipe") => {
         setCameraModeSafe(mode);
       },
       setScrollY: (y: number) => {
         scrollYRef.current = y;
-        if (app && cameraModeRef.current === 'swipe') {
+        if (app && cameraModeRef.current === "swipe") {
           app.stage.y = -y;
         }
       },
       getGameSize: () => {
         return {
           width: mapDataRef.current?.mapWidth || 1200,
-          height: mapDataRef.current?.mapHeight || 2500
+          height: mapDataRef.current?.mapHeight || 2500,
         };
-      }
-      ,
+      },
       // Fully destroy PIXI app and clear canvas/graphics immediately
       destroyCanvas: () => {
         try {
           // remove ball graphics
           if (app) {
-            ballsRef.current.forEach(ball => {
-              try { app.stage.removeChild(ball.graphics); } catch (e) {}
-              try { if (ball.indicator) app.stage.removeChild(ball.indicator); } catch (e) {}
+            ballsRef.current.forEach((ball) => {
+              try {
+                app.stage.removeChild(ball.graphics);
+              } catch (e) {}
+              try {
+                if (ball.indicator) app.stage.removeChild(ball.indicator);
+              } catch (e) {}
             });
           }
           ballsRef.current = [];
@@ -518,29 +688,40 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           spinnersRef.current = [];
           setActualWinners([]);
           actualWinnersRef.current = [];
-          setGameState('waiting');
+          setGameState("waiting");
           gamePlayingRef.current = false;
 
           // stop audio
-          try { if (oscillatorRef.current) oscillatorRef.current.stop(); } catch (e) {}
-          try { if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; } } catch (e) {}
+          try {
+            if (oscillatorRef.current) oscillatorRef.current.stop();
+          } catch (e) {}
+          try {
+            if (audioContextRef.current) {
+              audioContextRef.current.close();
+              audioContextRef.current = null;
+            }
+          } catch (e) {}
 
           // destroy PIXI app
           if (app) {
-            try { if (app.ticker) app.ticker.destroy(); } catch (e) {}
-            try { app.destroy({ removeView: true }); } catch (e) {}
+            try {
+              if (app.ticker) app.ticker.destroy();
+            } catch (e) {}
+            try {
+              app.destroy({ removeView: true });
+            } catch (e) {}
             setApp(null);
           }
         } catch (error) {
-          console.error('destroyCanvas error:', error);
+          console.error("destroyCanvas error:", error);
         }
-      }
+      },
     }));
 
     // Keep scrollY prop in sync with ref
     useEffect(() => {
       scrollYRef.current = scrollY;
-      if (app && cameraModeRef.current === 'swipe') {
+      if (app && cameraModeRef.current === "swipe") {
         app.stage.y = -scrollY;
       }
     }, [scrollY, app]);
@@ -588,7 +769,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             );
             texturesRef.current = textures;
           } catch (error) {
-            console.warn('Failed to load images:', error);
+            console.warn("Failed to load images:", error);
             texturesRef.current = [];
           }
         } else {
@@ -609,17 +790,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const updateBalls = () => {
           if (!rngRef.current) return;
 
-          ballsRef.current.forEach(ball => {
+          ballsRef.current.forEach((ball) => {
             if (ball.finished) return;
 
             if (!ball.bounceCount) ball.bounceCount = 0;
 
             // Apply gravity (deterministic - independent of FPS)
-            ball.dy += 0.08;
-
-            // Air resistance (minimal) deterministic
-            ball.dx *= 0.9998;
-            ball.dy *= 0.9998;
+            ball.dy += Math.round(0.08 * FIXED_POINT_SCALE) / FIXED_POINT_SCALE;
+            ball.dx = Math.round(ball.dx * 0.9998 * FIXED_POINT_SCALE) / FIXED_POINT_SCALE;
+            ball.dy = Math.round(ball.dy * 0.9998 * FIXED_POINT_SCALE) / FIXED_POINT_SCALE;
 
             // Store previous position for collision detection
             const prevX = ball.x;
@@ -648,7 +827,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               }
 
               // If ball moved beyond obstacle edges or obstacle destroyed — fall off
-              if (obs.destroyed || ball.x < obs.x - halfW - 24 || ball.x > obs.x + halfW + 24) {
+              if (
+                obs.destroyed ||
+                ball.x < obs.x - halfW - 24 ||
+                ball.x > obs.x + halfW + 24
+              ) {
                 (ball as any).onSurface = false;
                 (ball as any).surfaceObstacle = null;
                 // give a small downward velocity to start falling
@@ -667,12 +850,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               const obstacle = obstaclesRef.current[i];
               if (obstacle.destroyed) continue;
 
-              if (obstacle.type === 'peg') {
+              if (obstacle.type === "peg") {
                 const dx = ball.x - obstacle.x;
                 const dy = ball.y - obstacle.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+                const distance = deterministicMath.sqrt(dx * dx + dy * dy);
 
-                if (distance < 36) { // 12 + 24 (peg radius + ball radius)
+                if (distance < 36) {
+                  // 12 + 24 (peg radius + ball radius)
                   // Calculate collision normal
                   const normalX = dx / distance;
                   const normalY = dy / distance;
@@ -692,16 +876,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   ball.dy *= restitution;
                   playMelodyNote();
                 }
-              } else if (obstacle.type === 'barrier') {
+              } else if (obstacle.type === "barrier") {
                 const halfW = obstacle.width / 2;
                 const halfH = obstacle.height / 2;
 
                 // Check if ball is inside barrier bounds
-                if (Math.abs(ball.x - obstacle.x) < halfW + 24 && 
-                    Math.abs(ball.y - obstacle.y) < halfH + 24) {
-
+                if (
+                  Math.abs(ball.x - obstacle.x) < halfW + 24 &&
+                  Math.abs(ball.y - obstacle.y) < halfH + 24
+                ) {
                   // Special case for gate barrier
-                  const screenHeight = mapDataRef.current ? (mapDataRef.current as any).screenHeight || 800 : 800;
+                  const screenHeight = mapDataRef.current
+                    ? (mapDataRef.current as any).screenHeight || 800
+                    : 800;
                   if (obstacle.y === screenHeight) {
                     ball.y = screenHeight - 24;
                     ball.dy = 0;
@@ -709,8 +896,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   }
 
                   // Calculate which side was hit
-                  const overlapX = (halfW + 24) - Math.abs(ball.x - obstacle.x);
-                  const overlapY = (halfH + 24) - Math.abs(ball.y - obstacle.y);
+                  const overlapX = halfW + 24 - Math.abs(ball.x - obstacle.x);
+                  const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
                     // Hit left or right side
@@ -720,9 +907,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                       ball.x = obstacle.x + halfW + 24;
                     }
                     // consider barrier angle
-                    const barrierAngle = Math.atan2((obstacle as any).y - (obstacle as any).prevY || 0, (obstacle as any).x - (obstacle as any).prevX || 0);
-                    ball.dx = -ball.dx * 0.9 + Math.sin(barrierAngle) * 0.5;
-                    ball.dy -= Math.cos(barrierAngle) * 0.5;
+                    const barrierAngle = deterministicMath.atan2(
+                      (obstacle as any).y - (obstacle as any).prevY || 0,
+                      (obstacle as any).x - (obstacle as any).prevX || 0
+                    );
+                    ball.dx =
+                      -ball.dx * 0.9 +
+                      deterministicMath.sin(barrierAngle) * 0.5;
+                    ball.dy -= deterministicMath.cos(barrierAngle) * 0.5;
                     playMelodyNote();
                   } else {
                     // Hit top or bottom side
@@ -741,18 +933,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     }
                   }
                 }
-              } else if (obstacle.type === 'brick') {
+              } else if (obstacle.type === "brick") {
                 const halfW = obstacle.width / 2;
                 const halfH = obstacle.height / 2;
 
-                if (Math.abs(ball.x - obstacle.x) < halfW + 24 && 
-                    Math.abs(ball.y - obstacle.y) < halfH + 24) {
+                if (
+                  Math.abs(ball.x - obstacle.x) < halfW + 24 &&
+                  Math.abs(ball.y - obstacle.y) < halfH + 24
+                ) {
                   obstacle.destroyed = true;
-                  if (obstacle.graphics) pixiApp.stage.removeChild(obstacle.graphics);
+                  if (obstacle.graphics)
+                    pixiApp.stage.removeChild(obstacle.graphics);
 
                   // Bounce off destroyed brick
-                  const overlapX = (halfW + 24) - Math.abs(ball.x - obstacle.x);
-                  const overlapY = (halfH + 24) - Math.abs(ball.y - obstacle.y);
+                  const overlapX = halfW + 24 - Math.abs(ball.x - obstacle.x);
+                  const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
                     ball.dx = -ball.dx * 0.9;
@@ -761,12 +956,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   }
                   playMelodyNote();
                 }
-              } else if (obstacle.type === 'spinner') {
+              } else if (obstacle.type === "spinner") {
                 const dx = ball.x - obstacle.x;
                 const dy = ball.y - obstacle.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+                const distance = deterministicMath.sqrt(dx * dx + dy * dy);
 
-                if (distance < 48) { // Уменьшаю радиус коллизии воронки
+                if (distance < 48) {
+                  // Уменьшаю радиус коллизии воронки
                   const normalX = dx / distance;
                   const normalY = dy / distance;
 
@@ -779,20 +975,22 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const tangentY = normalX;
                   const spinForce = 1.6;
 
-                  ball.dx = normalX * Math.abs(ball.dx) * 0.75 + tangentX * spinForce;
-                  ball.dy = normalY * Math.abs(ball.dy) * 0.75 + tangentY * spinForce;
+                  ball.dx =
+                    normalX * Math.abs(ball.dx) * 0.75 + tangentX * spinForce;
+                  ball.dy =
+                    normalY * Math.abs(ball.dy) * 0.75 + tangentY * spinForce;
                   playMelodyNote();
                 }
               }
             }
 
             // Ball-to-ball collisions with proper physics
-            ballsRef.current.forEach(otherBall => {
+            ballsRef.current.forEach((otherBall) => {
               if (otherBall === ball || otherBall.finished) return;
 
               const dx = ball.x - otherBall.x;
               const dy = ball.y - otherBall.y;
-              const distance = Math.sqrt(dx * dx + dy * dy);
+              const distance = deterministicMath.sqrt(dx * dx + dy * dy);
 
               if (distance < 48 && distance > 0) {
                 const normalX = dx / distance;
@@ -808,7 +1006,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 // Calculate relative velocity
                 const relativeVelX = ball.dx - otherBall.dx;
                 const relativeVelY = ball.dy - otherBall.dy;
-                const relativeSpeed = relativeVelX * normalX + relativeVelY * normalY;
+                const relativeSpeed =
+                  relativeVelX * normalX + relativeVelY * normalY;
 
                 if (relativeSpeed > 0) return; // Balls moving apart
 
@@ -825,14 +1024,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             });
 
             // Boundary collisions with proper physics
-            if (ball.x < 24) { 
-              ball.x = 24; 
-              ball.dx = Math.abs(ball.dx) * 0.95; 
+            if (ball.x < 24) {
+              ball.x = 24;
+              ball.dx = Math.abs(ball.dx) * 0.95;
               playCollisionSound();
             }
-            if (ball.x > 1176) { 
-              ball.x = 1176; 
-              ball.dx = -Math.abs(ball.dx) * 0.95; 
+            if (ball.x > 1176) {
+              ball.x = 1176;
+              ball.dx = -Math.abs(ball.dx) * 0.95;
               playCollisionSound();
             }
 
@@ -850,7 +1049,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   // Notify parent about the winning ball
                   onBallWin?.(ball.id, ball.playerId);
 
-                  setGameState('finished');
+                  setGameState("finished");
                   gamePlayingRef.current = false;
                 }
               }
@@ -872,63 +1071,57 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           });
 
           // Remove finished balls
-          ballsRef.current = ballsRef.current.filter(ball => !ball.finished || actualWinnersRef.current.includes(ball.id));
+          ballsRef.current = ballsRef.current.filter(
+            (ball) =>
+              !ball.finished || actualWinnersRef.current.includes(ball.id)
+          );
         };
 
         // Animation loop (fixed timestep for deterministic physics)
         const gameLoop = () => {
-          const now = performance.now();
-          if (!lastTime.current) {
-            lastTime.current = now;
-            return;
+          // Выполняем один шаг физики с фиксированным временем
+          if (ballsRef.current.length > 0) {
+            updateBalls();
           }
 
-          let deltaTime = now - (lastTime.current || now);
-          // clamp big delta to avoid spiraling
-          if (deltaTime > 1000) deltaTime = 1000;
-          lastTime.current = now;
-
-          accumulator.current += deltaTime;
-          const step = fixedTimeStep.current;
-
-          // step physics in fixed increments
-          while (accumulator.current >= step) {
-            if (ballsRef.current.length > 0) {
-              updateBalls(1);
-            }
-            accumulator.current -= step;
-          }
-
-          // After physics steps, perform rendering-related transforms
+          // Остальная часть рендеринга (камера, индикаторы)...
           const deviceWidth = window.innerWidth;
           const deviceHeight = window.innerHeight;
           const scale = deviceWidth / 1000;
           pixiApp.stage.scale.set(scale);
 
           if (ballsRef.current.length > 0) {
-            const activeBalls = ballsRef.current.filter(ball => !ball.finished);
+            const activeBalls = ballsRef.current.filter(
+              (ball) => !ball.finished
+            );
             if (activeBalls.length > 0) {
               const leadingBall = activeBalls.reduce((leader, ball) =>
                 ball.y > leader.y ? ball : leader
               );
 
-              // Update leader indicators
-              ballsRef.current.forEach(ball => {
+              ballsRef.current.forEach((ball) => {
                 if (ball.indicator) {
-                  if (cameraModeRef.current === 'leader') {
-                    ball.indicator.visible = (ball === leadingBall && !ball.finished);
+                  if (cameraModeRef.current === "leader") {
+                    ball.indicator.visible =
+                      ball === leadingBall && !ball.finished;
                   } else {
                     ball.indicator.visible = false;
                   }
                 }
               });
 
-              if (cameraModeRef.current === 'leader') {
-                const maxCameraY = mapDataRef.current ? mapDataRef.current.mapHeight * scale - deviceHeight + 60 : 2500 * scale;
-                const targetCameraY = Math.max(0, Math.min(maxCameraY, leadingBall.y * scale - 320));
+              if (cameraModeRef.current === "leader") {
+                const maxCameraY = mapDataRef.current
+                  ? mapDataRef.current.mapHeight * scale - deviceHeight + 60
+                  : 2500 * scale;
+                const targetCameraY = Math.max(
+                  0,
+                  Math.min(maxCameraY, leadingBall.y * scale - 320)
+                );
 
                 const currentCameraY = -pixiApp.stage.y;
-                const newCameraY = currentCameraY + (targetCameraY - currentCameraY) * 0.03;
+                const newCameraY =
+                  currentCameraY + (targetCameraY - currentCameraY) * 0.03;
                 setCameraY(newCameraY);
                 pixiApp.stage.y = -newCameraY;
 
@@ -936,45 +1129,45 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 const targetCameraX = leadingBall.x * scale - deviceWidth / 2;
                 const minCameraX = 0;
                 const maxCameraX = mapWidth * scale - deviceWidth;
-                const clampedCameraX = Math.max(minCameraX, Math.min(maxCameraX, targetCameraX));
+                const clampedCameraX = Math.max(
+                  minCameraX,
+                  Math.min(maxCameraX, targetCameraX)
+                );
 
                 const currentCameraX = -pixiApp.stage.x;
-                const newCameraX = currentCameraX + (clampedCameraX - currentCameraX) * 0.03;
+                const newCameraX =
+                  currentCameraX + (clampedCameraX - currentCameraX) * 0.03;
                 pixiApp.stage.x = -newCameraX;
               }
             }
           }
 
-          if (cameraModeRef.current === 'swipe') {
+          if (cameraModeRef.current === "swipe") {
             const mapWidth = mapDataRef.current?.mapWidth || 1200;
             const centerX = (mapWidth * scale - deviceWidth) / 2;
             pixiApp.stage.x = -Math.max(0, centerX);
           }
 
           // Update spinner rotations
-          spinnersRef.current.forEach(spinner => {
+          spinnersRef.current.forEach((spinner) => {
             spinner.rotation += 0.08;
             spinner.graphics.rotation = spinner.rotation;
           });
         };
 
-        pixiApp.ticker.add(gameLoop);
+        // Запускаем игровой цикл с фиксированным интервалом
+        const fixedUpdateInterval = setInterval(gameLoop, fixedTimeStep.current);
+        
         setApp(pixiApp);
       };
 
       initGame();
 
+      // В функции очистки не забываем убрать интервал
       return () => {
-        try {
-          if (app) {
-            if (app.ticker) {
-              app.ticker.destroy();
-            }
-            app.destroy({ removeView: true });
-            setApp(null);
-          }
-        } catch (error) {
-          console.error('Error during cleanup:', error);
+        if (app) {
+          app.destroy({ removeView: true });
+          setApp(null);
         }
       };
     }, []);
