@@ -59,7 +59,17 @@ export function PvPScreen() {
   const handleStartGame = async () => {
     try {
       if (selectedGame?.status === GameState.PLAY) {
-        navigate('/game')
+        const fresh = games.find(g => g.seed === selectedGame.seed) || selectedGame;
+        navigate('/game', { state: {
+          game_id: fresh.game_id,
+          seed: fresh.seed,
+          mapId: fresh.map_id,
+          participants: fresh.participants,
+          prize: fresh.total_price,
+          total_balls: fresh.total_balls,
+          fullGame: fresh,
+          autoStart: true
+        }})
       }
     } catch (error) {
       console.error('Failed to start game:', error)
@@ -162,10 +172,15 @@ export function PvPScreen() {
           <button
             onClick={() => {
               if (!selectedGame) return
+              const fresh = games.find(g => g.seed === selectedGame.seed) || selectedGame;
               navigate('/game', { state: {
-                seed: selectedGame.seed,
-                mapId: selectedGame.map_id,
-                participants: selectedGame.participants,
+                game_id: fresh.game_id,
+                seed: fresh.seed,
+                mapId: fresh.map_id,
+                participants: fresh.participants,
+                prize: fresh.total_price,
+                total_balls: fresh.total_balls,
+                fullGame: fresh,
                 autoStart: true
               }})
             }}
