@@ -76,7 +76,7 @@ export function PvPScreen() {
         selectedGame.game_id
       )
       
-      webApp.openInvoice(result.url)
+      webApp.openInvoice(result.invoiceLink)
       hapticFeedback('light')
     } catch (error) {
       console.error('Failed to buy balls:', error)

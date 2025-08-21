@@ -69,8 +69,8 @@ class ApiService {
     });
   }
 
-  async buyBalls( userId: number, countBalls: number, initData: string, gameId: number): Promise<{ url: string }> {
-    return this.request<{ url: string }>('/payments/buy_balls', {
+  async buyBalls( userId: number, countBalls: number, initData: string, gameId: number): Promise<{ invoiceLink: string, paymentId: string  }> {
+    return this.request<{ invoiceLink: string, paymentId: string }>('/payments/buy_balls', {
       method: 'POST',
       body: JSON.stringify({
 
