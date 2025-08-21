@@ -60,21 +60,23 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       const rng = createRNG(gameData.seed);
       rngRef.current = rng;
 
-      // Clear previous game
-      setActualWinners([]);
-      actualWinnersRef.current = [];
-      ballsRef.current.forEach(ball => {
-        app.stage.removeChild(ball.graphics);
-        if (ball.indicator) {
-          app.stage.removeChild(ball.indicator);
-        }
-      });
+      // // Clear previous game
+      // setActualWinners([]);
+      // actualWinnersRef.current = [];
+      // ballsRef.current.forEach(ball => {
+      //   app.stage.removeChild(ball.graphics);
+      //   if (ball.indicator) {
+      //     app.stage.removeChild(ball.indicator);
+      //   }
+      // });
 
       // Generate map from mapId
       const mapData = generateMapFromId(app, gameData.mapId, gameData.seed);
       obstaclesRef.current = mapData.obstacles;
       spinnersRef.current = mapData.spinners;
       mapDataRef.current = mapData;
+
+      console.log('mapData', mapData)
 
       // Create balls from participants data
       const newBalls: Ball[] = [];
@@ -126,6 +128,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ballIndex++;
         }
       }
+
+      console.log('game canvas balls', newBalls)
 
       ballsRef.current = newBalls;
       // Убираем линию-барьер сразу
