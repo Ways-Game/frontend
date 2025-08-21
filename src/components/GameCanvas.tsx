@@ -36,6 +36,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Audio for collisions
     const collisionSoundRef = useRef<HTMLAudioElement | null>(null);
+    const lastCollisionAtRef = useRef<number>(0);
 
     // Refs to keep latest values inside PIXI loop (fix closure issue)
     const cameraModeRef = useRef<'leader' | 'swipe'>(initialCameraMode);
@@ -73,13 +74,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       };
     }, []);
 
-    const playCollisionSound = () => {
+    const playCollisionSound = (intensity = 0.5) => {
       if (!soundEnabled) return;
+      const now = Date.now();
+      const minInterval = 120; // ms between played sounds to avoid cacophony
+      if (now - lastCollisionAtRef.current < minInterval) return;
+
+      // probability grows with intensity
+      const chance = Math.min(1, 0.25 + intensity * 0.75);
+      if (Math.random() > chance) return;
+
       const audio = collisionSoundRef.current;
       if (!audio) return;
       try {
+        lastCollisionAtRef.current = now;
         audio.currentTime = 0;
-        // ignore play promise errors
         void audio.play();
       } catch (e) {
         // noop

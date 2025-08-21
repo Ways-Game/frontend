@@ -24,6 +24,23 @@ export const MAP_BLOCKS: MapBlock[] = [
         }
       }
 
+      // Edge barriers to prevent balls from hugging the sides
+      for (let row = 0; row < 4; row++) {
+        const y = startY + 50 + row * 80;
+        const leftBar = new PIXI.Graphics();
+        leftBar.roundRect(24 - 20, y - 10, 40, 20, 4);
+        leftBar.fill(0x8B4513).stroke({ width: 1, color: 0x654321 });
+        app.stage.addChild(leftBar);
+        obstacles.push({ x: 24, y, width: 40, height: 20, type: 'barrier', graphics: leftBar as any });
+
+        const rightBarX = mapWidth - 24;
+        const rightBar = new PIXI.Graphics();
+        rightBar.roundRect(rightBarX - 20, y - 10, 40, 20, 4);
+        rightBar.fill(0x8B4513).stroke({ width: 1, color: 0x654321 });
+        app.stage.addChild(rightBar);
+        obstacles.push({ x: rightBarX, y, width: 40, height: 20, type: 'barrier', graphics: rightBar as any });
+      }
+
       return { obstacles, spinners };
     }
   },
@@ -47,6 +64,21 @@ export const MAP_BLOCKS: MapBlock[] = [
           peg.circle(x, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
           app.stage.addChild(peg);
         }
+      }
+
+      // Add extra pegs along edges to discourage edge-falling
+      for (let y = startY + 40; y < startY + 80 + 4 * 120; y += 60) {
+        const leftX = 40;
+        const rightX = mapWidth - 40;
+        obstacles.push({ x: leftX, y, width: 30, height: 30, type: 'peg' });
+        const pegL = new PIXI.Graphics();
+        pegL.circle(leftX, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
+        app.stage.addChild(pegL);
+
+        obstacles.push({ x: rightX, y, width: 30, height: 30, type: 'peg' });
+        const pegR = new PIXI.Graphics();
+        pegR.circle(rightX, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
+        app.stage.addChild(pegR);
       }
 
       return { obstacles, spinners };
@@ -293,27 +325,30 @@ export const MAP_BLOCKS: MapBlock[] = [
 
   {
     id: "spiral",
-    name: "Спираль",
+    name: "Гигантская крутилка",
     height: 600,
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
 
-      const centerX = mapWidth / 2;
-      const centerY = startY + 300;
-      
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2;
-        const radius = 50 + i * 20;
-        const x = centerX + Math.cos(angle) * radius;
-        const y = centerY + Math.sin(angle) * radius;
-        
-        obstacles.push({ x, y, width: 30, height: 30, type: 'peg' });
+      // Single large horizontal spinner (thin bar) centered in the block
+      const x = mapWidth / 2;
+      const y = startY + 300;
+      const barWidth = Math.floor(mapWidth * 0.9);
+      const barHeight = 18;
 
-        const peg = new PIXI.Graphics();
-        peg.circle(x, y, 15).fill(0xff6b6b).stroke({ width: 2, color: 0xe55555 });
-        app.stage.addChild(peg);
-      }
+      // Add an obstacle entry for physics
+      obstacles.push({ x, y, width: barWidth, height: barHeight, type: 'spinner' });
+
+      const spinner = new PIXI.Graphics();
+      // Draw a long thin bar centered at (0,0)
+      spinner.rect(-barWidth / 2, -barHeight / 2, barWidth, barHeight);
+      spinner.fill(0xf39c12).stroke({ width: 3, color: 0xe67e22 });
+      spinner.position.set(x, y);
+      app.stage.addChild(spinner);
+
+      // Add to spinners so game loop will rotate it
+      spinners.push({ x, y, rotation: 0, graphics: spinner });
 
       return { obstacles, spinners };
     }

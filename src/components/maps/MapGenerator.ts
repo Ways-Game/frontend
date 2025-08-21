@@ -35,7 +35,7 @@ export const generateMapFromId = (app: PIXI.Application, mapId: number[] | numbe
   let currentY = screenHeight + 100;
   const selectedBlocks: typeof MAP_BLOCKS[0][] = [];
   
-  
+  console.log('mapId', mapId)
   if (Array.isArray(mapId)) {
     mapId.forEach((id)=>{
       selectedBlocks.push(MAP_BLOCKS[id])

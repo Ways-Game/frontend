@@ -216,15 +216,15 @@ export function PvPScreen() {
             {selectedGame?.participants.length ? (
               selectedGame.participants.map((participantItem: any, index) => {
                 // Normalize participant shape: some payloads have { user: { id, username, avatar, balls_count } }
-                const user = participantItem.user ? participantItem.user : participantItem
-                const avatar = user.avatar || user.avatar_url
-                const pid = user.id
-                const username = user.username || `User${pid}`
-                const ballsCount = participantItem.balls_count ?? user.balls_count ?? 0
+                const participantUser = participantItem.user ? participantItem.user : participantItem
+                const avatar = participantUser.avatar || participantUser.avatar_url
+                const pid = participantUser.id
+                const username = participantUser.username || `User${pid}`
+                const ballsCount = participantItem.balls_count ?? participantUser.balls_count ?? 0
 
                 return (
                   <div key={pid} className={`px-2.5 py-2 rounded-[37px] flex justify-between items-center ${
-                    index === 0 ? 'bg-blue-600' : 'bg-white/5'
+                    user.id === participantUser.id ? 'bg-blue-600' : 'bg-white/5'
                   }`}>
                     <div className="flex items-center gap-2.5">
                       {avatar ? (
