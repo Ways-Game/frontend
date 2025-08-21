@@ -100,9 +100,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           // Use participant avatar if available
           if (avatarUrl) {
             try {
+              console.log('game canvas avatarUrl', avatarUrl)
+
               const texture = await PIXI.Assets.load(avatarUrl);
               ballGraphics.circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
-            } catch {
+            } catch(error) {
+              console.log('game canvas avatarUrl error', error)
               ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
             }
           } else {
@@ -293,7 +296,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
             if (!ball.bounceCount) ball.bounceCount = 0;
 
-            // Apply gravity with realistic acceleration (slowed down further)
+            // Apply gravity with realistic acceleration
             ball.dy += 0.08;
 
             // Air resistance (minimal)
@@ -304,9 +307,37 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             const prevX = ball.x;
             const prevY = ball.y;
 
-            // Update position
-            ball.x += ball.dx;
-            ball.y += ball.dy;
+            // Rolling on surface logic: if ball is flagged as onSurface, keep it on top of the obstacle
+            if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
+              const obs: any = (ball as any).surfaceObstacle;
+              const halfW = obs.width / 2;
+              const halfH = obs.height / 2;
+
+              // keep ball sitting on top
+              ball.y = obs.y - halfH - 24;
+              ball.dy = 0;
+
+              // Rolling friction and small slowdown
+              ball.dx *= 0.995;
+              if (Math.abs(ball.dx) < 0.02) ball.dx = 0;
+
+              // Move horizontally along surface
+              ball.x += ball.dx;
+
+              // If ball moved beyond obstacle edges or obstacle destroyed — fall off
+              if (obs.destroyed || ball.x < obs.x - halfW - 24 || ball.x > obs.x + halfW + 24) {
+                (ball as any).onSurface = false;
+                (ball as any).surfaceObstacle = null;
+                // give a small downward velocity to start falling
+                ball.dy = 1;
+              }
+
+              // skip normal collision handling for this frame
+            } else {
+              // Normal movement
+              ball.x += ball.dx;
+              ball.y += ball.dy;
+            }
 
             // Collision detection with obstacles
             for (let i = 0; i < obstaclesRef.current.length; i++) {
@@ -332,8 +363,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   ball.dx = ball.dx - 2 * dotProduct * normalX;
                   ball.dy = ball.dy - 2 * dotProduct * normalY;
 
-                  // Energy loss on bounce - увеличиваю отскок
-                  const restitution = 0.85;
+                  // Energy loss on bounce - tuned for more natural bounce
+                  const restitution = 0.75;
                   ball.dx *= restitution;
                   ball.dy *= restitution;
                 }
@@ -364,15 +395,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     } else {
                       ball.x = obstacle.x + halfW + 24;
                     }
-                    ball.dx = -ball.dx * 0.85;
+                    ball.dx = -ball.dx * 0.7;
                   } else {
                     // Hit top or bottom side
                     if (ball.y < obstacle.y) {
+                      // place on top and start rolling along surface
                       ball.y = obstacle.y - halfH - 24;
+                      (ball as any).onSurface = true;
+                      (ball as any).surfaceObstacle = obstacle;
+                      // zero vertical velocity and reduce horizontal speed a bit
+                      ball.dy = 0;
+                      ball.dx *= 0.6;
                     } else {
                       ball.y = obstacle.y + halfH + 24;
+                      ball.dy = -ball.dy * 0.7;
                     }
-                    ball.dy = -ball.dy * 0.85;
                   }
                 }
               } else if (obstacle.type === 'brick') {
@@ -389,9 +426,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const overlapY = (halfH + 24) - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
-                    ball.dx = -ball.dx * 0.8;
+                    ball.dx = -ball.dx * 0.7;
                   } else {
-                    ball.dy = -ball.dy * 0.8;
+                    ball.dy = -ball.dy * 0.7;
                   }
                 }
               } else if (obstacle.type === 'spinner') {
@@ -410,10 +447,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   // Add spin effect
                   const tangentX = -normalY;
                   const tangentY = normalX;
-                  const spinForce = 2;
+                  const spinForce = 1.6;
 
-                  ball.dx = normalX * Math.abs(ball.dx) * 0.85 + tangentX * spinForce;
-                  ball.dy = normalY * Math.abs(ball.dy) * 0.85 + tangentY * spinForce;
+                  ball.dx = normalX * Math.abs(ball.dx) * 0.75 + tangentX * spinForce;
+                  ball.dy = normalY * Math.abs(ball.dy) * 0.75 + tangentY * spinForce;
                 }
               }
             }

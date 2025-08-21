@@ -12,6 +12,9 @@ export interface Ball {
   finished?: boolean;
   indicator?: PIXI.Graphics;
   bounceCount?: number;
+  // optional surface state for rolling behavior
+  onSurface?: boolean;
+  surfaceObstacle?: any;
 }
 
 export interface GameCanvasRef {
