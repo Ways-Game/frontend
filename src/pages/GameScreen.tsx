@@ -29,7 +29,7 @@ export function GameScreen() {
   const [scrollY, setScrollY] = useState(0)
   const [maxScrollY, setMaxScrollY] = useState(0)
   const [touchStartY, setTouchStartY] = useState(0) 
- const [gameData, setGameData] = useState({ seed: "", mapId: 0, participants: [] })
+ const [gameData, setGameData] = useState({ seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0 })
 
 
   const handleClose = () => {
@@ -145,7 +145,7 @@ export function GameScreen() {
   useEffect(() => {
     const state: any = (location && (location as any).state) || null
     if (state && state.seed) {
-      setGameData({ seed: state.seed || "", mapId: state.mapId || 0, participants: state.participants || [] })
+      setGameData({ seed: state.seed || "", mapId: state.mapId || 0, participants: state.participants || [], prize: state.prize ?? undefined, total_balls: state.total_balls ?? undefined })
       setGameMeta({
         game_id: state.game_id ?? state.gameId ?? undefined,
         prize: state.total_price ?? state.totalPrice ?? undefined,
@@ -369,7 +369,7 @@ export function GameScreen() {
       {gameModal && gameResult && (
         <GameResultModal
           type={gameModal}
-          prize={gameMeta.prize}
+          prize={gameData.prize}
           onPlayAgain={handlePlayAgain}
           onShare={handleShare}
           onClose={handleClose}

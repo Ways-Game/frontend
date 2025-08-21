@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "re
 import * as PIXI from "pixi.js";
 import { generateRandomMap, generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
+import collisionSound from "@/assets/collision.wav";
 
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
@@ -12,10 +13,11 @@ interface GameCanvasProps {
   speedUpTime?: number;
   initialCameraMode?: 'leader' | 'swipe';
   scrollY?: number;
+  soundEnabled?: boolean;
 }
 
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
-  ({ onBallWin, onGameStart, onGameEnd, ballImages = [], className, speedUpTime = 0, initialCameraMode = 'leader', scrollY = 0 }, ref) => {
+  ({ onBallWin, onGameStart, onGameEnd, ballImages = [], className, speedUpTime = 0, initialCameraMode = 'leader', scrollY = 0, soundEnabled = true }, ref) => {
     const canvasRef = useRef<HTMLDivElement>(null);
     const [app, setApp] = useState<PIXI.Application | null>(null);
     const ballsRef = useRef<Ball[]>([]);
@@ -31,6 +33,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const mapDataRef = useRef<MapData | null>(null);
     const speedUpFramesRemaining = useRef(0);
     const isSpeedingUp = useRef(false);
+
+    // Audio for collisions
+    const collisionSoundRef = useRef<HTMLAudioElement | null>(null);
 
     // Refs to keep latest values inside PIXI loop (fix closure issue)
     const cameraModeRef = useRef<'leader' | 'swipe'>(initialCameraMode);
@@ -49,6 +54,36 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         h ^= h >>> 16;
         return (h >>> 0) / 4294967296;
       };
+    };
+
+    // Initialize collision sound
+    useEffect(() => {
+      try {
+        collisionSoundRef.current = new Audio(collisionSound as any);
+        if (collisionSoundRef.current) collisionSoundRef.current.volume = 0.3;
+      } catch (e) {
+        collisionSoundRef.current = null;
+      }
+
+      return () => {
+        if (collisionSoundRef.current) {
+          collisionSoundRef.current.pause();
+          collisionSoundRef.current = null;
+        }
+      };
+    }, []);
+
+    const playCollisionSound = () => {
+      if (!soundEnabled) return;
+      const audio = collisionSoundRef.current;
+      if (!audio) return;
+      try {
+        audio.currentTime = 0;
+        // ignore play promise errors
+        void audio.play();
+      } catch (e) {
+        // noop
+      }
     };
 
     const startRound = async (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
@@ -372,6 +407,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const restitution = 0.95;
                   ball.dx *= restitution;
                   ball.dy *= restitution;
+                  playCollisionSound();
                 }
               } else if (obstacle.type === 'barrier') {
                 const halfW = obstacle.width / 2;
@@ -404,6 +440,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     const barrierAngle = Math.atan2((obstacle as any).y - (obstacle as any).prevY || 0, (obstacle as any).x - (obstacle as any).prevX || 0);
                     ball.dx = -ball.dx * 0.9 + Math.sin(barrierAngle) * 0.5;
                     ball.dy -= Math.cos(barrierAngle) * 0.5;
+                    playCollisionSound();
                   } else {
                     // Hit top or bottom side
                     if (ball.y < obstacle.y) {
@@ -417,6 +454,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     } else {
                       ball.y = obstacle.y + halfH + 24;
                       ball.dy = -ball.dy * 0.9;
+                      playCollisionSound();
                     }
                   }
                 }
@@ -438,6 +476,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   } else {
                     ball.dy = -ball.dy * 0.9;
                   }
+                  playCollisionSound();
                 }
               } else if (obstacle.type === 'spinner') {
                 const dx = ball.x - obstacle.x;
@@ -459,6 +498,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
                   ball.dx = normalX * Math.abs(ball.dx) * 0.75 + tangentX * spinForce;
                   ball.dy = normalY * Math.abs(ball.dy) * 0.75 + tangentY * spinForce;
+                  playCollisionSound();
                 }
               }
             }
@@ -497,6 +537,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 ball.dy -= impulse * normalY * 0.5;
                 otherBall.dx += impulse * normalX * 0.5;
                 otherBall.dy += impulse * normalY * 0.5;
+                playCollisionSound();
               }
             });
 
@@ -504,10 +545,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             if (ball.x < 24) { 
               ball.x = 24; 
               ball.dx = Math.abs(ball.dx) * 0.95; 
+              playCollisionSound();
             }
             if (ball.x > 1176) { 
               ball.x = 1176; 
               ball.dx = -Math.abs(ball.dx) * 0.95; 
+              playCollisionSound();
             }
 
             // Check win/death zones - dynamic based on map
