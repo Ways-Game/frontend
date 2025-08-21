@@ -4,6 +4,37 @@ import { generateRandomMap, generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
 import RTTTL from "@/assets/Theme - Batman.txt?raw";
 
+// Hook to manage audio context and soundEnabled ref to avoid re-renders
+const useGameSound = (initialEnabled = true) => {
+  const soundEnabledRef = useRef<boolean>(initialEnabled);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const enableSound = useCallback(() => {
+    soundEnabledRef.current = true;
+  }, []);
+
+  const disableSound = useCallback(() => {
+    soundEnabledRef.current = false;
+    try {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+    } catch (e) {
+      // swallow
+    }
+  }, []);
+
+  const getAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioContextRef.current;
+  }, []);
+
+  return { soundEnabledRef, audioContextRef, getAudioContext, enableSound, disableSound };
+};
+
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
   onGameStart?: () => void;
@@ -39,13 +70,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // WebAudio melody refs
     interface Note { frequency: number; duration: number }
-    const audioContextRef = useRef<AudioContext | null>(null);
     const oscillatorRef = useRef<OscillatorNode | null>(null);
     const currentGainRef = useRef<GainNode | null>(null);
     const currentFilterRef = useRef<BiquadFilterNode | null>(null);
     const melodyNotesRef = useRef<Note[]>([]);
     const currentNoteIndexRef = useRef(0);
     const isPlayingRef = useRef(false);
+
+    // sound hook (stores enabled flag and audio context)
+    const { soundEnabledRef, audioContextRef, getAudioContext, enableSound, disableSound } = useGameSound(soundEnabled);
 
     // Refs to keep latest values inside PIXI loop (fix closure issue)
     const cameraModeRef = useRef<'leader' | 'swipe'>(initialCameraMode);
@@ -173,11 +206,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     }, []);
 
     const playCollisionSound = (intensity = 0.5) => {
-      if (!soundEnabled || isPlayingRef.current) return;
+      // Use ref for sound enabled to avoid stale closures
+      if (!soundEnabledRef.current) return;
 
       // Legacy function retained for compatibility but no longer plays wav.
       // Keep a minimal rate limiter so earlier logic relying on this doesn't spam.
-      if (!soundEnabled) return;
       const now = Date.now();
       const minInterval = 60;
       if (now - lastCollisionAtRef.current < minInterval) return;
@@ -186,8 +219,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Play a single melody note using WebAudio (softer oscillator, low-pass filter, fadeout)
     const playMelodyNote = useCallback(() => {
-      // Respect sound toggle
-      if (!soundEnabled || isPlayingRef.current) return;
+      // Respect sound toggle stored in ref
+      if (!soundEnabledRef.current || isPlayingRef.current) return;
 
       const notes = melodyNotesRef.current;
       if (currentNoteIndexRef.current >= notes.length) {
@@ -208,11 +241,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       try {
-        if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        }
-
-        const context = audioContextRef.current;
+        const context = getAudioContext();
         if (context.state === 'suspended') {
           context.resume();
         }
@@ -263,30 +292,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     }, [soundEnabled]);
 
-    // When sound is disabled, immediately stop and drop all audio nodes synchronously
+    // synchronize prop changes to internal sound ref
     useEffect(() => {
-      if (!soundEnabled) {
-        try {
-          // immediately kill gain/filter/oscillator without waiting
-          try { if (currentGainRef.current) { currentGainRef.current.gain.cancelScheduledValues(0); currentGainRef.current.gain.setValueAtTime(0.0001, 0); currentGainRef.current.disconnect(); } } catch (e) {}
-          try { if (currentFilterRef.current) { currentFilterRef.current.disconnect(); } } catch (e) {}
-          try { if (oscillatorRef.current) { try { oscillatorRef.current.onended = null; } catch (e) {} try { oscillatorRef.current.stop(); } catch (e) {} oscillatorRef.current.disconnect(); } } catch (e) {}
-          currentGainRef.current = null;
-          currentFilterRef.current = null;
-          oscillatorRef.current = null;
-          isPlayingRef.current = false;
-        } catch (e) {
-          // swallow
-        }
-
-        try {
-          if (audioContextRef.current) {
-            audioContextRef.current.close();
-            audioContextRef.current = null;
-          }
-        } catch (e) {}
+      if (soundEnabled) {
+        enableSound();
+      } else {
+        disableSound();
+        // immediate shutdown of existing nodes
+        try { if (currentGainRef.current) { try { currentGainRef.current.gain.cancelScheduledValues(0); currentGainRef.current.gain.setValueAtTime(0.0001, 0); currentGainRef.current.disconnect(); } catch (e) {} currentGainRef.current = null; } } catch (e) {}
+        try { if (currentFilterRef.current) { try { currentFilterRef.current.disconnect(); } catch (e) {} currentFilterRef.current = null; } } catch (e) {}
+        try { if (oscillatorRef.current) { try { oscillatorRef.current.onended = null; } catch (e) {} try { oscillatorRef.current.stop(); } catch (e) {} try { oscillatorRef.current.disconnect(); } catch (e) {} oscillatorRef.current = null; } } catch (e) {}
+        isPlayingRef.current = false;
       }
-    }, [soundEnabled]);
+    }, [soundEnabled, enableSound, disableSound]);
 
     const startRound = async (gameData: { seed: string; mapId: number[] | number; participants: any[] }) => {
       if (!app) return;
