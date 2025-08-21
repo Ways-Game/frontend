@@ -48,11 +48,13 @@ export interface Player {
 }
 
 export interface GameData {
-  id: string
-  players: Player[]
-  prizePool: number
-  timeLeft: number
-  status: 'waiting' | 'active' | 'finished'
+  game_id: number
+  seed: string
+  mapId: number
+  participants: ParticipantData[]
+  prize: number
+  total_balls: number
+  status: GameState
 }
 
 export interface ReferralUser {

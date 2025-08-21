@@ -5,9 +5,9 @@ class ApiProxy {
     return api;
   }
 
-  async getCurrentGame() {
+  async getGameById(game_id: number) {
     try {
-      return await this.getService().getCurrentGame();
+      return await this.getService().getGameById(game_id);
     } catch (error) {
       console.error('API Error:', error);
       throw error;

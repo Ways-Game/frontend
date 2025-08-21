@@ -14,13 +14,13 @@ import { TabBar } from "@/components/navigation/TabBar"
 
 export function GameScreen() {
   const navigate = useNavigate()
-  const { webApp, shareGameStory } = useTelegram()
+  const { webApp, shareGameStory, user } = useTelegram()
   const gameCanvasRef = useRef<GameCanvasRef>(null)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [gameModal, setGameModal] = useState<"win" | "lose" | null>(null)
   const [gameResult, setGameResult] = useState<{ result: 'win' | 'lose'; prize?: number } | null>(null)
   const [winnerInfo, setWinnerInfo] = useState<{ name?: string; avatar?: string } | null>(null)
-  const [gameMeta, setGameMeta] = useState<{ game_id?: number; prize?: number; total_balls?: number }>({})
+  // gameData holds meta (prize, total_balls, game_id)
   const [gameStarted, setGameStarted] = useState(false)
   const [showCountdown, setShowCountdown] = useState(false)
   const [countdownText, setCountdownText] = useState('3')
@@ -29,7 +29,7 @@ export function GameScreen() {
   const [scrollY, setScrollY] = useState(0)
   const [maxScrollY, setMaxScrollY] = useState(0)
   const [touchStartY, setTouchStartY] = useState(0) 
- const [gameData, setGameData] = useState({ seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0 })
+ const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0 })
 
 
   const handleClose = () => {
@@ -58,32 +58,22 @@ export function GameScreen() {
   }
 
   const handleGameEnd = () => {
-    // Game canvas finished, fetch current game info and show loss modal
-    api.getCurrentGame().then(current => {
-      const prize = (current as any)?.total_price ?? (current as any)?.prizePool ?? undefined
-      const total_balls = (current as any)?.total_balls ?? (current as any)?.totalBalls ?? undefined
-      setGameMeta(prev => ({ ...prev, prize, total_balls }))
-      setGameResult({ result: 'lose', prize })
-      setGameModal('lose')
-    }).catch(() => {
-      setGameResult({ result: 'lose' })
-      setGameModal('lose')
-    })
+    // Game canvas finished, show loss modal using gameData
+    setGameResult({ result: 'lose', prize: gameData.prize })
+    setGameModal('lose')
   }
 
   const handleBallWin = async (ballId: string, playerId: string) => {
     console.log(`Ball ${ballId} (${playerId}) won!`)
     try {
       // try to update winner on server if we have game id
-      if (gameMeta.game_id) {
-        await apiProxy.updateGameWinner(gameMeta.game_id, Number(playerId))
+      if (gameData.game_id) {
+        await apiProxy.updateGameWinner(gameData.game_id, Number(playerId))
       }
 
-      // fetch current game info to get prize and total_balls if possible
-      const current = await api.getCurrentGame().catch(() => null)
-      const prize = (current as any)?.total_price ?? (current as any)?.prizePool ?? undefined
-      const total_balls = (current as any)?.total_balls ?? (current as any)?.totalBalls ?? undefined
-      setGameMeta(prev => ({ ...prev, prize, total_balls }))
+      // use gameData for prize and total_balls
+      const prize = gameData.prize || undefined
+      const total_balls = gameData.total_balls || undefined
 
       // fetch winner profile
       let winnerName: string | undefined
@@ -97,7 +87,7 @@ export function GameScreen() {
       }
 
       setWinnerInfo({ name: winnerName, avatar: winnerAvatar })
-      setGameResult({ result: 'win', prize })
+      setGameResult({ result: 'win', prize: gameData.prize })
       setGameModal('win')
     } catch (err) {
       console.error('Failed to update winner or fetch info', err)
@@ -145,12 +135,7 @@ export function GameScreen() {
   useEffect(() => {
     const state: any = (location && (location as any).state) || null
     if (state && state.seed) {
-      setGameData({ seed: state.seed || "", mapId: state.mapId || 0, participants: state.participants || [], prize: state.prize ?? undefined, total_balls: state.total_balls ?? undefined })
-      setGameMeta({
-        game_id: state.game_id ?? state.gameId ?? undefined,
-        prize: state.total_price ?? state.totalPrice ?? undefined,
-        total_balls: state.total_balls ?? state.totalBalls ?? undefined,
-      })
+      setGameData({ game_id: state.game_id ?? state.gameId ?? 0, seed: state.seed || "", mapId: state.mapId || 0, participants: state.participants || [], prize: state.prize ?? state.total_price ?? 0, total_balls: state.total_balls ?? state.totalBalls ?? 0 })
       if (state.autoStart) {
         // give a tick for setState to apply
         setTimeout(() => {
@@ -320,7 +305,7 @@ export function GameScreen() {
           <div className="bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-3 py-2">
             <div className="flex justify-start items-center gap-0.5">
               <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
-              <div className="text-center text-neutral-50 text-sm leading-snug">{gameMeta?.total_balls ?? 0}</div>
+              <div className="text-center text-neutral-50 text-sm leading-snug">{gameData?.total_balls ?? 0}</div>
             </div>
           </div>
           

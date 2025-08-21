@@ -22,8 +22,10 @@ class ApiService {
     return response.json();
   }
 
-  async getCurrentGame(): Promise<GameData> {
-    return this.request<GameData>('/game/current');
+  // removed getCurrentGame (not present on backend)
+  // Use GET /api/game/get_game/{game_id} instead via api.getGameById
+  async getGameById(game_id: number): Promise<GameData > {
+    return this.request<GameData >(`/game/get_game/${game_id}`);
   }
 
 
