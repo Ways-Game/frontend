@@ -29,6 +29,12 @@ export function GameScreen() {
   const [maxScrollY, setMaxScrollY] = useState(0)
   const [touchStartY, setTouchStartY] = useState(0) 
  const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0 })
+// ref to keep latest gameData accessible to callbacks
+const gameDataRef = useRef<typeof gameData>(gameData);
+
+useEffect(() => {
+  gameDataRef.current = gameData;
+}, [gameData]);
 
 // ref to defer autoStart until gameData is applied; store pending payload
 const autoStartPendingRef = useRef<any | null>(null);
@@ -76,10 +82,11 @@ const autoStartPendingRef = useRef<any | null>(null);
 
     try {
       // try to update winner on server if we have game id
-      console.log(gameData)
-      if (gameData.game_id) {
-        console.log('update game winner',gameData.game_id, +playerId)
-        await api.updateGameWinner(gameData.game_id, +playerId)
+      const currentGameData = gameDataRef.current;
+      console.log('currentGameData at win:', currentGameData)
+      if (currentGameData && currentGameData.game_id) {
+        console.log('update game winner', currentGameData.game_id, +playerId)
+        await api.updateGameWinner(currentGameData.game_id, +playerId)
       }
 
       // fetch winner profile for display (works for both win and lose)
@@ -96,12 +103,15 @@ const autoStartPendingRef = useRef<any | null>(null);
 
       setWinnerInfo({ name: winnerName, avatar: winnerAvatar })
 
+      // compute prize from latest available data (prefer ref)
+      const prize = (currentGameData && (currentGameData as any).prize) ?? gameData.prize ?? 0
+
       // Show win modal only if the winner is the current Telegram user
       if (isLocalUserWinner) {
-        setGameResult({ result: 'win', prize: gameData.prize })
+        setGameResult({ result: 'win', prize })
         setGameModal('win')
       } else {
-        setGameResult({ result: 'lose', prize: gameData.prize })
+        setGameResult({ result: 'lose', prize })
         setGameModal('lose')
       }
     } catch (err) {
