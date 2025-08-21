@@ -57,6 +57,12 @@ export interface GameData {
   status: GameState
 }
 
+// Request body for updating the game winner
+export interface UpdateWinner {
+  game_id: number;
+  user_id: number;
+}
+
 export interface ReferralUser {
   id: string
   username: string

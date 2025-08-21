@@ -61,6 +61,16 @@ class ApiService {
   }
 
   // Update game winner
+  /**
+   * Update the winner of a game.
+   * PUT /api/game/update_winner
+   * Body: { game_id, user_id }
+   * Responses:
+   *  200 - success
+   *  400 - winner already set
+   *  404 - game not found
+   *  500 - server error
+   */
   async updateGameWinner(game_id: number, user_id: number): Promise<void> {
     return this.request<void>('/game/update_winner', {
       method: 'PUT',

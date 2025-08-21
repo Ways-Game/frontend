@@ -8,7 +8,6 @@ import { GameCanvas } from "@/components/GameCanvas"
 import {GameCanvasRef} from "@/types/components"
 import { Trophy, Volume2, VolumeX, X, Star, ChevronLeft, ChevronRight } from "lucide-react"
 import { api } from "@/services/api"
-import { apiProxy } from "@/services/apiProxy"
 import { useTelegram } from "@/hooks/useTelegram"
 import { TabBar } from "@/components/navigation/TabBar"
 
@@ -68,36 +67,49 @@ const autoStartPendingRef = useRef(false);
 
   const handleBallWin = async (ballId: string, playerId: string) => {
     console.log(`Ball ${ballId} (${playerId}) won!`)
+
+    const numericPlayerId = Number(playerId)
+    const isLocalUserWinner = !!user && numericPlayerId === user.id
+
     try {
       // try to update winner on server if we have game id
       if (gameData.game_id) {
-        await apiProxy.updateGameWinner(gameData.game_id, Number(playerId))
+        await api.updateGameWinner(gameData.game_id, numericPlayerId)
       }
 
-      // use gameData for prize and total_balls
-      const prize = gameData.prize || undefined
-      const total_balls = gameData.total_balls || undefined
-
-      // fetch winner profile
+      // fetch winner profile for display (works for both win and lose)
       let winnerName: string | undefined
       let winnerAvatar: string | undefined
       try {
-        const profile = await api.getUserProfile(Number(playerId))
+        const profile = await api.getUserProfile(numericPlayerId)
         winnerName = profile.username || `User${profile.id}`
         winnerAvatar = profile.avatar_url
       } catch (e) {
+        console.warn('Failed to fetch winner profile', e)
         winnerName = `User${playerId}`
       }
 
       setWinnerInfo({ name: winnerName, avatar: winnerAvatar })
-      setGameResult({ result: 'win', prize: gameData.prize })
-      setGameModal('win')
+
+      // Show win modal only if the winner is the current Telegram user
+      if (isLocalUserWinner) {
+        setGameResult({ result: 'win', prize: gameData.prize })
+        setGameModal('win')
+      } else {
+        setGameResult({ result: 'lose', prize: gameData.prize })
+        setGameModal('lose')
+      }
     } catch (err) {
       console.error('Failed to update winner or fetch info', err)
-      // still show modal locally
+      // Fallback: show lose modal unless the winner matches local user
       setWinnerInfo({ name: `User${playerId}` })
-      setGameResult({ result: 'win' })
-      setGameModal('win')
+      if (isLocalUserWinner) {
+        setGameResult({ result: 'win' })
+        setGameModal('win')
+      } else {
+        setGameResult({ result: 'lose' })
+        setGameModal('lose')
+      }
     }
   }
 

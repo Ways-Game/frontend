@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { apiProxy } from '@/services/apiProxy';
+import { api } from '@/services/api';
 
 export function useApi<T>(apiCall: () => Promise<T>) {
   const [data, setData] = useState<T | null>(null);
@@ -27,11 +27,10 @@ export function useApi<T>(apiCall: () => Promise<T>) {
 }
 
 export const useGameApi = () => ({
-  getCurrentGame: useApi(() => apiProxy.getCurrentGame()),
-  startGame: useApi(() => apiProxy.startGame()),
+  startGame: useApi(() => api.startGame()),
 });
 
 export const useUserApi = () => ({
-  buyBallz: (amount: number) => useApi(() => apiProxy.buyBallz(amount)),
-  shareResult: (gameId: string) => useApi(() => apiProxy.shareResult(gameId)),
+  buyBallz: (amount: number) => useApi(() => api.buyBallz(amount)),
+  shareResult: (gameId: string) => useApi(() => api.shareResult(gameId)),
 });
