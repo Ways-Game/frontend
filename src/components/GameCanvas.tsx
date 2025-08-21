@@ -58,6 +58,37 @@ interface GameCanvasProps {
 }
 
 const FIXED_POINT_SCALE = 1000;
+const FP_SCALE = FIXED_POINT_SCALE;
+
+// Fixed-point арифметика (только целые числа)
+type FP = number; // целое число, представляющее value * FP_SCALE
+
+function toFP(v: number): FP { return Math.round(v * FP_SCALE); }
+function fromFP(v: FP): number { return v / FP_SCALE; }
+function fpAdd(a: FP, b: FP): FP { return a + b; }
+function fpSub(a: FP, b: FP): FP { return a - b; }
+function fpMul(a: FP, b: FP): FP { return Math.round((a * b) / FP_SCALE); }
+function fpDiv(a: FP, b: FP): FP { return b === 0 ? 0 : Math.round((a * FP_SCALE) / b); }
+function fpAbs(a: FP): FP { return Math.abs(a); }
+function fpMulFloat(a: FP, f: number): FP { return Math.round(a * f); }
+
+// Целочисленный корень
+function intSqrt(n: number): number {
+  if (n <= 0) return 0;
+  let x = Math.floor(Math.sqrt(n));
+  if (x === 0) x = 1;
+  while (true) {
+    const y = Math.floor((x + Math.floor(n / x)) / 2);
+    if (y >= x) return x;
+    x = y;
+  }
+}
+
+function fpSqrt(fpVal: FP): FP {
+  if (fpVal <= 0) return 0;
+  const arg = Math.max(0, Math.floor(fpVal * FP_SCALE));
+  return intSqrt(arg);
+}
 
 // Детерминированный PRNG (mulberry32)
 function stringToSeed(s: string) {
@@ -598,13 +629,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             y: startY,
             dx: (rngRef.current!() - 0.5) * 2,
             dy: 0,
+            xFP: toFP(startX),
+            yFP: toFP(startY),
+            dxFP: toFP((rngRef.current!() - 0.5) * 2),
+            dyFP: toFP(0),
             graphics: ballGraphics,
             color: 0x4ecdc4,
             playerId: playerId,
             finished: false,
             indicator: indicator,
             index: ballIndex,
-          } as Ball & { index: number });
+          } as Ball & { index: number; xFP: FP; yFP: FP; dxFP: FP; dyFP: FP });
           ballIndex++;
         }
       }
@@ -842,14 +877,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const step = physicsStepCount.current;
 
           ballsRef.current.forEach((ball, ballIndex) => {
+            const ballFP = ball as Ball & { xFP: FP; yFP: FP; dxFP: FP; dyFP: FP; index: number };
             if (ball.finished) return;
 
             if (!ball.bounceCount) ball.bounceCount = 0;
 
-            // Apply gravity (квантованная арифметика)
-            ball.dy = qNum(ball.dy + 0.08);
-            ball.dx = qNum(ball.dx * 0.9998);
-            ball.dy = qNum(ball.dy * 0.9998);
+            // Apply gravity (fixed-point арифметика)
+            ballFP.dyFP = fpAdd(ballFP.dyFP, toFP(0.08));
+            ballFP.dxFP = fpMul(ballFP.dxFP, toFP(0.9998));
+            ballFP.dyFP = fpMul(ballFP.dyFP, toFP(0.9998));
 
             // Store previous position for collision detection
             const prevX = ball.x;
@@ -869,13 +905,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               ball.dx *= 0.997;
               if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
 
-              // Move horizontally along surface (deterministic)
-              ball.x = qNum(ball.x + ball.dx);
+              // Move horizontally along surface (fixed-point)
+              ballFP.xFP = fpAdd(ballFP.xFP, ballFP.dxFP);
               // Детерминированный шум без условного RNG
-              const ballIdx = (ball as any).index || ballIndex;
+              const ballIdx = ballFP.index || ballIndex;
               const noise = deterministicNoise(seedNumRef.current, ballIdx, step);
-              if (Math.abs(ball.dx) < 0.1) {
-                ball.dx = qNum(ball.dx + (noise - 0.5) * 0.2);
+              if (fpAbs(ballFP.dxFP) < toFP(0.1)) {
+                ballFP.dxFP = fpAdd(ballFP.dxFP, toFP((noise - 0.5) * 0.2));
               }
 
               // If ball moved beyond obstacle edges or obstacle destroyed — fall off
@@ -892,9 +928,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
               // skip normal collision handling for this frame
             } else {
-              // Normal movement (квантованное)
-              ball.x = qNum(ball.x + ball.dx);
-              ball.y = qNum(ball.y + ball.dy);
+              // Normal movement (fixed-point)
+              ballFP.xFP = fpAdd(ballFP.xFP, ballFP.dxFP);
+              ballFP.yFP = fpAdd(ballFP.yFP, ballFP.dyFP);
             }
 
             // Collision detection with obstacles
@@ -903,25 +939,30 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               if (obstacle.destroyed) continue;
 
               if (obstacle.type === "peg") {
-                const dx = ball.x - obstacle.x;
-                const dy = ball.y - obstacle.y;
-                const distance = deterministicMath.sqrt(dx * dx + dy * dy);
+                const obsFP = { xFP: toFP(obstacle.x), yFP: toFP(obstacle.y) };
+                const dx = fpSub(ballFP.xFP, obsFP.xFP);
+                const dy = fpSub(ballFP.yFP, obsFP.yFP);
+                const distSq = dx * dx + dy * dy;
+                const collisionThresh = toFP(36) * toFP(36);
 
-                if (distance < 36) {
-                  // 12 + 24 (peg radius + ball radius)
-                  // Calculate collision normal
-                  const normalX = dx / distance;
-                  const normalY = dy / distance;
+                if (distSq < collisionThresh) {
+                  const distFP = fpSqrt(distSq);
+                  const normalXFP = distFP === 0 ? toFP(1) : fpDiv(dx, distFP);
+                  const normalYFP = distFP === 0 ? toFP(0) : fpDiv(dy, distFP);
 
-                  // Move ball outside of peg (квантованное)
-                  ball.x = qNum(obstacle.x + normalX * 36);
-                  ball.y = qNum(obstacle.y + normalY * 36);
+                  // Move ball outside of peg
+                  ballFP.xFP = fpAdd(obsFP.xFP, fpMul(normalXFP, toFP(36)));
+                  ballFP.yFP = fpAdd(obsFP.yFP, fpMul(normalYFP, toFP(36)));
 
                   // Reflect velocity with energy loss
-                  const dotProduct = ball.dx * normalX + ball.dy * normalY;
-                  const restitution = 0.95;
-                  ball.dx = qNum((ball.dx - 2 * dotProduct * normalX) * restitution);
-                  ball.dy = qNum((ball.dy - 2 * dotProduct * normalY) * restitution);
+                  const dotFP = Math.round((ballFP.dxFP * normalXFP + ballFP.dyFP * normalYFP) / FP_SCALE);
+                  const twoDotFP = dotFP * 2;
+                  ballFP.dxFP = fpSub(ballFP.dxFP, Math.round((twoDotFP * normalXFP) / FP_SCALE));
+                  ballFP.dyFP = fpSub(ballFP.dyFP, Math.round((twoDotFP * normalYFP) / FP_SCALE));
+                  
+                  // Restitution
+                  ballFP.dxFP = fpMul(ballFP.dxFP, toFP(0.95));
+                  ballFP.dyFP = fpMul(ballFP.dyFP, toFP(0.95));
                   playMelodyNote();
                 }
               } else if (obstacle.type === "barrier") {
@@ -1105,13 +1146,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               }
             }
 
-            // Update graphics
-            ball.graphics.position.set(ball.x, ball.y);
+            // Update graphics (конвертируем из FP)
+            ball.graphics.position.set(fromFP(ballFP.xFP), fromFP(ballFP.yFP));
 
             // Update indicator position if exists
             if (ball.indicator) {
-              ball.indicator.position.set(ball.x, ball.y - 40);
+              ball.indicator.position.set(fromFP(ballFP.xFP), fromFP(ballFP.yFP) - 40);
             }
+            
+            // Sync legacy properties for compatibility
+            ball.x = fromFP(ballFP.xFP);
+            ball.y = fromFP(ballFP.yFP);
+            ball.dx = fromFP(ballFP.dxFP);
+            ball.dy = fromFP(ballFP.dyFP);
           });
 
           // Remove finished balls
