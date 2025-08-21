@@ -100,9 +100,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           // Use participant avatar if available
           if (avatarUrl) {
             try {
-              console.log('game canvas avatarUrl', avatarUrl)
-
-              const texture = await PIXI.Assets.load(avatarUrl);
+              const encodedUrl = encodeURI(avatarUrl);
+              console.log('game canvas avatarUrl', encodedUrl)
+              const texture = await PIXI.Assets.load(encodedUrl);
               ballGraphics.circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
             } catch(error) {
               console.log('game canvas avatarUrl error', error)
