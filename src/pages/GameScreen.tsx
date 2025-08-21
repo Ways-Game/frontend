@@ -20,7 +20,7 @@ export function GameScreen() {
   const [gameModal, setGameModal] = useState<"win" | "lose" | null>(null)
   const [gameResult, setGameResult] = useState<{ result: 'win' | 'lose'; prize?: number } | null>(null)
   const [winnerInfo, setWinnerInfo] = useState<{ name?: string; avatar?: string } | null>(null)
-  const [gameMeta, setGameMeta] = useState<{ game_id?: number; prize?: number }>({})
+  const [gameMeta, setGameMeta] = useState<{ game_id?: number; prize?: number; total_balls?: number }>({})
   const [gameStarted, setGameStarted] = useState(false)
   const [showCountdown, setShowCountdown] = useState(false)
   const [countdownText, setCountdownText] = useState('3')
@@ -61,6 +61,8 @@ export function GameScreen() {
     // Game canvas finished, fetch current game info and show loss modal
     api.getCurrentGame().then(current => {
       const prize = (current as any)?.total_price ?? (current as any)?.prizePool ?? undefined
+      const total_balls = (current as any)?.total_balls ?? (current as any)?.totalBalls ?? undefined
+      setGameMeta(prev => ({ ...prev, prize, total_balls }))
       setGameResult({ result: 'lose', prize })
       setGameModal('lose')
     }).catch(() => {
@@ -77,9 +79,11 @@ export function GameScreen() {
         await apiProxy.updateGameWinner(gameMeta.game_id, Number(playerId))
       }
 
-      // fetch current game info to get prize if possible
+      // fetch current game info to get prize and total_balls if possible
       const current = await api.getCurrentGame().catch(() => null)
       const prize = (current as any)?.total_price ?? (current as any)?.prizePool ?? undefined
+      const total_balls = (current as any)?.total_balls ?? (current as any)?.totalBalls ?? undefined
+      setGameMeta(prev => ({ ...prev, prize, total_balls }))
 
       // fetch winner profile
       let winnerName: string | undefined
@@ -145,6 +149,7 @@ export function GameScreen() {
       setGameMeta({
         game_id: state.game_id ?? state.gameId ?? undefined,
         prize: state.total_price ?? state.totalPrice ?? undefined,
+        total_balls: state.total_balls ?? state.totalBalls ?? undefined,
       })
       if (state.autoStart) {
         // give a tick for setState to apply
@@ -315,7 +320,7 @@ export function GameScreen() {
           <div className="bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-3 py-2">
             <div className="flex justify-start items-center gap-0.5">
               <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
-              <div className="text-center text-neutral-50 text-sm leading-snug">{250}</div>
+              <div className="text-center text-neutral-50 text-sm leading-snug">{gameMeta?.total_balls ?? 0}</div>
             </div>
           </div>
           
@@ -364,7 +369,7 @@ export function GameScreen() {
       {gameModal && gameResult && (
         <GameResultModal
           type={gameModal}
-          prize={gameResult.prize}
+          prize={gameMeta.prize}
           onPlayAgain={handlePlayAgain}
           onShare={handleShare}
           onClose={handleClose}

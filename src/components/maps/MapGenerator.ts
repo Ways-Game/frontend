@@ -81,25 +81,26 @@ export const generateMapFromId = (app: PIXI.Application, mapId: number[] | numbe
   const leftBottomX = mapWidth / 2 - funnelWidthBottom / 2;
   const rightBottomX = mapWidth / 2 + funnelWidthBottom / 2;
   
-  const segments = 250;
+  // Уменьшаем размеры барьеров и увеличиваем количество сегментов для плавности
+  const segments = 30;
   for (let i = 0; i < segments; i++) {
     const t = i / (segments - 1);
     const x1 = leftTopX + (leftBottomX - leftTopX) * t;
     const x2 = rightTopX + (rightBottomX - rightTopX) * t;
     const y = topY + funnelHeight * t;
-    
+
     obstacles.push(
-      { x: x1 - 45, y: y, width: 80, height: 50, type: 'barrier' },
-      { x: x2 + 45, y: y, width: 80, height: 50, type: 'barrier' }
+      { x: x1, y: y, width: 10, height: 5, type: 'barrier' },
+      { x: x2, y: y, width: 10, height: 5, type: 'barrier' }
     );
   }
-  
-  const passageSegments = 20;
+
+  const passageSegments = 15;
   for (let i = 0; i < passageSegments; i++) {
     const y = bottomY + (verticalPassage / passageSegments) * i;
     obstacles.push(
-      { x: leftBottomX - 25, y: y, width: 60, height: 40, type: 'barrier' },
-      { x: rightBottomX + 25, y: y, width: 60, height: 40, type: 'barrier' }
+      { x: leftBottomX, y: y, width: 10, height: 5, type: 'barrier' },
+      { x: rightBottomX, y: y, width: 10, height: 5, type: 'barrier' }
     );
   }
 
@@ -219,51 +220,32 @@ export const generateRandomMap = (app: PIXI.Application, mapId: number[] | numbe
   const leftBottomX = mapWidth / 2 - funnelWidthBottom / 2;
   const rightBottomX = mapWidth / 2 + funnelWidthBottom / 2;
   
-  // Максимальное количество барьеров вдоль левой линии воронки
-  const segments = 10; // Увеличено количество сегментов
+  // Уменьшаем размеры барьеров и увеличиваем количество сегментов для плавности
+  const segments = 30;
+  let prevLeftX = leftTopX;
+  let prevLeftY = topY;
+  let prevRightX = rightTopX;
+  let prevRightY = topY;
   for (let i = 0; i < segments; i++) {
     const t = i / (segments - 1);
     const x = leftTopX + (leftBottomX - leftTopX) * t;
+    const xr = rightTopX + (rightBottomX - rightTopX) * t;
     const y = topY + funnelHeight * t;
-    
-    // Очень толстый барьер для быстрых мячей
-    obstacles.push({
-      x: x - 45,
-      y: y,
-      width: 80,
-      height: 50,
-      type: 'barrier'
-    });
-    
 
-  }
-  
-  // Максимальное количество барьеров вдоль правой линии воронки
-  for (let i = 0; i < segments; i++) {
-    const t = i / (segments - 1);
-    const x = rightTopX + (rightBottomX - rightTopX) * t;
-    const y = topY + funnelHeight * t;
-    
-    // Очень толстый барьер для быстрых мячей
-    obstacles.push({
-      x: x + 45,
-      y: y,
-      width: 80,
-      height: 50,
-      type: 'barrier'
-    });
-    
+    obstacles.push({ x: x, y: y, width: 10, height: 5, type: 'barrier', prevX: prevLeftX, prevY: prevLeftY } as any);
+    obstacles.push({ x: xr, y: y, width: 10, height: 5, type: 'barrier', prevX: prevRightX, prevY: prevRightY } as any);
 
+    prevLeftX = x; prevLeftY = y;
+    prevRightX = xr; prevRightY = y;
   }
-  
-  // Много барьеров для вертикальных стенок прохода
-  const passageSegments = 10; // Увеличено количество
+
+  const passageSegments = 15;
   for (let i = 0; i < passageSegments; i++) {
     const y = bottomY + (verticalPassage / passageSegments) * i;
-    
+
     obstacles.push(
-      { x: leftBottomX - 25, y: y, width: 60, height: 40, type: 'barrier' },
-      { x: rightBottomX + 25, y: y, width: 60, height: 40, type: 'barrier' }
+      { x: leftBottomX, y: y, width: 10, height: 5, type: 'barrier' } as any,
+      { x: rightBottomX, y: y, width: 10, height: 5, type: 'barrier' } as any
     );
   }
 

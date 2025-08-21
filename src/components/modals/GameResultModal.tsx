@@ -15,7 +15,7 @@ interface GameResultModalProps {
 }
 
 export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, winnerName, winnerAvatar }: GameResultModalProps) {
-  const [countdown, setCountdown] = useState(10)
+  const [countdown, setCountdown] = useState(20)
   const [shareError, setShareError] = useState<string | null>(null)
   const { user, shareGameStory } = useTelegram()
 
@@ -73,7 +73,7 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
             <div className="flex items-center gap-0.5">
               <img src="/src/assets/icons/star.svg" className="w-5 h-5" alt="star" />
 
-              <span className="text-base">{`${isWin ? '+' : ''}${prize?.toLocaleString() || '3,423'}`}</span>
+              <span className="text-base">{`${isWin ? '+' : ''}${prize?.toLocaleString()}`}</span>
             </div>
           </div>
           

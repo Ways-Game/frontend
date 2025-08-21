@@ -318,12 +318,16 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               ball.y = obs.y - halfH - 24;
               ball.dy = 0;
 
-              // Rolling friction and small slowdown (lighter friction to allow faster rolling)
-              ball.dx *= 0.999;
+              // Rolling friction and small slowdown (slightly reduced friction)
+              ball.dx *= 0.997;
               if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
 
               // Move horizontally along surface
               ball.x += ball.dx;
+              // Add tiny randomness to avoid perfect sticking
+              if (Math.abs(ball.dx) < 0.1) {
+                ball.dx += (rngRef.current ? (rngRef.current() - 0.5) : (Math.random() - 0.5)) * 0.2;
+              }
 
               // If ball moved beyond obstacle edges or obstacle destroyed — fall off
               if (obs.destroyed || ball.x < obs.x - halfW - 24 || ball.x > obs.x + halfW + 24) {
@@ -396,7 +400,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     } else {
                       ball.x = obstacle.x + halfW + 24;
                     }
-                    ball.dx = -ball.dx * 0.9;
+                    // consider barrier angle
+                    const barrierAngle = Math.atan2((obstacle as any).y - (obstacle as any).prevY || 0, (obstacle as any).x - (obstacle as any).prevX || 0);
+                    ball.dx = -ball.dx * 0.9 + Math.sin(barrierAngle) * 0.5;
+                    ball.dy -= Math.cos(barrierAngle) * 0.5;
                   } else {
                     // Hit top or bottom side
                     if (ball.y < obstacle.y) {
