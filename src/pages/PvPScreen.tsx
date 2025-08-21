@@ -68,7 +68,7 @@ export function PvPScreen() {
     
     try {
       const result = await api.buyBalls(
-        webApp.initDataUnsafe.query_id || '',
+      
         user.id,
         countBalls,
         webApp.initData,

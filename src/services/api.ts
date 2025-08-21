@@ -69,11 +69,11 @@ class ApiService {
     });
   }
 
-  async buyBalls(queryId: string, userId: number, countBalls: number, initData: string, gameId: number): Promise<{ url: string }> {
+  async buyBalls( userId: number, countBalls: number, initData: string, gameId: number): Promise<{ url: string }> {
     return this.request<{ url: string }>('/payments/buy_balls', {
       method: 'POST',
       body: JSON.stringify({
-        query_id: queryId,
+
         user_id: userId,
         count_balls: countBalls,
         init_data: initData,
