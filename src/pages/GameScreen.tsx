@@ -35,11 +35,18 @@ const autoStartPendingRef = useRef<any | null>(null);
 
 
   const handleClose = () => {
-    navigate('/')
+    try {
+      gameCanvasRef.current?.destroyCanvas?.();
+    } catch (e) {}
+    // small delay to ensure canvas cleanup runs before navigation
+    setTimeout(() => navigate('/'), 50);
   }
 
   const handlePlayAgain = () => {
-    navigate('/')
+    try {
+      gameCanvasRef.current?.destroyCanvas?.();
+    } catch (e) {}
+    setTimeout(() => navigate('/'), 50);
   }
 
   const handleShare = async () => {
@@ -269,6 +276,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           speedUpTime={speedUpTime - 4}
           initialCameraMode={cameraMode}
           scrollY={cameraMode === 'swipe' ? scrollY : 0}
+          soundEnabled={soundEnabled}
         />
       </div>
       

@@ -24,4 +24,6 @@ export interface GameCanvasRef {
   setCameraMode: (mode: 'leader' | 'swipe') => void;
   setScrollY: (y: number) => void;
   getGameSize: () => { width: number; height: number };
+  // Destroys PIXI app and clears canvas immediately
+  destroyCanvas?: () => void;
 }

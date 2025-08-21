@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallba
 import * as PIXI from "pixi.js";
 import { generateRandomMap, generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
-import HARRY_POTTER_RTTTL from "@/assets/Theme - Batman.txt?raw";
+import RTTTL from "@/assets/Theme - Batman.txt?raw";
 
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
@@ -67,9 +67,24 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const parseRTTTL = (rtttl: string) => {
       try {
         if (!rtttl || typeof rtttl !== 'string') return [];
-        const parts = rtttl.split(':');
-        if (parts.length < 3) return [];
-        const [name, settingsStr, notesStr] = parts;
+        // Remove BOM and trim
+        let raw = rtttl.replace(/^\uFEFF/, '').trim();
+        // Try simple split first
+        let parts = raw.split(':');
+        let name: string, settingsStr: string, notesStr: string;
+        if (parts.length >= 3) {
+          // In case extra ':' in notes, join remainder
+          name = parts[0];
+          settingsStr = parts[1];
+          notesStr = parts.slice(2).join(':');
+        } else {
+          // Try regex to be more resilient to newlines/formatting
+          const m = raw.match(/^\s*([^:]+):([^:]+):([\s\S]+)$/);
+          if (!m) return [];
+          name = m[1];
+          settingsStr = m[2];
+          notesStr = m[3];
+        }
         const settings: any = {};
         settingsStr.split(',').forEach(s => {
           const [key, value] = s.split('=');
@@ -349,9 +364,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       onGameStart?.();
       // initialize melody notes from imported RTTTL
       try {
-        if (HARRY_POTTER_RTTTL) {
-          melodyNotesRef.current = parseRTTTL(HARRY_POTTER_RTTTL as string);
-          currentNoteIndexRef.current = 0;
+        // Initialize melody notes from imported RTTTL string. Use a hash to detect changes
+        if (RTTTL && typeof RTTTL === 'string') {
+          const raw = RTTTL.replace(/^\uFEFF/, '').trim();
+          // simple change-detection: compute a quick hash
+          const hash = raw.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString();
+          // store hash on ref to compare later
+          if ((melodyNotesRef as any)._sourceHash !== hash) {
+            melodyNotesRef.current = parseRTTTL(raw as string);
+            currentNoteIndexRef.current = 0;
+            (melodyNotesRef as any)._sourceHash = hash;
+          }
         }
       } catch (e) {
         console.warn('Failed to init melody notes', e);
@@ -425,6 +448,39 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           width: mapDataRef.current?.mapWidth || 1200,
           height: mapDataRef.current?.mapHeight || 2500
         };
+      }
+      ,
+      // Fully destroy PIXI app and clear canvas/graphics immediately
+      destroyCanvas: () => {
+        try {
+          // remove ball graphics
+          if (app) {
+            ballsRef.current.forEach(ball => {
+              try { app.stage.removeChild(ball.graphics); } catch (e) {}
+              try { if (ball.indicator) app.stage.removeChild(ball.indicator); } catch (e) {}
+            });
+          }
+          ballsRef.current = [];
+          obstaclesRef.current = [];
+          spinnersRef.current = [];
+          setActualWinners([]);
+          actualWinnersRef.current = [];
+          setGameState('waiting');
+          gamePlayingRef.current = false;
+
+          // stop audio
+          try { if (oscillatorRef.current) oscillatorRef.current.stop(); } catch (e) {}
+          try { if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; } } catch (e) {}
+
+          // destroy PIXI app
+          if (app) {
+            try { if (app.ticker) app.ticker.destroy(); } catch (e) {}
+            try { app.destroy({ removeView: true }); } catch (e) {}
+            setApp(null);
+          }
+        } catch (error) {
+          console.error('destroyCanvas error:', error);
+        }
       }
     }));
 
