@@ -81,16 +81,26 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       // Create balls from participants data
       const newBalls: Ball[] = [];
       let ballIndex = 0;
-      
+
       // Create balls for each participant based on their balls_count
-      for (const participant of gameData.participants) {
-        for (let i = 0; i < participant.balls_count; i++) {
+      for (const rawParticipant of gameData.participants) {
+        // normalize participant shape: support both { user: {...}, balls_count } and flat participant
+        const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+        const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
+        const avatarUrl = rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
+        const playerId = (user.id ?? rawParticipant.id ?? '').toString();
+
+        console.log('game canvas participant', rawParticipant)
+
+        if (ballsCount <= 0) continue;
+
+        for (let i = 0; i < ballsCount; i++) {
           const ballGraphics = new PIXI.Graphics();
-          
+
           // Use participant avatar if available
-          if (participant.avatar_url) {
+          if (avatarUrl) {
             try {
-              const texture = await PIXI.Assets.load(participant.avatar_url);
+              const texture = await PIXI.Assets.load(avatarUrl);
               ballGraphics.circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
             } catch {
               ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
@@ -121,7 +131,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             dy: 0,
             graphics: ballGraphics,
             color: 0x4ecdc4,
-            playerId: participant.id.toString(),
+            playerId: playerId,
             finished: false,
             indicator: indicator
           });
