@@ -67,18 +67,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const parseRTTTL = (rtttl: string) => {
       try {
         if (!rtttl || typeof rtttl !== 'string') return [];
-        // Remove BOM and trim
         let raw = rtttl.replace(/^\uFEFF/, '').trim();
-        // Try simple split first
         let parts = raw.split(':');
         let name: string, settingsStr: string, notesStr: string;
         if (parts.length >= 3) {
-          // In case extra ':' in notes, join remainder
           name = parts[0];
           settingsStr = parts[1];
           notesStr = parts.slice(2).join(':');
         } else {
-          // Try regex to be more resilient to newlines/formatting
           const m = raw.match(/^\s*([^:]+):([^:]+):([\s\S]+)$/);
           if (!m) return [];
           name = m[1];
