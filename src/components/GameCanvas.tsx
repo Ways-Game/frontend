@@ -605,7 +605,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             finished: false,
             indicator: indicator,
             index: ballIndex,
-          } as Ball & { index: number });
+            // Для плавной интерполяции
+            renderX: startX,
+            renderY: startY,
+            prevX: startX,
+            prevY: startY,
+          } as Ball & { index: number; renderX: number; renderY: number; prevX: number; prevY: number });
           ballIndex++;
         }
       }
@@ -1103,13 +1108,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               }
             }
 
-            // Update graphics
-            ball.graphics.position.set(ball.x, ball.y);
-
-            // Update indicator position if exists
-            if (ball.indicator) {
-              ball.indicator.position.set(ball.x, ball.y - 40);
-            }
+            // Сохраняем предыдущую позицию для интерполяции
+            const ballExt = ball as Ball & { renderX: number; renderY: number; prevX: number; prevY: number };
+            ballExt.prevX = ballExt.renderX || ball.x;
+            ballExt.prevY = ballExt.renderY || ball.y;
+            ballExt.renderX = ball.x;
+            ballExt.renderY = ball.y;
           });
 
           // Remove finished balls
@@ -1145,6 +1149,28 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             accumulator.current -= step;
           }
 
+          // Плавная интерполяция для рендеринга
+          const alpha = accumulator.current / step;
+          ballsRef.current.forEach((ball) => {
+            const ballExt = ball as Ball & { renderX: number; renderY: number; prevX: number; prevY: number };
+            if (ballExt.prevX !== undefined && ballExt.prevY !== undefined) {
+              // Интерполируем между предыдущей и текущей позицией
+              const interpX = ballExt.prevX + (ballExt.renderX - ballExt.prevX) * alpha;
+              const interpY = ballExt.prevY + (ballExt.renderY - ballExt.prevY) * alpha;
+              
+              ball.graphics.position.set(interpX, interpY);
+              
+              if (ball.indicator) {
+                ball.indicator.position.set(interpX, interpY - 40);
+              }
+            } else {
+              ball.graphics.position.set(ball.x, ball.y);
+              if (ball.indicator) {
+                ball.indicator.position.set(ball.x, ball.y - 40);
+              }
+            }
+          });
+
           // Рендеринг
           const deviceWidth = window.innerWidth;
           const deviceHeight = window.innerHeight;
@@ -1156,9 +1182,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               (ball) => !ball.finished
             );
             if (activeBalls.length > 0) {
-              const leadingBall = activeBalls.reduce((leader, ball) =>
-                ball.y > leader.y ? ball : leader
-              );
+              const leadingBall = activeBalls.reduce((leader, ball) => {
+                const ballExt = ball as Ball & { renderX: number; renderY: number };
+                const leaderExt = leader as Ball & { renderX: number; renderY: number };
+                const ballY = ballExt.renderY || ball.y;
+                const leaderY = leaderExt.renderY || leader.y;
+                return ballY > leaderY ? ball : leader;
+              });
 
               ballsRef.current.forEach((ball) => {
                 if (ball.indicator) {
