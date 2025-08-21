@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallba
 import * as PIXI from "pixi.js";
 import { generateRandomMap, generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
-import HARRY_POTTER_RTTTL from "@/assets/Theme - Harry Potter.txt?raw";
+import HARRY_POTTER_RTTTL from "@/assets/Theme - Batman.txt?raw";
 
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
