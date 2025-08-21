@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from "react"
-import { WaysButton } from "@/components/ui/ways-button"
-import { Chip } from "@/components/ui/ways-chip"
-import { Trophy, Share, Medal, CheckCircle, X } from "lucide-react"
+import { useState, useEffect } from "react"
+import { X } from "lucide-react"
 import { useTelegram } from "@/hooks/useTelegram"
 
 interface GameResultModalProps {
@@ -34,6 +32,7 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
   }, [onClose])
 
   const isWin = type === "win"
+  console.log("в модалке", isWin)
   
   return (
     <div className="fixed inset-0 bg-black/60 flex flex-col justify-end items-center px-6 pb-10 z-50">

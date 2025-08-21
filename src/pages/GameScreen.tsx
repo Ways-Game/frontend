@@ -67,21 +67,20 @@ const autoStartPendingRef = useRef(false);
 
   const handleBallWin = async (ballId: string, playerId: string) => {
     console.log(`Ball ${ballId} (${playerId}) won!`)
-
-    const numericPlayerId = Number(playerId)
-    const isLocalUserWinner = !!user && numericPlayerId === user.id
+    console.log(user.id, playerId)
+    const isLocalUserWinner = +playerId === user.id
 
     try {
       // try to update winner on server if we have game id
       if (gameData.game_id) {
-        await api.updateGameWinner(gameData.game_id, numericPlayerId)
+        await api.updateGameWinner(gameData.game_id, +playerId)
       }
 
       // fetch winner profile for display (works for both win and lose)
       let winnerName: string | undefined
       let winnerAvatar: string | undefined
       try {
-        const profile = await api.getUserProfile(numericPlayerId)
+        const profile = await api.getUserProfile(+playerId)
         winnerName = profile.username || `User${profile.id}`
         winnerAvatar = profile.avatar_url
       } catch (e) {
