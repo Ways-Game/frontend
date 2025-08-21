@@ -641,9 +641,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
               // Move horizontally along surface (deterministic)
               ball.x += ball.dx;
-              // Add tiny randomness to avoid perfect sticking
+              // Deterministic tiny randomness (uses seeded rngRef if available)
               if (Math.abs(ball.dx) < 0.1) {
-                ball.dx += (rngRef.current ? (rngRef.current() - 0.5) : (Math.random() - 0.5)) * 0.2;
+                const r = rngRef.current ? rngRef.current() : 0.5; // fallback deterministic value
+                ball.dx += (r - 0.5) * 0.2;
               }
 
               // If ball moved beyond obstacle edges or obstacle destroyed — fall off
