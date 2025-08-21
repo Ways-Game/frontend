@@ -41,6 +41,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     interface Note { frequency: number; duration: number }
     const audioContextRef = useRef<AudioContext | null>(null);
     const oscillatorRef = useRef<OscillatorNode | null>(null);
+    const currentGainRef = useRef<GainNode | null>(null);
+    const currentFilterRef = useRef<BiquadFilterNode | null>(null);
     const melodyNotesRef = useRef<Note[]>([]);
     const currentNoteIndexRef = useRef(0);
     const isPlayingRef = useRef(false);
@@ -226,6 +228,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         // Gain node with gentle volume and exponential fade-out
         const gainNode = context.createGain();
+        // store refs to allow immediate shutdown
+        currentGainRef.current = gainNode;
+        currentFilterRef.current = filter;
         gainNode.gain.setValueAtTime(0.12, context.currentTime);
         // Avoid ramping to zero (use a small value)
         gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + note.duration / 1000);
@@ -245,6 +250,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         oscillator.onended = () => {
           isPlayingRef.current = false;
           currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+          // cleanup nodes
+          try { if (currentGainRef.current) { try { currentGainRef.current.disconnect(); } catch (e) {} currentGainRef.current = null; } } catch (e) {}
+          try { if (currentFilterRef.current) { try { currentFilterRef.current.disconnect(); } catch (e) {} currentFilterRef.current = null; } } catch (e) {}
+          try { oscillatorRef.current = null; } catch (e) {}
         };
       } catch (error) {
         console.error('Failed to play note:', error);
@@ -252,17 +261,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     }, [soundEnabled]);
 
-    // When sound is disabled, immediately stop any playing audio and close context
+    // When sound is disabled, immediately stop and drop all audio nodes synchronously
     useEffect(() => {
       if (!soundEnabled) {
         try {
-          if (oscillatorRef.current) {
-            try { oscillatorRef.current.onended = null; } catch (e) {}
-            try { oscillatorRef.current.stop(); } catch (e) {}
-            try { oscillatorRef.current.disconnect(); } catch (e) {}
-            oscillatorRef.current = null;
-          }
-        } catch (e) {}
+          // immediately kill gain/filter/oscillator without waiting
+          try { if (currentGainRef.current) { currentGainRef.current.gain.cancelScheduledValues(0); currentGainRef.current.gain.setValueAtTime(0.0001, 0); currentGainRef.current.disconnect(); } } catch (e) {}
+          try { if (currentFilterRef.current) { currentFilterRef.current.disconnect(); } } catch (e) {}
+          try { if (oscillatorRef.current) { try { oscillatorRef.current.onended = null; } catch (e) {} try { oscillatorRef.current.stop(); } catch (e) {} oscillatorRef.current.disconnect(); } } catch (e) {}
+          currentGainRef.current = null;
+          currentFilterRef.current = null;
+          oscillatorRef.current = null;
+          isPlayingRef.current = false;
+        } catch (e) {
+          // swallow
+        }
 
         try {
           if (audioContextRef.current) {
@@ -270,8 +283,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             audioContextRef.current = null;
           }
         } catch (e) {}
-
-        isPlayingRef.current = false;
       }
     }, [soundEnabled]);
 
