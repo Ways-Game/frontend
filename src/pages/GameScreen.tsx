@@ -105,8 +105,10 @@ export function GameScreen() {
       if (state.autoStart) {
         // give a tick for setState to apply
         setTimeout(() => {
-          startGame()
           gameCanvasRef.current?.startGame({ seed: state.seed, mapId: state.mapId, participants: state.participants || [] })
+          startGame()
+          console.log('startGame called', state)
+         
         }, 50)
       }
     }
