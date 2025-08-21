@@ -33,6 +33,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const mapDataRef = useRef<MapData | null>(null);
     const speedUpFramesRemaining = useRef(0);
     const isSpeedingUp = useRef(false);
+    const gamePlayingRef = useRef(false);
 
     // Audio for collisions
     const collisionSoundRef = useRef<HTMLAudioElement | null>(null);
@@ -200,6 +201,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       setGameState('playing');
+      gamePlayingRef.current = true;
       onGameStart?.();
     };
 
@@ -225,6 +227,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       setActualWinners([]);
       actualWinnersRef.current = [];
       setGameState('waiting');
+      gamePlayingRef.current = false;
     };
 
     // Helper to update camera mode both in state and ref

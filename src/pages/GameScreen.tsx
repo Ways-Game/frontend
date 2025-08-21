@@ -137,14 +137,10 @@ export function GameScreen() {
     if (state && state.seed) {
       setGameData({ game_id: state.game_id ?? state.gameId ?? 0, seed: state.seed || "", mapId: state.mapId || 0, participants: state.participants || [], prize: state.prize ?? state.total_price ?? 0, total_balls: state.total_balls ?? state.totalBalls ?? 0 })
       if (state.autoStart) {
-        // give a tick for setState to apply
+        // give a tick for setState to apply; only call our startGame (it handles countdown)
         setTimeout(() => {
-          gameCanvasRef.current?.startGame({ seed: state.seed, mapId: state.mapId, participants: state.participants || [] });
-          // The startGame function in GameScreen.tsx also handles the countdown.
-          // It should be called with the same gameData to ensure consistency.
-          startGame(state); 
-          console.log('startGame called', state)
-         
+          startGame(state);
+          console.log('startGame called', gameData)
         }, 50)
       }
     }
@@ -231,6 +227,7 @@ export function GameScreen() {
       {/* Game Canvas - Full Screen */}
       <div 
         className="absolute inset-0 w-full h-full overflow-hidden"
+        style={{ display: showCountdown ? 'none' : 'block' }}
         onWheel={handleWheel}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
