@@ -182,6 +182,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Play a single melody note using WebAudio (softer oscillator, low-pass filter, fadeout)
     const playMelodyNote = useCallback(() => {
+      // Respect sound toggle
       if (!soundEnabled || isPlayingRef.current) return;
 
       const notes = melodyNotesRef.current;
@@ -247,6 +248,29 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         };
       } catch (error) {
         console.error('Failed to play note:', error);
+        isPlayingRef.current = false;
+      }
+    }, [soundEnabled]);
+
+    // When sound is disabled, immediately stop any playing audio and close context
+    useEffect(() => {
+      if (!soundEnabled) {
+        try {
+          if (oscillatorRef.current) {
+            try { oscillatorRef.current.onended = null; } catch (e) {}
+            try { oscillatorRef.current.stop(); } catch (e) {}
+            try { oscillatorRef.current.disconnect(); } catch (e) {}
+            oscillatorRef.current = null;
+          }
+        } catch (e) {}
+
+        try {
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+          }
+        } catch (e) {}
+
         isPlayingRef.current = false;
       }
     }, [soundEnabled]);
