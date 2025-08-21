@@ -1,11 +1,8 @@
 import { api } from './api';
-import { MockApi } from './mockApi';
-
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true' || import.meta.env.DEV;
 
 class ApiProxy {
   private getService() {
-    return USE_MOCK ? MockApi : api;
+    return api;
   }
 
   async getCurrentGame() {
@@ -13,9 +10,6 @@ class ApiProxy {
       return await this.getService().getCurrentGame();
     } catch (error) {
       console.error('API Error:', error);
-      if (!USE_MOCK) {
-        return MockApi.getCurrentGame();
-      }
       throw error;
     }
   }
@@ -26,9 +20,6 @@ class ApiProxy {
       return await this.getService().buyBallz(amount);
     } catch (error) {
       console.error('API Error:', error);
-      if (!USE_MOCK) {
-        return MockApi.buyBallz(amount);
-      }
       throw error;
     }
   }
@@ -38,9 +29,6 @@ class ApiProxy {
       return await this.getService().startGame();
     } catch (error) {
       console.error('API Error:', error);
-      if (!USE_MOCK) {
-        return MockApi.startGame();
-      }
       throw error;
     }
   }
@@ -50,9 +38,6 @@ class ApiProxy {
       return await this.getService().getGameResult();
     } catch (error) {
       console.error('API Error:', error);
-      if (!USE_MOCK) {
-        return MockApi.getGameResult();
-      }
       throw error;
     }
   }
@@ -62,9 +47,6 @@ class ApiProxy {
       return await this.getService().shareResult(gameId);
     } catch (error) {
       console.error('API Error:', error);
-      if (!USE_MOCK) {
-        return MockApi.shareResult(gameId);
-      }
       throw error;
     }
   }

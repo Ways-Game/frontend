@@ -11,7 +11,7 @@ import { useLiveTimer } from "@/hooks/useLiveTimer"
 import { useGames } from "@/hooks/useWebSocket"
 import { api } from "@/services/api"
 import { GameState } from "@/types/api"
-import type { UserStats, GameDetailResponse } from "@/types/api"
+import type { GameDetailResponse } from "@/types/api"
 import { useTelegram } from "@/hooks/useTelegram"
 
 const quickActions = ["210", "5", "10", "X2"]
@@ -67,12 +67,13 @@ export function PvPScreen() {
     if (!selectedGame || !user) return
     
     try {
+      console.log('handleBuyBallz called. selectedGame:', selectedGame, 'user:', user)
       const result = await api.buyBalls(
       
         user.id,
         countBalls,
         webApp.initData,
-        selectedGame.id
+        selectedGame.game_id
       )
       
       webApp.openInvoice(result.url)
@@ -167,7 +168,7 @@ export function PvPScreen() {
           {/* Game Info Row */}
           <div className="flex justify-between items-start">
             <div className="h-8 px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
-              <span className="text-white text-base">GAME #{selectedGame?.id || '-----'}</span>
+              <span className="text-white text-base">GAME #{selectedGame?.game_id || '-----'}</span>
               <div className={`w-2 h-2 rounded-full ${
                 selectedGame?.status === GameState.PLAY ? 'bg-green-500' :
                 selectedGame?.status === GameState.WAIT_PLAYERS || selectedGame?.status === GameState.WAIT_PLAY ? 'bg-yellow-500' : 'bg-gray-500'
