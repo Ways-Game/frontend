@@ -4,7 +4,6 @@ import { generateRandomMap, generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
 import RTTTL from "@/assets/Theme - Batman.txt?raw";
 
-// Hook to manage audio context and soundEnabled ref to avoid re-renders
 const useGameSound = (initialEnabled = true) => {
   const soundEnabledRef = useRef<boolean>(initialEnabled);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -21,7 +20,6 @@ const useGameSound = (initialEnabled = true) => {
         audioContextRef.current = null;
       }
     } catch (e) {
-      // swallow
     }
   }, []);
 

@@ -76,7 +76,9 @@ const autoStartPendingRef = useRef<any | null>(null);
 
     try {
       // try to update winner on server if we have game id
+      console.log(gameData)
       if (gameData.game_id) {
+        console.log('update game winner',gameData.game_id, +playerId)
         await api.updateGameWinner(gameData.game_id, +playerId)
       }
 
