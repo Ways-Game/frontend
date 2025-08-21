@@ -8,6 +8,7 @@ import { GameCanvas } from "@/components/GameCanvas"
 import {GameCanvasRef} from "@/types/components"
 import { Trophy, Volume2, VolumeX, X, Star, ChevronLeft, ChevronRight } from "lucide-react"
 import { api } from "@/services/api"
+import { apiProxy } from "@/services/apiProxy"
 import { useTelegram } from "@/hooks/useTelegram"
 import { TabBar } from "@/components/navigation/TabBar"
 
@@ -18,6 +19,8 @@ export function GameScreen() {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [gameModal, setGameModal] = useState<"win" | "lose" | null>(null)
   const [gameResult, setGameResult] = useState<{ result: 'win' | 'lose'; prize?: number } | null>(null)
+  const [winnerInfo, setWinnerInfo] = useState<{ name?: string; avatar?: string } | null>(null)
+  const [gameMeta, setGameMeta] = useState<{ game_id?: number; prize?: number }>({})
   const [gameStarted, setGameStarted] = useState(false)
   const [showCountdown, setShowCountdown] = useState(false)
   const [countdownText, setCountdownText] = useState('3')
@@ -55,15 +58,50 @@ export function GameScreen() {
   }
 
   const handleGameEnd = () => {
-    // Game canvas finished, show result
-    api.getGameResult().then(result => {
-      setGameResult(result)
-      setGameModal(result.result)
+    // Game canvas finished, fetch current game info and show loss modal
+    api.getCurrentGame().then(current => {
+      const prize = (current as any)?.total_price ?? (current as any)?.prizePool ?? undefined
+      setGameResult({ result: 'lose', prize })
+      setGameModal('lose')
+    }).catch(() => {
+      setGameResult({ result: 'lose' })
+      setGameModal('lose')
     })
   }
 
-  const handleBallWin = (ballId: string, playerId: string) => {
+  const handleBallWin = async (ballId: string, playerId: string) => {
     console.log(`Ball ${ballId} (${playerId}) won!`)
+    try {
+      // try to update winner on server if we have game id
+      if (gameMeta.game_id) {
+        await apiProxy.updateGameWinner(gameMeta.game_id, Number(playerId))
+      }
+
+      // fetch current game info to get prize if possible
+      const current = await api.getCurrentGame().catch(() => null)
+      const prize = (current as any)?.total_price ?? (current as any)?.prizePool ?? undefined
+
+      // fetch winner profile
+      let winnerName: string | undefined
+      let winnerAvatar: string | undefined
+      try {
+        const profile = await api.getUserProfile(Number(playerId))
+        winnerName = profile.username || `User${profile.id}`
+        winnerAvatar = profile.avatar_url
+      } catch (e) {
+        winnerName = `User${playerId}`
+      }
+
+      setWinnerInfo({ name: winnerName, avatar: winnerAvatar })
+      setGameResult({ result: 'win', prize })
+      setGameModal('win')
+    } catch (err) {
+      console.error('Failed to update winner or fetch info', err)
+      // still show modal locally
+      setWinnerInfo({ name: `User${playerId}` })
+      setGameResult({ result: 'win' })
+      setGameModal('win')
+    }
   }
 
 
@@ -104,6 +142,10 @@ export function GameScreen() {
     const state: any = (location && (location as any).state) || null
     if (state && state.seed) {
       setGameData({ seed: state.seed || "", mapId: state.mapId || 0, participants: state.participants || [] })
+      setGameMeta({
+        game_id: state.game_id ?? state.gameId ?? undefined,
+        prize: state.total_price ?? state.totalPrice ?? undefined,
+      })
       if (state.autoStart) {
         // give a tick for setState to apply
         setTimeout(() => {
@@ -188,10 +230,10 @@ export function GameScreen() {
   }
 
   const testModal = () => {
-    api.getGameResult().then(result => {
-      setGameResult(result)
-      setGameModal(result.result)
-    })
+    // open modal with dummy data for testing
+    setWinnerInfo({ name: 'Tester' })
+    setGameResult({ result: 'win', prize: 100 })
+    setGameModal('win')
   }
 
   return (
@@ -249,14 +291,7 @@ export function GameScreen() {
       )}
       
       
-      {/* Start Game Button */}
-      {!gameStarted && !showCountdown && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-30">
-          <WaysButton onClick={startGame} className="px-8 py-4 text-lg">
-            Start Game
-          </WaysButton>
-        </div>
-      )}
+      
       
       {/* Countdown Overlay */}
       {showCountdown && (
@@ -333,6 +368,8 @@ export function GameScreen() {
           onPlayAgain={handlePlayAgain}
           onShare={handleShare}
           onClose={handleClose}
+          winnerName={winnerInfo?.name}
+          winnerAvatar={winnerInfo?.avatar}
         />
       )}
     </div>

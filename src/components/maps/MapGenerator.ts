@@ -220,7 +220,7 @@ export const generateRandomMap = (app: PIXI.Application, mapId: number[] | numbe
   const rightBottomX = mapWidth / 2 + funnelWidthBottom / 2;
   
   // Максимальное количество барьеров вдоль левой линии воронки
-  const segments = 250; // Увеличено количество сегментов
+  const segments = 10; // Увеличено количество сегментов
   for (let i = 0; i < segments; i++) {
     const t = i / (segments - 1);
     const x = leftTopX + (leftBottomX - leftTopX) * t;
@@ -257,7 +257,7 @@ export const generateRandomMap = (app: PIXI.Application, mapId: number[] | numbe
   }
   
   // Много барьеров для вертикальных стенок прохода
-  const passageSegments = 20; // Увеличено количество
+  const passageSegments = 10; // Увеличено количество
   for (let i = 0; i < passageSegments; i++) {
     const y = bottomY + (verticalPassage / passageSegments) * i;
     

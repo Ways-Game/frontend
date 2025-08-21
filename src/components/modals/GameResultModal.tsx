@@ -10,9 +10,11 @@ interface GameResultModalProps {
   onPlayAgain: () => void
   onShare: () => void
   onClose: () => void
+  winnerName?: string
+  winnerAvatar?: string
 }
 
-export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose }: GameResultModalProps) {
+export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, winnerName, winnerAvatar }: GameResultModalProps) {
   const [countdown, setCountdown] = useState(10)
   const [shareError, setShareError] = useState<string | null>(null)
   const { user, shareGameStory } = useTelegram()
@@ -56,14 +58,14 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose }: 
           {/* Winner Info */}
           <div className={`w-full px-2.5 py-2 font-black ${isWin ? 'bg-green-600 text-white' : ' bg-white/5 text-neutral-50'}  rounded-[37px] flex justify-between items-center`}>
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
-                <span className="text-xs font-bold text-blue-600">
-                  {isWin ? "Y" : "TG"}
-                </span>
-              </div>
-              <span className=" text-sm">
-                {isWin ? "YOU" : "@ergertrthr"}
-              </span>
+              {winnerAvatar ? (
+                <img src={winnerAvatar} className="w-7 h-7 rounded-full object-cover" alt="winner" />
+              ) : (
+                <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                  <span className="text-xs font-bold text-blue-600">{isWin ? "Y" : "TG"}</span>
+                </div>
+              )}
+              <span className=" text-sm">{isWin ? (winnerName || 'YOU') : (winnerName || '@unknown')}</span>
               <span className={`text-sm py-1 rounded `}>
                 WIN!{isWin ? "!" : ""}
               </span>

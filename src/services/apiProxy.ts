@@ -33,9 +33,9 @@ class ApiProxy {
     }
   }
 
-  async getGameResult() {
+  async updateGameWinner(game_id: number, user_id: number) {
     try {
-      return await this.getService().getGameResult();
+      return await this.getService().updateGameWinner(game_id, user_id);
     } catch (error) {
       console.error('API Error:', error);
       throw error;

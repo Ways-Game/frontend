@@ -40,10 +40,6 @@ class ApiService {
     });
   }
 
-  async getGameResult(): Promise<{ result: 'win' | 'lose'; prize?: number }> {
-    return this.request<{ result: 'win' | 'lose'; prize?: number }>('/game/result');
-  }
-
   async shareResult(gameId: string): Promise<{ shared: boolean }> {
     return this.request<{ shared: boolean }>('/game/share', {
       method: 'POST',
@@ -56,9 +52,17 @@ class ApiService {
   }
 
   async updateUserPhoto(user_id: number, avatar_url: string): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>('/profile/update_photo/', {
+    return this.request<{ success: boolean }>(`/profile/update_photo/`, {
       method: 'PUT',
       body: JSON.stringify({ user_id, avatar_url }),
+    });
+  }
+
+  // Update game winner
+  async updateGameWinner(game_id: number, user_id: number): Promise<void> {
+    return this.request<void>('/game/update_winner', {
+      method: 'PUT',
+      body: JSON.stringify({ game_id, user_id }),
     });
   }
 
