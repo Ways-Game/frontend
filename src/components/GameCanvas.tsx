@@ -101,8 +101,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           if (avatarUrl) {
             try {
               const encodedUrl = encodeURI(avatarUrl);
+              const proxyUrl = "https://cors-anywhere.herokuapp.com/";
+              const finalUrl = proxyUrl + encodedUrl;
               console.log('game canvas avatarUrl', encodedUrl)
-              const texture = await PIXI.Assets.load(encodedUrl);
+              const img = new Image();
+              img.crossOrigin = "Anonymous";
+              img.src = finalUrl;
+              await new Promise((resolve) => (img.onload = resolve));
+              const texture = PIXI.Texture.from(img);
               ballGraphics.circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
             } catch(error) {
               console.log('game canvas avatarUrl error', error)
@@ -300,8 +306,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             ball.dy += 0.08;
 
             // Air resistance (minimal)
-            ball.dx *= 0.9995;
-            ball.dy *= 0.9995;
+            ball.dx *= 0.9998;
+            ball.dy *= 0.9998;
 
             // Store previous position for collision detection
             const prevX = ball.x;
@@ -317,9 +323,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               ball.y = obs.y - halfH - 24;
               ball.dy = 0;
 
-              // Rolling friction and small slowdown
-              ball.dx *= 0.995;
-              if (Math.abs(ball.dx) < 0.02) ball.dx = 0;
+              // Rolling friction and small slowdown (lighter friction to allow faster rolling)
+              ball.dx *= 0.999;
+              if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
 
               // Move horizontally along surface
               ball.x += ball.dx;
@@ -363,8 +369,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   ball.dx = ball.dx - 2 * dotProduct * normalX;
                   ball.dy = ball.dy - 2 * dotProduct * normalY;
 
-                  // Energy loss on bounce - tuned for more natural bounce
-                  const restitution = 0.75;
+                  // Energy loss on bounce - tuned for stronger bounces
+                  const restitution = 0.95;
                   ball.dx *= restitution;
                   ball.dy *= restitution;
                 }
@@ -395,7 +401,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                     } else {
                       ball.x = obstacle.x + halfW + 24;
                     }
-                    ball.dx = -ball.dx * 0.7;
+                    ball.dx = -ball.dx * 0.9;
                   } else {
                     // Hit top or bottom side
                     if (ball.y < obstacle.y) {
@@ -405,10 +411,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                       (ball as any).surfaceObstacle = obstacle;
                       // zero vertical velocity and reduce horizontal speed a bit
                       ball.dy = 0;
-                      ball.dx *= 0.6;
+                      ball.dx *= 0.95;
                     } else {
                       ball.y = obstacle.y + halfH + 24;
-                      ball.dy = -ball.dy * 0.7;
+                      ball.dy = -ball.dy * 0.9;
                     }
                   }
                 }
@@ -426,9 +432,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const overlapY = (halfH + 24) - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
-                    ball.dx = -ball.dx * 0.7;
+                    ball.dx = -ball.dx * 0.9;
                   } else {
-                    ball.dy = -ball.dy * 0.7;
+                    ball.dy = -ball.dy * 0.9;
                   }
                 }
               } else if (obstacle.type === 'spinner') {
@@ -482,7 +488,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 if (relativeSpeed > 0) return; // Balls moving apart
 
                 // Collision response (assuming equal mass)
-                const restitution = 0.8;
+                const restitution = 0.92;
                 const impulse = relativeSpeed * restitution;
 
                 ball.dx -= impulse * normalX * 0.5;
@@ -495,11 +501,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             // Boundary collisions with proper physics
             if (ball.x < 24) { 
               ball.x = 24; 
-              ball.dx = Math.abs(ball.dx) * 0.85; 
+              ball.dx = Math.abs(ball.dx) * 0.95; 
             }
             if (ball.x > 1176) { 
               ball.x = 1176; 
-              ball.dx = -Math.abs(ball.dx) * 0.85; 
+              ball.dx = -Math.abs(ball.dx) * 0.95; 
             }
 
             // Check win/death zones - dynamic based on map
