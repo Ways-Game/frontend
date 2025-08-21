@@ -59,6 +59,45 @@ interface GameCanvasProps {
 
 const FIXED_POINT_SCALE = 1000;
 
+// Детерминированный PRNG (mulberry32)
+function stringToSeed(s: string) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed: number) {
+  let t = seed >>> 0;
+  return function () {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Детерминированный шум
+function hash32(a: number) {
+  a = (a ^ (a >>> 16)) >>> 0;
+  a = Math.imul(a, 0x45d9f3b) >>> 0;
+  a = (a ^ (a >>> 16)) >>> 0;
+  a = Math.imul(a, 0x45d9f3b) >>> 0;
+  a = (a ^ (a >>> 16)) >>> 0;
+  return a >>> 0;
+}
+
+function deterministicNoise(seedNum: number, ballIndex: number, step: number) {
+  const combo = ((seedNum & 0xffff) << 16) ^ ((ballIndex & 0xfff) << 4) ^ (step & 0xfff);
+  const h = hash32(combo);
+  return (h >>> 0) / 4294967296;
+}
+
+// Квантование
+const QS = FIXED_POINT_SCALE;
+function qNum(v: number) { return Math.round(v * QS) / QS; }
+
 const deterministicMath = {
   sqrt: (x: number): number => {
     // Реализация квадратного корня через алгоритм Ньютона
@@ -132,6 +171,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const speedUpFramesRemaining = useRef(0);
     const isSpeedingUp = useRef(false);
     const gamePlayingRef = useRef(false);
+    const physicsStepCount = useRef(0);
+    const seedNumRef = useRef(0);
 
     // Audio for collisions (legacy wav removed in favor of WebAudio melody)
     const lastCollisionAtRef = useRef<number>(0);
@@ -462,8 +503,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       speedUpFramesRemaining.current = 0;
       isSpeedingUp.current = false;
 
-      const rng = createRNG(gameData.seed);
-      rngRef.current = rng;
+      const seedNum = stringToSeed(gameData.seed);
+      rngRef.current = mulberry32(seedNum);
+      seedNumRef.current = seedNum;
 
       // // Clear previous game
       // setActualWinners([]);
@@ -536,8 +578,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           indicator.visible = false;
 
           const screenHeight = (mapData as any).screenHeight || 800;
-          const startX = 50 + rng() * 1100;
-          const startY = 50 + rng() * (screenHeight - 100);
+          const startX = 50 + rngRef.current!() * 1100;
+          const startY = 50 + rngRef.current!() * (screenHeight - 100);
           ballGraphics.position.set(startX, startY);
           indicator.position.set(startX, startY - 40);
 
@@ -548,14 +590,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             id: `${gameData.seed}_${ballIndex}`,
             x: startX,
             y: startY,
-            dx: (rng() - 0.5) * 2,
+            dx: (rngRef.current!() - 0.5) * 2,
             dy: 0,
             graphics: ballGraphics,
             color: 0x4ecdc4,
             playerId: playerId,
             finished: false,
             indicator: indicator,
-          });
+            index: ballIndex,
+          } as Ball & { index: number });
           ballIndex++;
         }
       }
@@ -790,15 +833,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const updateBalls = () => {
           if (!rngRef.current) return;
 
-          ballsRef.current.forEach((ball) => {
+          physicsStepCount.current++;
+          const step = physicsStepCount.current;
+
+          ballsRef.current.forEach((ball, ballIndex) => {
             if (ball.finished) return;
 
             if (!ball.bounceCount) ball.bounceCount = 0;
 
-            // Apply gravity (deterministic - independent of FPS)
-            ball.dy += Math.round(0.08 * FIXED_POINT_SCALE) / FIXED_POINT_SCALE;
-            ball.dx = Math.round(ball.dx * 0.9998 * FIXED_POINT_SCALE) / FIXED_POINT_SCALE;
-            ball.dy = Math.round(ball.dy * 0.9998 * FIXED_POINT_SCALE) / FIXED_POINT_SCALE;
+            // Apply gravity (квантованная арифметика)
+            ball.dy = qNum(ball.dy + 0.08);
+            ball.dx = qNum(ball.dx * 0.9998);
+            ball.dy = qNum(ball.dy * 0.9998);
 
             // Store previous position for collision detection
             const prevX = ball.x;
@@ -819,11 +865,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
 
               // Move horizontally along surface (deterministic)
-              ball.x += ball.dx;
-              // Deterministic tiny randomness (uses seeded rngRef if available)
+              ball.x = qNum(ball.x + ball.dx);
+              // Детерминированный шум без условного RNG
+              const ballIdx = (ball as any).index || ballIndex;
+              const noise = deterministicNoise(seedNumRef.current, ballIdx, step);
               if (Math.abs(ball.dx) < 0.1) {
-                const r = rngRef.current ? rngRef.current() : 0.5; // fallback deterministic value
-                ball.dx += (r - 0.5) * 0.2;
+                ball.dx = qNum(ball.dx + (noise - 0.5) * 0.2);
               }
 
               // If ball moved beyond obstacle edges or obstacle destroyed — fall off
@@ -840,9 +887,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
               // skip normal collision handling for this frame
             } else {
-              // Normal movement (deterministic)
-              ball.x += ball.dx;
-              ball.y += ball.dy;
+              // Normal movement (квантованное)
+              ball.x = qNum(ball.x + ball.dx);
+              ball.y = qNum(ball.y + ball.dy);
             }
 
             // Collision detection with obstacles
