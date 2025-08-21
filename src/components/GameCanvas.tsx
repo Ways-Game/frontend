@@ -1079,12 +1079,28 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         // Animation loop (fixed timestep for deterministic physics)
         const gameLoop = () => {
-          // Выполняем один шаг физики с фиксированным временем
-          if (ballsRef.current.length > 0) {
-            updateBalls();
+          const now = performance.now();
+          if (!lastTime.current) {
+            lastTime.current = now;
+            return;
           }
 
-          // Остальная часть рендеринга (камера, индикаторы)...
+          let deltaTime = now - (lastTime.current || now);
+          if (deltaTime > 1000) deltaTime = 1000;
+          lastTime.current = now;
+
+          accumulator.current += deltaTime;
+          const step = fixedTimeStep.current;
+
+          // Выполняем фиксированные шаги физики
+          while (accumulator.current >= step) {
+            if (ballsRef.current.length > 0) {
+              updateBalls();
+            }
+            accumulator.current -= step;
+          }
+
+          // Рендеринг
           const deviceWidth = window.innerWidth;
           const deviceHeight = window.innerHeight;
           const scale = deviceWidth / 1000;
@@ -1155,15 +1171,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           });
         };
 
-        // Запускаем игровой цикл с фиксированным интервалом
-        const fixedUpdateInterval = setInterval(gameLoop, fixedTimeStep.current);
+        pixiApp.ticker.add(gameLoop);
         
         setApp(pixiApp);
       };
 
       initGame();
 
-      // В функции очистки не забываем убрать интервал
       return () => {
         if (app) {
           app.destroy({ removeView: true });
