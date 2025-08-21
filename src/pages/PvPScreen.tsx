@@ -30,12 +30,20 @@ export function PvPScreen() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        
-        // Select first waiting game by default
+        // Select first waiting game by default (only when nothing is selected)
         if (games.length > 0 && !selectedGame) {
           const waitingGame = games.find(g => g.status === GameState.WAIT_PLAYERS || g.status === GameState.WAIT_PLAY)
           if (waitingGame) {
             setSelectedGame(waitingGame)
+          }
+        }
+
+        // If a game is already selected, keep it in sync with the latest games list
+        if (selectedGame) {
+          const updatedGame = games.find(g => g.seed === selectedGame.seed)
+          // update local selectedGame reference when backend sent newer object
+          if (updatedGame && updatedGame !== selectedGame) {
+            setSelectedGame(updatedGame)
           }
         }
       } catch (error) {
