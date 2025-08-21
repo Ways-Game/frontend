@@ -606,7 +606,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         let frameCount = 0;
 
         // Professional physics update function
-        const updateBalls = (frameMultiplier = 1) => {
+        const updateBalls = () => {
           if (!rngRef.current) return;
 
           ballsRef.current.forEach(ball => {
