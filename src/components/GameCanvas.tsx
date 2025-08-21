@@ -64,7 +64,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       };
     };
 
-    // RTTTL parser (returns array of {frequency, duration(ms)})
     const parseRTTTL = (rtttl: string) => {
       try {
         if (!rtttl || typeof rtttl !== 'string') return [];
@@ -89,14 +88,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           let rest = noteStr.trim();
 
-          // Parse duration
           const durationMatch = rest.match(/^\d+/);
           if (durationMatch) {
             duration = parseInt(durationMatch[0]);
             rest = rest.substring(durationMatch[0].length);
           }
 
-          // Parse note
           if (rest[0] === 'p') {
             noteChar = 'p';
             rest = rest.substring(1);
@@ -109,22 +106,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             }
           }
 
-          // Parse dot
           if (rest[0] === '.') {
             dot = true;
             rest = rest.substring(1);
           }
 
-          // Parse octave
           if (rest.length > 0) {
             const oct = parseInt(rest);
             if (!isNaN(oct)) octave = oct;
           }
 
-          // Calculate duration in ms
           const durationMs = (240000 / bpm) * (1 / duration) * (dot ? 1.5 : 1);
 
-          // Calculate frequency
           let frequency = 0;
           if (noteChar !== 'p') {
             const noteMap: { [key: string]: number } = {
@@ -176,7 +169,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       lastCollisionAtRef.current = now;
     };
 
-    // Play a single melody note using WebAudio
+    // Play a single melody note using WebAudio (softer oscillator, low-pass filter, fadeout)
     const playMelodyNote = useCallback(() => {
       if (!soundEnabled || isPlayingRef.current) return;
 
@@ -210,13 +203,26 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         const oscillator = context.createOscillator();
         oscillatorRef.current = oscillator;
+
+        // Softer waveform
         oscillator.type = 'sine';
+
+        // Low-pass filter to smooth high frequencies
+        const filter = context.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 2000;
+
+        // Gain node with gentle volume and exponential fade-out
+        const gainNode = context.createGain();
+        gainNode.gain.setValueAtTime(0.12, context.currentTime);
+        // Avoid ramping to zero (use a small value)
+        gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + note.duration / 1000);
+
         oscillator.frequency.setValueAtTime(note.frequency, context.currentTime);
 
-        const gainNode = context.createGain();
-        gainNode.gain.setValueAtTime(0.18, context.currentTime);
-
-        oscillator.connect(gainNode);
+        // Chain: oscillator -> filter -> gain -> destination
+        oscillator.connect(filter);
+        filter.connect(gainNode);
         gainNode.connect(context.destination);
 
         oscillator.start();

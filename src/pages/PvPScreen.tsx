@@ -311,7 +311,23 @@ export function PvPScreen() {
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">300</div>
             </div>
           </button>
-          <div className="min-h-14 inline-flex flex-col justify-start items-center gap-1.5">
+          <button
+            onClick={() => {
+              if (!selectedGame || !user) return
+
+              // Find participant in selected game
+              const participant = selectedGame.participants.find((p: any) => {
+                const participantUser = p.user ? p.user : p
+                return participantUser.id === user.id
+              })
+
+              const currentBalls = participant ? (participant.balls_count ?? 0) : 0
+              if (currentBalls <= 0) return
+
+              handleBuyBallz(currentBalls * 2)
+            }}
+            className={`min-h-14 inline-flex flex-col justify-start items-center gap-1.5 ${!selectedGame || !selectedGame.participants.some((p: any) => (p.user ? p.user : p).id === user.id) ? 'opacity-40 pointer-events-none' : ''}`}
+          >
             <div className="w-14 min-h-14 bg-gradient-to-b from-green-400 to-green-700 rounded-[28px] shadow-[inset_6px_9px_8.800000190734863px_0px_rgba(255,255,255,0.25)] flex items-center justify-center">
               <div className="text-white text-xl font-black">X2</div>
             </div>
@@ -319,7 +335,7 @@ export function PvPScreen() {
               <img src="/src/assets/icons/thick_disc.svg" className="w-3 h-3" alt="thick_disc" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">X2</div>
             </div>
-          </div>
+          </button>
         </div>
       </div>
 
