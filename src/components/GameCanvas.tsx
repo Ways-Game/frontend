@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallba
 import * as PIXI from "pixi.js";
 import { generateRandomMap, generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
-import HARRY_POTTER_RTTTL from "@/assets/Theme - Harry Potter.txt";
+import HARRY_POTTER_RTTTL from "@/assets/Theme - Harry Potter.txt?raw";
 
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
@@ -67,7 +67,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     // RTTTL parser (returns array of {frequency, duration(ms)})
     const parseRTTTL = (rtttl: string) => {
       try {
-        const [name, settingsStr, notesStr] = rtttl.split(':');
+        if (!rtttl || typeof rtttl !== 'string') return [];
+        const parts = rtttl.split(':');
+        if (parts.length < 3) return [];
+        const [name, settingsStr, notesStr] = parts;
         const settings: any = {};
         settingsStr.split(',').forEach(s => {
           const [key, value] = s.split('=');

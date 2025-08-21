@@ -63,8 +63,9 @@ const autoStartPendingRef = useRef<any | null>(null);
 
   const handleBallWin = async (ballId: string, playerId: string) => {
     console.log(`Ball ${ballId} (${playerId}) won!`)
-    console.log(user.id, playerId)
-    const isLocalUserWinner = +playerId === user.id
+    const localUserId = user ? user.id : null
+    console.log(localUserId, playerId)
+    const isLocalUserWinner = localUserId !== null && +playerId === localUserId
 
     try {
       // try to update winner on server if we have game id
