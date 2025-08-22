@@ -206,7 +206,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       if (newMode === 'swipe') {
         const gameSize = gameCanvasRef.current.getGameSize()
         const containerHeight = window.innerHeight - 80
-        const scale = window.innerWidth / 1200 // Исправлено с 1000 на 1200
+        const scale = window.innerWidth / 1200
         const scaledHeight = gameSize.height * scale
         setMaxScrollY(Math.max(0, scaledHeight - containerHeight))
         setScrollY(0) // Сбрасываем прокрутку при переключении режима
@@ -232,47 +232,54 @@ const autoStartPendingRef = useRef<any | null>(null);
 
   const handleWheel = (e: React.WheelEvent) => {
     if (cameraMode === 'swipe') {
-      const newY = Math.max(0, Math.min(maxScrollY, scrollY + e.deltaY))
-      setScrollY(newY)
+      e.preventDefault();
+      const newY = Math.max(0, Math.min(maxScrollY, scrollY + e.deltaY));
+      setScrollY(newY);
       if (gameCanvasRef.current) {
-        gameCanvasRef.current.setScrollY(newY)
+        gameCanvasRef.current.setScrollY(newY);
       }
     }
   }
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (cameraMode === 'swipe') {
-      setTouchStartY(e.touches[0].clientY)
+      setTouchStartY(e.touches[0].clientY);
     }
   }
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (cameraMode === 'swipe' && touchStartY !== 0) {
-      e.preventDefault()
-      const touchY = e.touches[0].clientY
-      const deltaY = touchStartY - touchY
-      const newY = Math.max(0, Math.min(maxScrollY, scrollY + deltaY * 2))
-      setScrollY(newY)
+      e.preventDefault();
+      const touchY = e.touches[0].clientY;
+      const deltaY = touchStartY - touchY;
+      const newY = Math.max(0, Math.min(maxScrollY, scrollY + deltaY));
+      setScrollY(newY);
       if (gameCanvasRef.current) {
-        gameCanvasRef.current.setScrollY(newY)
+        gameCanvasRef.current.setScrollY(newY);
       }
-      setTouchStartY(touchY)
+      setTouchStartY(touchY);
     }
   }
 
   const handleTouchEnd = () => {
-    setTouchStartY(0)
+    setTouchStartY(0);
   }
 
   const testModal = () => {
     // open modal with dummy data for testing
-    setWinnerInfo({ name: 'Tester' })
-    setGameResult({ result: 'win', prize: 100 })
-    setGameModal('win')
+    setWinnerInfo({ name: 'Tester' });
+    setGameResult({ result: 'win', prize: 100 });
+    setGameModal('win');
   }
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
+    <div 
+      className="min-h-screen bg-black relative overflow-hidden"
+      onWheel={handleWheel}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Game Canvas - Full Screen */}
       <div 
         className="absolute inset-0 w-full h-full overflow-hidden"

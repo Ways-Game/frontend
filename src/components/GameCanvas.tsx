@@ -176,17 +176,46 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         });
 
         const defaultDuration = parseInt(settings.d) || 4;
+        const defaultOctave = parseInt(settings.o) || 5;
         const bpm = parseInt(settings.b) || 63;
 
+        const baseFreq: Record<string, number> = {
+          'c': 261.63, 'c#': 277.18, 'd': 293.66, 'd#': 311.13, 'e': 329.63,
+          'f': 349.23, 'f#': 369.99, 'g': 392.00, 'g#': 415.30, 'a': 440.00,
+          'a#': 466.16, 'b': 493.88
+        };
+
         const notes = parts[2].split(",").map((noteStr) => {
+          noteStr = noteStr.trim();
           let duration = defaultDuration;
+          let octave = defaultOctave;
+          let noteName = "a";
+
           const durationMatch = noteStr.match(/^\d+/);
           if (durationMatch) {
             duration = parseInt(durationMatch[0]);
+            noteStr = noteStr.substring(durationMatch[0].length);
           }
+
+          if (noteStr.toLowerCase().startsWith('p')) {
+            return { frequency: 0, duration: (240000 / bpm) * (1 / duration) };
+          }
+
+          const noteMatch = noteStr.match(/^[a-g]#?/i);
+          if (noteMatch) {
+            noteName = noteMatch[0].toLowerCase();
+            const restStr = noteStr.substring(noteMatch[0].length);
+            const octaveMatch = restStr.match(/^\d/);
+            if (octaveMatch) {
+              octave = parseInt(octaveMatch[0]);
+            }
+          }
+
+          let frequency = baseFreq[noteName] || 440;
+          frequency = frequency * Math.pow(2, octave - 4);
           
           const durationMs = (240000 / bpm) * (1 / duration);
-          return { frequency: 440, duration: durationMs };
+          return { frequency, duration: durationMs };
         });
 
         return notes;
@@ -197,14 +226,39 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     const playMelodyNote = useCallback(() => {
       if (!soundEnabledRef.current) return;
-      // Не используем random.next() для сохранения детерминизма
-      // Просто воспроизводим фиксированную ноту
+      
+      const notes = melodyNotesRef.current;
+      if (notes.length === 0) {
+        // Fallback to 440Hz if no melody loaded
+        try {
+          const context = getAudioContext();
+          const oscillator = context.createOscillator();
+          const gainNode = context.createGain();
+          
+          oscillator.frequency.setValueAtTime(440, context.currentTime);
+          gainNode.gain.setValueAtTime(0.05, context.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(context.destination);
+          
+          oscillator.start();
+          oscillator.stop(context.currentTime + 0.1);
+        } catch (error) {}
+        return;
+      }
+
+      const note = notes[currentNoteIndexRef.current];
+      currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+
+      if (note.frequency === 0) return; // Skip pauses
+
       try {
         const context = getAudioContext();
         const oscillator = context.createOscillator();
         const gainNode = context.createGain();
         
-        oscillator.frequency.setValueAtTime(440, context.currentTime);
+        oscillator.frequency.setValueAtTime(note.frequency, context.currentTime);
         gainNode.gain.setValueAtTime(0.05, context.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
         
@@ -213,9 +267,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         
         oscillator.start();
         oscillator.stop(context.currentTime + 0.1);
-      } catch (error) {
-        // Игнорируем ошибки аудио
-      }
+      } catch (error) {}
     }, [getAudioContext]);
 
     // Детерминированный игровой цикл с фиксированным шагом
@@ -540,8 +592,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           appRef.current.stage.y += (targetY - appRef.current.stage.y) * 0.05;
         }
       } else if (cameraModeRef.current === "swipe") {
-        // Для режима прокрутки
+        // Фиксируем камеру по X и позволяем скроллить по Y
+        appRef.current.stage.x = 0;
         appRef.current.stage.y = -scrollYRef.current * scale;
+        
+        // Скрываем все индикаторы в режиме свайпа
+        ballsRef.current.forEach((ball) => {
+          if (ball.indicator) ball.indicator.visible = false;
+        });
       }
     };
 
@@ -686,6 +744,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       try {
         if (RTTTL && typeof RTTTL === "string") {
           melodyNotesRef.current = parseRTTTL(RTTTL);
+          currentNoteIndexRef.current = 0;
         }
       } catch (e) {
         console.warn("Failed to init melody notes", e);
@@ -729,12 +788,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       cameraModeRef.current = mode;
 
       if (appRef.current && mode === "swipe") {
-        const deviceWidth = window.innerWidth;
-        const scale = deviceWidth / WORLD_WIDTH; // Используем WORLD_WIDTH вместо 1000
-        const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
-        const centerX = (mapWidth * scale - deviceWidth) / 2;
-        appRef.current.stage.x = -Math.max(0, centerX);
-        appRef.current.stage.y = -scrollYRef.current * scale; // Умножаем на scale
+        const scale = window.innerWidth / WORLD_WIDTH;
+        appRef.current.stage.x = 0;
+        appRef.current.stage.y = -scrollYRef.current * scale;
 
         ballsRef.current.forEach((ball) => {
           if (ball.indicator) ball.indicator.visible = false;
@@ -811,6 +867,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       const handleResize = () => {
         if (appRef.current) {
           appRef.current.renderer.resize(window.innerWidth, window.innerHeight - 80);
+          
+          // Update camera position for swipe mode
+          if (cameraModeRef.current === "swipe") {
+            const scale = window.innerWidth / WORLD_WIDTH;
+            appRef.current.stage.x = 0;
+            appRef.current.stage.y = -scrollYRef.current * scale;
+          }
         }
       };
 
