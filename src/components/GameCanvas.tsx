@@ -11,23 +11,13 @@ import { generateMapFromId } from "./maps";
 import { MapData, Obstacle, Spinner, Ball, GameCanvasRef } from "@/types";
 import RTTTL from "@/assets/Theme - Batman.txt?raw";
 
-// Константы для детерминированной физики
+// Constants
 const FIXED_FPS = 60;
 const FIXED_DELTA = 1000 / FIXED_FPS;
 const WORLD_WIDTH = 1200;
 const WORLD_HEIGHT = 2500;
 
-// Предвычисленные константы физики
-const GRAVITY_PER_STEP = 0.08;
-const FRICTION_STEP = 0.9999800039998667; // Math.pow(0.9988, 1/60)
-const SPINNER_STEP = 0.08;
-const SURFACE_FRICTION = 0.997;
-const PEG_BOUNCE = 0.82;
-const BRICK_BOUNCE = 0.78;
-const BALL_BOUNCE = 0.86;
-const SPINNER_BOUNCE = 1.1;
-
-// Детерминированные математические операции
+// deterministic helpers (kept as before)
 const precise = {
   add: (a: number, b: number) => a + b,
   sub: (a: number, b: number) => a - b,
@@ -38,18 +28,14 @@ const precise = {
   floor: (x: number) => Math.floor(x),
 };
 
-// Хелперы камеры
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-// Детерминированный ГПСЧ
 class DeterministicRandom {
   private seed: number;
-  
   constructor(seed: string) {
     this.seed = this.hashString(seed);
   }
-  
   private hashString(str: string): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -58,30 +44,16 @@ class DeterministicRandom {
     }
     return Math.abs(hash);
   }
-
   next(): number {
     this.seed = Math.imul(this.seed, 16807) % 2147483647;
     return (this.seed & 0x7fffffff) / 0x7fffffff;
   }
 }
 
+// simplified sound hook (audio context ref exposed)
 const useGameSound = (initialEnabled = true) => {
   const soundEnabledRef = useRef<boolean>(initialEnabled);
   const audioContextRef = useRef<AudioContext | null>(null);
-
-  const enableSound = useCallback(() => {
-    soundEnabledRef.current = true;
-  }, []);
-
-  const disableSound = useCallback(() => {
-    soundEnabledRef.current = false;
-    try {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-    } catch (e) {}
-  }, []);
 
   const getAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -95,8 +67,6 @@ const useGameSound = (initialEnabled = true) => {
     soundEnabledRef,
     audioContextRef,
     getAudioContext,
-    enableSound,
-    disableSound,
   };
 };
 
@@ -131,14 +101,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const obstaclesRef = useRef<Obstacle[]>([]);
     const spinnersRef = useRef<Spinner[]>([]);
     const mapDataRef = useRef<MapData | null>(null);
-    
+
     const physicsTimeRef = useRef(0);
     const lastTimeRef = useRef(0);
     const accumulatorRef = useRef(0);
     const seedRef = useRef<string>("");
     const randomRef = useRef<DeterministicRandom | null>(null);
     const gameLoopRef = useRef<number | null>(null);
-    
+
     const [gameState, setGameState] = useState<"waiting" | "playing" | "finished">("waiting");
     const [actualWinners, setActualWinners] = useState<string[]>([]);
     const actualWinnersRef = useRef<string[]>([]);
@@ -146,22 +116,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const cameraModeRef = useRef<"leader" | "swipe">(initialCameraMode);
     const scrollYRef = useRef<number>(scrollY);
 
-    // Audio refs
+    // Audio refs and melody state
     const oscillatorRef = useRef<OscillatorNode | null>(null);
     const currentGainRef = useRef<GainNode | null>(null);
     const currentFilterRef = useRef<BiquadFilterNode | null>(null);
     const melodyNotesRef = useRef<any[]>([]);
     const currentNoteIndexRef = useRef(0);
     const isPlayingRef = useRef(false);
+    const lastCollisionAtRef = useRef<number>(0);
 
-    const {
-      soundEnabledRef,
-      audioContextRef,
-      getAudioContext,
-      enableSound,
-      disableSound,
-    } = useGameSound(soundEnabled);
+    const { soundEnabledRef, audioContextRef, getAudioContext } = useGameSound(soundEnabled);
 
+    // RTTTL parser (unchanged)
     const parseRTTTL = (rtttl: string) => {
       try {
         if (!rtttl || typeof rtttl !== 'string') return [];
@@ -240,12 +206,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    // Cleanup audio resources on unmount
+    // Clean up audio when component unmounts
     useEffect(() => {
       return () => {
         try {
           if (oscillatorRef.current) {
-            oscillatorRef.current.stop();
+            try { oscillatorRef.current.stop(); } catch (e) {}
+            oscillatorRef.current = null;
           }
         } catch (e) {}
         try {
@@ -257,11 +224,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       };
     }, []);
 
-    const lastCollisionAtRef = useRef<number>(0);
-
+    // Minimal collision sound rate-limiter (kept)
     const playCollisionSound = (intensity = 0.5) => {
-      // Legacy function retained for compatibility but no longer plays wav.
-      // Keep a minimal rate limiter so earlier logic relying on this doesn't spam.
       if (!soundEnabledRef.current) return;
       const now = Date.now();
       const minInterval = 60;
@@ -269,9 +233,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       lastCollisionAtRef.current = now;
     };
 
-    // Play a single melody note using WebAudio (softer oscillator, low-pass filter, fadeout)
+    // Play single melody note using WebAudio (updated to be robust after enable/disable)
     const playMelodyNote = useCallback(() => {
-      if (!soundEnabledRef.current || isPlayingRef.current) return;
+      if (!soundEnabledRef.current) return;
+      // If a note is already playing, don't overlap (simple guard)
+      if (isPlayingRef.current) return;
 
       const notes = melodyNotesRef.current;
       if (currentNoteIndexRef.current >= notes.length) {
@@ -281,7 +247,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       const note = notes[currentNoteIndexRef.current];
       if (!note) return;
 
-      // Pause (rest)
+      // Handle rests
       if (note.frequency === 0) {
         isPlayingRef.current = true;
         setTimeout(() => {
@@ -292,35 +258,35 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       try {
+        // Ensure audio context exists
         if (!audioContextRef.current) {
           audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         }
-
-        const context = audioContextRef.current;
+        const context = audioContextRef.current!;
+        // Resume if suspended (user gesture / autoplay policies)
         if (context.state === 'suspended') {
-          context.resume();
+          context.resume().catch((err) => {
+            // resume may fail if not allowed; silently ignore
+            console.warn('AudioContext resume failed:', err);
+          });
         }
 
         const oscillator = context.createOscillator();
         oscillatorRef.current = oscillator;
-
-        // Softer waveform
         oscillator.type = 'sine';
 
-        // Low-pass filter to smooth high frequencies
         const filter = context.createBiquadFilter();
         filter.type = 'lowpass';
         filter.frequency.value = 2000;
+        currentFilterRef.current = filter;
 
-        // Gain node with gentle volume and exponential fade-out
         const gainNode = context.createGain();
+        currentGainRef.current = gainNode;
         gainNode.gain.setValueAtTime(0.12, context.currentTime);
-        // Avoid ramping to zero (use a small value)
         gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + note.duration / 1000);
 
         oscillator.frequency.setValueAtTime(note.frequency, context.currentTime);
 
-        // Chain: oscillator -> filter -> gain -> destination
         oscillator.connect(filter);
         filter.connect(gainNode);
         gainNode.connect(context.destination);
@@ -331,6 +297,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         isPlayingRef.current = true;
 
         oscillator.onended = () => {
+          try {
+            // ensure we clean up refs
+            if (oscillatorRef.current === oscillator) oscillatorRef.current = null;
+            if (currentGainRef.current === gainNode) currentGainRef.current = null;
+            if (currentFilterRef.current === filter) currentFilterRef.current = null;
+          } catch (e) {}
           isPlayingRef.current = false;
           currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
         };
@@ -338,9 +310,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         console.error('Failed to play note:', error);
         isPlayingRef.current = false;
       }
-    }, [soundEnabledRef]);
+    }, [audioContextRef, soundEnabledRef]);
 
-    // Детерминированный игровой цикл с фиксированным шагом
+    // Deterministic physics loop / render functions (mostly unchanged)
     const gameLoop = () => {
       updatePhysics();
       physicsTimeRef.current += FIXED_DELTA;
@@ -351,34 +323,26 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
-    // Детерминированное обновление физики
     const updatePhysics = () => {
       if (!randomRef.current) return;
 
-      // Валидация синхронизации каждую секунду
       if (physicsTimeRef.current % 1000 === 0 && physicsTimeRef.current > 0) {
-        const checksum = ballsRef.current.reduce((sum, b) => 
+        const checksum = ballsRef.current.reduce((sum, b) =>
           sum + b.x * 10000 + b.y * 100 + b.dx * 10 + b.dy, 0);
         console.log(`Sync check at ${physicsTimeRef.current}ms: ${checksum.toFixed(2)}`);
       }
 
-      // Обновляем спиннеры с детерминированным шагом
       spinnersRef.current.forEach((spinner) => {
-        spinner.rotation = precise.add(spinner.rotation, SPINNER_STEP);
+        spinner.rotation = precise.add(spinner.rotation, 0.08);
       });
 
-      ballsRef.current.forEach((ball, ballIndex) => {
+      ballsRef.current.forEach((ball) => {
         if (ball.finished) return;
 
-        // === ДЕТЕРМИНИРОВАННАЯ ФИЗИКА ===
-        // 1. Гравитация
-        ball.dy = precise.add(ball.dy, GRAVITY_PER_STEP);
-        
-        // 2. Трение (воздух)
-        ball.dx = precise.mul(ball.dx, FRICTION_STEP);
-        ball.dy = precise.mul(ball.dy, FRICTION_STEP);
+        ball.dy = precise.add(ball.dy, 0.08);
+        ball.dx = precise.mul(ball.dx, 0.9999800039998667);
+        ball.dy = precise.mul(ball.dy, 0.9999800039998667);
 
-        // 3. Логика поверхностей
         if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
           const obs: any = (ball as any).surfaceObstacle;
           const halfW = obs.width / 2;
@@ -386,21 +350,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
           ball.dy = 0;
-          ball.dx = precise.mul(ball.dx, SURFACE_FRICTION);
-          
+          ball.dx = precise.mul(ball.dx, 0.997);
+
           if (precise.abs(ball.dx) < 0.03) ball.dx = 0;
           ball.x = precise.add(ball.x, ball.dx);
-          
-          // Детерминированный шум
+
           const noise = randomRef.current!.next();
           if (precise.abs(ball.dx) < 0.1) {
             const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.2);
             ball.dx = precise.add(ball.dx, noiseValue);
           }
 
-          // Проверка падения
-          if (obs.destroyed || 
-              ball.x < precise.sub(precise.sub(obs.x, halfW), 24) || 
+          if (obs.destroyed ||
+              ball.x < precise.sub(precise.sub(obs.x, halfW), 24) ||
               ball.x > precise.add(precise.add(obs.x, halfW), 24)) {
             (ball as any).onSurface = false;
             (ball as any).surfaceObstacle = null;
@@ -411,19 +373,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ball.y = precise.add(ball.y, ball.dy);
         }
 
-        // 4. Коллизии
-
         checkCollisions(ball);
       });
 
-      // Remove finished balls
       ballsRef.current = ballsRef.current.filter(
         (ball) => !ball.finished || actualWinnersRef.current.includes(ball.id)
       );
     };
 
     const checkCollisions = (ball: Ball) => {
-      // === ДЕТЕРМИНИРОВАННАЯ ОБРАБОТКА КОЛЛИЗИЙ ===
       obstaclesRef.current.forEach((obstacle) => {
         if (obstacle.destroyed) return;
 
@@ -431,31 +389,29 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const dx = precise.sub(ball.x, obstacle.x);
           const dy = precise.sub(ball.y, obstacle.y);
           const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
-          
+
           if (distanceSq < 1296) {
             const distance = precise.sqrt(distanceSq);
             const normalX = precise.div(dx, distance);
             const normalY = precise.div(dy, distance);
 
-            // Корректировка позиции
             ball.x = precise.add(obstacle.x, precise.mul(normalX, 36));
             ball.y = precise.add(obstacle.y, precise.mul(normalY, 36));
 
-            // Расчет отражения
             const dotProduct = precise.add(
               precise.mul(ball.dx, normalX),
               precise.mul(ball.dy, normalY)
             );
-            
+
             ball.dx = precise.mul(
               precise.sub(ball.dx, precise.mul(precise.mul(dotProduct, 2), normalX)),
-              PEG_BOUNCE
+              0.82
             );
             ball.dy = precise.mul(
               precise.sub(ball.dy, precise.mul(precise.mul(dotProduct, 2), normalY)),
-              PEG_BOUNCE
+              0.82
             );
-            
+
             playMelodyNote();
           }
         } else if (obstacle.type === "barrier") {
@@ -472,17 +428,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               } else {
                 ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
               }
-              ball.dx = precise.mul(ball.dx, -BRICK_BOUNCE);
+              ball.dx = precise.mul(ball.dx, -0.78);
             } else {
               if (ball.y < obstacle.y) {
                 ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
                 (ball as any).onSurface = true;
                 (ball as any).surfaceObstacle = obstacle;
                 ball.dy = 0;
-                ball.dx = precise.mul(ball.dx, PEG_BOUNCE);
+                ball.dx = precise.mul(ball.dx, 0.82);
               } else {
                 ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
-                ball.dy = precise.mul(ball.dy, -BRICK_BOUNCE);
+                ball.dy = precise.mul(ball.dy, -0.78);
               }
             }
             playMelodyNote();
@@ -501,9 +457,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             const overlapY = precise.sub(halfH + 24, precise.abs(precise.sub(ball.y, obstacle.y)));
 
             if (overlapX < overlapY) {
-              ball.dx = precise.mul(ball.dx, -BRICK_BOUNCE);
+              ball.dx = precise.mul(ball.dx, -0.78);
             } else {
-              ball.dy = precise.mul(ball.dy, -BRICK_BOUNCE);
+              ball.dy = precise.mul(ball.dy, -0.78);
             }
             playMelodyNote();
           }
@@ -512,7 +468,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const dy = precise.sub(ball.y, obstacle.y);
           const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
 
-          if (distanceSq < 2304 && distanceSq > 0) { // 48^2 = 2304
+          if (distanceSq < 2304 && distanceSq > 0) {
             const distance = precise.sqrt(distanceSq);
             const normalX = precise.div(dx, distance);
             const normalY = precise.div(dy, distance);
@@ -524,23 +480,23 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             const tangentY = normalX;
             const currentSpeed = precise.sqrt(precise.add(precise.mul(ball.dx, ball.dx), precise.mul(ball.dy, ball.dy)));
 
-            ball.dx = precise.mul(precise.add(precise.mul(precise.mul(normalX, currentSpeed), 0.75), precise.mul(tangentX, 1.6)), SPINNER_BOUNCE);
-            ball.dy = precise.mul(precise.add(precise.mul(precise.mul(normalY, currentSpeed), 0.75), precise.mul(tangentY, 1.6)), SPINNER_BOUNCE);
-            
+            ball.dx = precise.mul(precise.add(precise.mul(precise.mul(normalX, currentSpeed), 0.75), precise.mul(tangentX, 1.6)), 1.1);
+            ball.dy = precise.mul(precise.add(precise.mul(precise.mul(normalY, currentSpeed), 0.75), precise.mul(tangentY, 1.6)), 1.1);
+
             playMelodyNote();
           }
         }
       });
 
-      // === КОЛЛИЗИИ МЕЖДУ МЯЧАМИ ===
+      // ball-ball collisions (unchanged)
       ballsRef.current.forEach((otherBall) => {
         if (otherBall === ball || otherBall.finished) return;
 
         const dx = precise.sub(ball.x, otherBall.x);
         const dy = precise.sub(ball.y, otherBall.y);
         const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
-        
-        if (distanceSq < 2304 && distanceSq > 0) { // 48^2 = 2304
+
+        if (distanceSq < 2304 && distanceSq > 0) {
           const distance = precise.sqrt(distanceSq);
           const normalX = precise.div(dx, distance);
           const normalY = precise.div(dy, distance);
@@ -562,7 +518,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           if (relSpeed > 0) return;
 
-          const impulse = precise.mul(relSpeed, BALL_BOUNCE);
+          const impulse = precise.mul(relSpeed, 0.86);
           const halfImpulse = precise.mul(impulse, 0.5);
 
           ball.dx = precise.sub(ball.dx, precise.mul(normalX, halfImpulse));
@@ -574,17 +530,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      // === ГРАНИЧНЫЕ КОЛЛИЗИИ ===
       if (ball.x < 24) {
         ball.x = 24;
-        ball.dx = precise.mul(precise.abs(ball.dx), PEG_BOUNCE);
+        ball.dx = precise.mul(precise.abs(ball.dx), 0.82);
       }
       if (ball.x > 1176) {
         ball.x = 1176;
-        ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), PEG_BOUNCE);
+        ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), 0.82);
       }
 
-      // Win/death zones
       if (mapDataRef.current) {
         const { winY, deathY } = mapDataRef.current;
 
@@ -607,7 +561,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    // Рендеринг (отделен от физики)
+    // Render (updated swipe handling to match old behavior: centerX & unscaled Y)
     const render = () => {
       if (!appRef.current) return;
 
@@ -623,57 +577,55 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      // Update spinner graphics rotation
       spinnersRef.current.forEach((spinner) => {
         spinner.graphics.rotation = spinner.rotation;
       });
 
-      // Camera logic
       if (ballsRef.current.length > 0 && cameraModeRef.current === "leader") {
         const activeBalls = ballsRef.current.filter(ball => !ball.finished);
         if (activeBalls.length > 0) {
-          const leadingBall = activeBalls.reduce((prev, current) => 
+          const leadingBall = activeBalls.reduce((prev, current) =>
             prev.y > current.y ? prev : current
           );
 
-          // показываем индикатор только для лидера
           ballsRef.current.forEach((ball) => {
             if (ball.indicator) {
               ball.indicator.visible = ball === leadingBall && !ball.finished;
             }
           });
 
-          // Центрируем камеру на leadingBall с границами
           const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
           const mapHeight = mapDataRef.current?.mapHeight || WORLD_HEIGHT;
-          
+
           let targetX = -leadingBall.x * scale + deviceWidth / 2;
           let targetY = -leadingBall.y * scale + deviceHeight / 2;
-          
-          // Ограничиваем камеру границами карты
+
           const minX = Math.min(0, deviceWidth - mapWidth * scale);
           const maxX = 0;
 
-          
           targetX = Math.max(minX, Math.min(maxX, targetX));
 
-          // Плавное перемещение камеры
           appRef.current.stage.x += (targetX - appRef.current.stage.x) * 0.05;
           appRef.current.stage.y += (targetY - appRef.current.stage.y) * 0.05;
         }
       } else if (cameraModeRef.current === "swipe") {
-        // Фиксируем камеру по X и позволяем скроллить по Y
-        appRef.current.stage.x = 0;
-        appRef.current.stage.y = -scrollYRef.current * scale;
-        
-        // Скрываем все индикаторы в режиме свайпа
+        // OLD swipe behavior integrated:
+        const deviceWidth = window.innerWidth;
+        const scaleForCenter = deviceWidth / 1000; // older centering formula restored
+        const mapWidth = mapDataRef.current?.mapWidth || 1200;
+        const centerX = (mapWidth * scaleForCenter - deviceWidth) / 2;
+        appRef.current.stage.x = -Math.max(0, centerX);
+
+        // Use unscaled Y for swipe (matches old behaviour)
+        appRef.current.stage.y = -scrollYRef.current;
+
         ballsRef.current.forEach((ball) => {
           if (ball.indicator) ball.indicator.visible = false;
         });
       }
     };
 
-    // Запуск игры с детерминированными параметрами
+    // Start game (unchanged except kept in same scope)
     const startGame = async (gameData: {
       seed: string;
       mapId: number[] | number;
@@ -687,7 +639,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       lastTimeRef.current = 0;
       accumulatorRef.current = 0;
 
-      // Clear previous game
       setActualWinners([]);
       actualWinnersRef.current = [];
       ballsRef.current.forEach((ball) => {
@@ -697,10 +648,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      // Генерация карты с фиксированными размерами мира
       const originalRandom = Math.random;
       Math.random = () => randomRef.current!.next();
-      
+
       try {
         const mapData = generateMapFromId(appRef.current, gameData.mapId, {
           seed: gameData.seed,
@@ -708,11 +658,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           worldHeight: WORLD_HEIGHT,
           random: randomRef.current
         });
-        
-        // Сортируем для детерминированного порядка
+
         obstaclesRef.current = mapData.obstacles.sort((a, b) => (a.x + a.y) - (b.x + b.y));
         spinnersRef.current = mapData.spinners.sort((a, b) => (a.x + a.y) - (b.x + b.y));
-        
+
         mapDataRef.current = {
           ...mapData,
           mapWidth: WORLD_WIDTH,
@@ -720,12 +669,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           screenHeight: WORLD_HEIGHT
         };
 
-        // После генерации карты выставляем stage в начальную позицию
         if (appRef.current) {
           appRef.current.stage.x = 0;
           appRef.current.stage.y = 0;
 
-          // Убедимся, что рендерер знает актуальный размер и scale
           const deviceWidth = window.innerWidth;
           const deviceHeight = window.innerHeight - 80;
           appRef.current.renderer.resize(deviceWidth, deviceHeight);
@@ -735,7 +682,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         Math.random = originalRandom;
       }
 
-      // Create balls with deterministic positions
       const newBalls: Ball[] = [];
       let ballIndex = 0;
 
@@ -798,7 +744,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       ballsRef.current = newBalls;
 
-      // Remove gate barrier
       const gateBarrier = (mapDataRef.current as any)?.gateBarrier;
       if (gateBarrier) {
         const index = obstaclesRef.current.indexOf(gateBarrier);
@@ -810,7 +755,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       setGameState("playing");
       onGameStart?.();
 
-      // Initialize melody
       try {
         if (RTTTL && typeof RTTTL === "string") {
           melodyNotesRef.current = parseRTTTL(RTTTL);
@@ -820,11 +764,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         console.warn("Failed to init melody notes", e);
       }
 
-      // Запускаем физику через setInterval для стабильности
       const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
       (gameLoopRef as any).physicsIntervalId = physicsInterval;
-      
-      // Рендер через rAF
+
       gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
@@ -846,21 +788,26 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         });
       }
-      
+
       ballsRef.current = [];
       setActualWinners([]);
       actualWinnersRef.current = [];
       setGameState("waiting");
     };
 
+    // Integrate old swipe-centering behavior here (restored)
     const setCameraModeSafe = (mode: "leader" | "swipe") => {
       setCameraMode(mode);
       cameraModeRef.current = mode;
 
       if (appRef.current && mode === "swipe") {
-        const scale = window.innerWidth / WORLD_WIDTH;
-        appRef.current.stage.x = 0;
-        appRef.current.stage.y = -scrollYRef.current * scale;
+        const deviceWidth = window.innerWidth;
+        const scale = deviceWidth / 1000; // restored older centering formula
+        const mapWidth = mapDataRef.current?.mapWidth || 1200;
+        const centerX = (mapWidth * scale - deviceWidth) / 2;
+        appRef.current.stage.x = -Math.max(0, centerX);
+        // use unscaled Y as in the old implementation
+        appRef.current.stage.y = -scrollYRef.current;
 
         ballsRef.current.forEach((ball) => {
           if (ball.indicator) ball.indicator.visible = false;
@@ -872,12 +819,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       startGame,
       resetGame,
       gameState,
-      setCameraMode: setCameraModeSafe,
+      setCameraMode: (mode: "leader" | "swipe") => {
+        setCameraModeSafe(mode);
+      },
       setScrollY: (y: number) => {
         scrollYRef.current = y;
         if (appRef.current && cameraModeRef.current === "swipe") {
-          const scale = window.innerWidth / WORLD_WIDTH;
-          appRef.current.stage.y = -y * scale;
+          // OLD behaviour: set unscaled stage.y
+          appRef.current.stage.y = -y;
         }
       },
       getGameSize: () => ({
@@ -893,7 +842,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           cancelAnimationFrame(gameLoopRef.current);
           gameLoopRef.current = null;
         }
-        
+
         try {
           if (appRef.current) {
             ballsRef.current.forEach((ball) => {
@@ -904,7 +853,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 if (ball.indicator) appRef.current!.stage.removeChild(ball.indicator);
               } catch (e) {}
             });
-            
+
             try {
               appRef.current.destroy({ removeView: true });
             } catch (e) {}
@@ -913,36 +862,99 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         } catch (error) {
           console.error("destroyCanvas error:", error);
         }
+
+        // Ensure audio fully cleaned
+        try {
+          if (oscillatorRef.current) {
+            try { oscillatorRef.current.stop(); } catch (e) {}
+            oscillatorRef.current = null;
+          }
+        } catch (e) {}
+        try {
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+          }
+        } catch (e) {}
+        isPlayingRef.current = false;
       },
     }));
 
+    // Keep scrollY prop in sync (restored old behavior: unscaled Y)
     useEffect(() => {
       scrollYRef.current = scrollY;
       if (appRef.current && cameraModeRef.current === "swipe") {
-        const scale = window.innerWidth / WORLD_WIDTH;
-        appRef.current.stage.y = -scrollY * scale;
+        appRef.current.stage.y = -scrollY;
       }
     }, [scrollY]);
 
+    // React to soundEnabled prop changes robustly:
     useEffect(() => {
-      if (soundEnabled) {
-        enableSound();
-      } else {
-        disableSound();
-      }
-    }, [soundEnabled, enableSound, disableSound]);
+      // update ref
+      soundEnabledRef.current = !!soundEnabled;
 
-    // Resize handler
+      if (!soundEnabled) {
+        // Stop any playing oscillator and mark not playing
+        try {
+          if (oscillatorRef.current) {
+            try { oscillatorRef.current.onended = null; } catch (e) {}
+            try { oscillatorRef.current.stop(); } catch (e) {}
+            oscillatorRef.current = null;
+          }
+        } catch (e) {}
+
+        try {
+          if (currentGainRef.current) {
+            try { currentGainRef.current.disconnect(); } catch (e) {}
+            currentGainRef.current = null;
+          }
+        } catch (e) {}
+        try {
+          if (currentFilterRef.current) {
+            try { currentFilterRef.current.disconnect(); } catch (e) {}
+            currentFilterRef.current = null;
+          }
+        } catch (e) {}
+
+        // close audio context to free resources (user requested mute)
+        try {
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+          }
+        } catch (e) {}
+
+        // allow new notes after re-enable
+        isPlayingRef.current = false;
+      } else {
+        // on enabling, ensure audio context exists and try to resume it
+        try {
+          if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          }
+          const ctx = audioContextRef.current;
+          if (ctx.state === "suspended") {
+            ctx.resume().catch((err) => console.warn("resume failed:", err));
+          }
+        } catch (e) {
+          console.warn("Failed to (re)create AudioContext:", e);
+        }
+      }
+    }, [soundEnabled]);
+
+    // Resize handler updated to use old centering behavior for swipe mode
     useEffect(() => {
       const handleResize = () => {
         if (appRef.current) {
           appRef.current.renderer.resize(window.innerWidth, window.innerHeight - 80);
-          
-          // Update camera position for swipe mode
+
           if (cameraModeRef.current === "swipe") {
-            const scale = window.innerWidth / WORLD_WIDTH;
-            appRef.current.stage.x = 0;
-            appRef.current.stage.y = -scrollYRef.current * scale;
+            const deviceWidth = window.innerWidth;
+            const scale = deviceWidth / 1000; // old centering formula
+            const mapWidth = mapDataRef.current?.mapWidth || 1200;
+            const centerX = (mapWidth * scale - deviceWidth) / 2;
+            appRef.current.stage.x = -Math.max(0, centerX);
+            appRef.current.stage.y = -scrollYRef.current; // unscaled Y
           }
         }
       };
@@ -951,7 +963,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Initialize PIXI
+    // PIXI initialization (unchanged)
     useEffect(() => {
       if (!canvasRef.current || appRef.current) return;
 
@@ -971,7 +983,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           antialias: false,
         });
 
-        // Фиксированный FPS для детерминизма
         PIXI.Ticker.shared.maxFPS = FIXED_FPS;
         PIXI.Ticker.shared.minFPS = FIXED_FPS;
 
