@@ -37,6 +37,10 @@ const precise = {
   floor: (x: number) => Math.floor(x),
 };
 
+// Хелперы камеры
+const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
 // Детерминированный ГПСЧ
 class DeterministicRandom {
   private seed: number;
@@ -487,7 +491,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       const deviceWidth = window.innerWidth;
       const deviceHeight = window.innerHeight;
-      const scale = precise.div(deviceWidth, 1200); // Фиксированные мировые координаты
+      const scale = deviceWidth / WORLD_WIDTH;
       appRef.current.stage.scale.set(scale);
 
       ballsRef.current.forEach((ball) => {
@@ -502,52 +506,52 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         spinner.graphics.rotation = spinner.rotation;
       });
 
-      // Camera logic
-      if (ballsRef.current.length > 0) {
-        const activeBalls = ballsRef.current.filter((ball) => !ball.finished);
-        if (activeBalls.length > 0) {
-          const leadingBall = activeBalls.reduce((leader, ball) => {
-            return ball.y > leader.y ? ball : leader;
-          });
+      // CAMERA (REPLACED)
+      if (mapDataRef.current && ballsRef.current.length > 0) {
+        const mapWidth = mapDataRef.current.mapWidth || WORLD_WIDTH;
+        const mapHeight = mapDataRef.current.mapHeight || WORLD_HEIGHT;
 
+        const activeBalls = ballsRef.current.filter(b => !b.finished);
+        if (activeBalls.length > 0) {
+          const leadingBall = activeBalls.reduce((leader, b) => (b.y > leader.y ? b : leader), activeBalls[0]);
+
+          // показываем индикатор только для лидера
           ballsRef.current.forEach((ball) => {
             if (ball.indicator) {
-              if (cameraModeRef.current === "leader") {
-                ball.indicator.visible = ball === leadingBall && !ball.finished;
-              } else {
-                ball.indicator.visible = false;
-              }
+              ball.indicator.visible = cameraModeRef.current === "leader" && ball === leadingBall && !ball.finished;
             }
           });
 
           if (cameraModeRef.current === "leader") {
-            const maxCameraY = mapDataRef.current
-              ? precise.add(precise.mul(mapDataRef.current.mapHeight, scale), precise.sub(deviceHeight, -60))
-              : precise.mul(2500, scale);
-            const targetCameraY = precise.abs(precise.sub(0, precise.abs(precise.sub(maxCameraY, precise.sub(precise.mul(leadingBall.y, scale), 320)))));
+            // Screen bounds for camera in pixels
+            const maxCameraY = Math.max(0, mapHeight * scale - deviceHeight);
+            const desiredCameraY = clamp(leadingBall.y * scale - deviceHeight / 2 + 80, 0, maxCameraY);
 
-            const currentCameraY = precise.mul(appRef.current.stage.y, -1);
-            const newCameraY = precise.add(currentCameraY, precise.mul(precise.sub(targetCameraY, currentCameraY), 0.03));
-            appRef.current.stage.y = precise.mul(newCameraY, -1);
+            const currentCameraY = -appRef.current.stage.y;
+            const newCameraY = lerp(currentCameraY, desiredCameraY, 0.12);
+            appRef.current.stage.y = -newCameraY;
 
-            const mapWidth = mapDataRef.current?.mapWidth || 1200;
-            const targetCameraX = precise.sub(precise.mul(leadingBall.x, scale), precise.div(deviceWidth, 2));
-            const minCameraX = 0;
-            const maxCameraX = precise.sub(precise.mul(mapWidth, scale), deviceWidth);
-            const clampedCameraX = precise.abs(precise.sub(minCameraX, precise.abs(precise.sub(maxCameraX, targetCameraX))));
+            const maxCameraX = Math.max(0, mapWidth * scale - deviceWidth);
+            const desiredCameraX = clamp(leadingBall.x * scale - deviceWidth / 2, 0, maxCameraX);
 
-            const currentCameraX = precise.mul(appRef.current.stage.x, -1);
-            const newCameraX = precise.add(currentCameraX, precise.mul(precise.sub(clampedCameraX, currentCameraX), 0.03));
-            appRef.current.stage.x = precise.mul(newCameraX, -1);
+            const currentCameraX = -appRef.current.stage.x;
+            const newCameraX = lerp(currentCameraX, desiredCameraX, 0.12);
+            appRef.current.stage.x = -newCameraX;
           }
         }
       }
 
-      if (cameraModeRef.current === "swipe") {
-        const mapWidth = mapDataRef.current?.mapWidth || 1200;
-        const centerX = precise.div(precise.sub(precise.mul(mapWidth, scale), deviceWidth), 2);
-        appRef.current.stage.x = precise.mul(precise.abs(precise.sub(0, precise.abs(precise.sub(0, centerX)))), -1);
-        appRef.current.stage.y = precise.mul(scrollYRef.current, -1);
+      // Swipe camera (фиксированная прокрутка)
+      if (cameraModeRef.current === "swipe" && mapDataRef.current) {
+        const mapWidth = mapDataRef.current.mapWidth || WORLD_WIDTH;
+        const mapHeight = mapDataRef.current.mapHeight || WORLD_HEIGHT;
+
+        const centerX = clamp((mapWidth * scale - deviceWidth) / 2, 0, Math.max(0, mapWidth * scale - deviceWidth));
+        appRef.current.stage.x = -centerX;
+
+        const maxCameraY = Math.max(0, mapHeight * scale - deviceHeight);
+        const targetY = clamp(scrollYRef.current * scale, 0, maxCameraY);
+        appRef.current.stage.y = -targetY;
       }
     };
 
@@ -597,6 +601,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           mapHeight: WORLD_HEIGHT,
           screenHeight: WORLD_HEIGHT
         };
+
+        // После генерации карты выставляем stage в начальную позицию
+        if (appRef.current) {
+          appRef.current.stage.x = 0;
+          appRef.current.stage.y = 0;
+
+          // Убедимся, что рендерер знает актуальный размер и scale
+          const deviceWidth = window.innerWidth;
+          const deviceHeight = window.innerHeight - 80;
+          appRef.current.renderer.resize(deviceWidth, deviceHeight);
+          appRef.current.stage.scale.set(deviceWidth / WORLD_WIDTH);
+        }
       } finally {
         Math.random = originalRandom;
       }
@@ -797,6 +813,44 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         disableSound();
       }
     }, [soundEnabled, enableSound, disableSound]);
+
+    // Resize handler
+    useEffect(() => {
+      const onResize = () => {
+        if (!appRef.current || !mapDataRef.current) return;
+
+        const w = window.innerWidth;
+        const h = Math.max(200, window.innerHeight - 80);
+
+        appRef.current.renderer.resize(w, h);
+
+        const scale = w / WORLD_WIDTH;
+        appRef.current.stage.scale.set(scale);
+
+        // Поддерживаем камеру — центрируем на лидере (если есть), иначе сброс
+        if (cameraModeRef.current === "leader" && ballsRef.current.length > 0) {
+          const activeBalls = ballsRef.current.filter(b => !b.finished);
+          if (activeBalls.length > 0) {
+            const leader = activeBalls.reduce((a,b) => b.y > a.y ? b : a, activeBalls[0]);
+            const maxCameraY = Math.max(0, mapDataRef.current.mapHeight * scale - h);
+            const desiredCameraY = clamp(leader.y * scale - h / 2 + 80, 0, maxCameraY);
+            appRef.current.stage.y = -desiredCameraY;
+
+            const maxCameraX = Math.max(0, mapDataRef.current.mapWidth * scale - w);
+            const desiredCameraX = clamp(leader.x * scale - w / 2, 0, maxCameraX);
+            appRef.current.stage.x = -desiredCameraX;
+          }
+        } else if (cameraModeRef.current === "swipe") {
+          const centerX = clamp((mapDataRef.current.mapWidth * scale - w) / 2, 0, Math.max(0, mapDataRef.current.mapWidth * scale - w));
+          appRef.current.stage.x = -centerX;
+          const maxCameraY = Math.max(0, mapDataRef.current.mapHeight * scale - h);
+          appRef.current.stage.y = -clamp(scrollYRef.current * scale, 0, maxCameraY);
+        }
+      };
+
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    }, []);
 
     // Initialize PIXI
     useEffect(() => {
