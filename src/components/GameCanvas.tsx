@@ -14,13 +14,18 @@ import RTTTL from "@/assets/Theme - Batman.txt?raw";
 // Константы для детерминированной физики
 const FIXED_FPS = 60;
 const FIXED_DELTA = 1000 / FIXED_FPS;
-const PHYSICS_SCALE = 1000;
+const SECONDS_PER_STEP = FIXED_DELTA / 1000;
 
-// Точные математические операции
+// Физические константы в единицах в секунду
+const GRAVITY_PER_SEC = 4.8; // 0.08 * 60 = 4.8 units/s^2
+const FRICTION_PER_SEC = 0.9988; // 0.9998^60 ≈ 0.9988 per second
+const SPINNER_SPEED_PER_SEC = 4.8; // 0.08 * 60 = 4.8 rad/s
+
+// Точные математические операции без округления
 const precise = {
-  add: (a: number, b: number) => Math.round((a + b) * PHYSICS_SCALE) / PHYSICS_SCALE,
-  mul: (a: number, b: number) => Math.round(a * b * PHYSICS_SCALE) / PHYSICS_SCALE,
-  sqrt: (x: number) => Math.round(Math.sqrt(x) * PHYSICS_SCALE) / PHYSICS_SCALE,
+  add: (a: number, b: number) => a + b,
+  mul: (a: number, b: number) => a * b,
+  sqrt: (x: number) => Math.sqrt(x),
 };
 
 // Детерминированный ГПСЧ
@@ -177,32 +182,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     };
 
     const playMelodyNote = useCallback(() => {
-      if (!soundEnabledRef.current || isPlayingRef.current) return;
-
-      const notes = melodyNotesRef.current;
-      if (notes.length === 0) return;
-      
-      const note = notes[currentNoteIndexRef.current % notes.length];
-      if (!note) return;
-
+      if (!soundEnabledRef.current) return;
+      // Не используем random.next() для сохранения детерминизма
+      // Просто воспроизводим фиксированную ноту
       try {
         const context = getAudioContext();
         const oscillator = context.createOscillator();
         const gainNode = context.createGain();
         
-        oscillator.frequency.setValueAtTime(note.frequency, context.currentTime);
-        gainNode.gain.setValueAtTime(0.1, context.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + note.duration / 1000);
+        oscillator.frequency.setValueAtTime(440, context.currentTime);
+        gainNode.gain.setValueAtTime(0.05, context.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
         
         oscillator.connect(gainNode);
         gainNode.connect(context.destination);
         
         oscillator.start();
-        oscillator.stop(context.currentTime + note.duration / 1000);
-        
-        currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+        oscillator.stop(context.currentTime + 0.1);
       } catch (error) {
-        console.error("Audio error:", error);
+        // Игнорируем ошибки аудио
       }
     }, [getAudioContext]);
 
@@ -214,12 +212,16 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       accumulatorRef.current += delta;
 
-      let steps = 0;
-      while (accumulatorRef.current >= FIXED_DELTA && steps < 5) {
+      // Защита от спирали смерти - ограничиваем накопленное время
+      const MAX_ACCUMULATED = 500; // максимум 500ms накопления
+      if (accumulatorRef.current > MAX_ACCUMULATED) {
+        accumulatorRef.current = MAX_ACCUMULATED;
+      }
+
+      while (accumulatorRef.current >= FIXED_DELTA) {
         updatePhysics();
         accumulatorRef.current -= FIXED_DELTA;
         physicsTimeRef.current += FIXED_DELTA;
-        steps++;
       }
 
       render();
@@ -232,16 +234,23 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       // Update spinners in physics
       spinnersRef.current.forEach((spinner) => {
-        spinner.rotation = precise.add(spinner.rotation, 0.08);
+        spinner.rotation = precise.add(spinner.rotation, SPINNER_SPEED_PER_SEC * SECONDS_PER_STEP);
       });
+
+      // Debug: log state every second
+      const stepCount = Math.floor(physicsTimeRef.current / FIXED_DELTA);
+      if (stepCount % 60 === 0 && stepCount > 0) {
+        const state = ballsRef.current.map(b => [b.x, b.y, b.dx, b.dy]);
+        console.log(`Physics step ${stepCount}:`, state);
+      }
 
       ballsRef.current.forEach((ball, ballIndex) => {
         if (ball.finished) return;
 
         // Применяем детерминированные физические вычисления
-        ball.dy = precise.add(ball.dy, 0.08);
-        ball.dx = precise.mul(ball.dx, 0.9998);
-        ball.dy = precise.mul(ball.dy, 0.9998);
+        ball.dy = precise.add(ball.dy, GRAVITY_PER_SEC * SECONDS_PER_STEP);
+        ball.dx = precise.mul(ball.dx, Math.pow(FRICTION_PER_SEC, SECONDS_PER_STEP));
+        ball.dy = precise.mul(ball.dy, Math.pow(FRICTION_PER_SEC, SECONDS_PER_STEP));
 
         // Rolling surface logic
         if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
@@ -458,7 +467,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       const deviceWidth = window.innerWidth;
       const deviceHeight = window.innerHeight;
-      const scale = deviceWidth / 1200; // Используем мировые координаты 1200px
+      const scale = deviceWidth / 1200; // Фиксированные мировые координаты
       appRef.current.stage.scale.set(scale);
 
       ballsRef.current.forEach((ball) => {
@@ -536,12 +545,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       lastTimeRef.current = 0;
       accumulatorRef.current = 0;
 
-      // Override Math.random to ensure deterministic behavior
-      if (!(Math as any).originalRandom) {
-        (Math as any).originalRandom = Math.random;
-      }
-      Math.random = () => randomRef.current!.next();
-
       // Clear previous game
       setActualWinners([]);
       actualWinnersRef.current = [];
@@ -552,11 +555,20 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      // Generate map
-      const mapData = generateMapFromId(appRef.current, gameData.mapId, gameData.seed);
-      obstaclesRef.current = mapData.obstacles;
-      spinnersRef.current = mapData.spinners;
-      mapDataRef.current = mapData;
+      // Ограниченное переопределение Math.random только для критических секций
+      const originalRandom = Math.random;
+      Math.random = () => randomRef.current!.next();
+      
+      try {
+        // Generate map
+        const mapData = generateMapFromId(appRef.current, gameData.mapId, gameData.seed);
+        obstaclesRef.current = mapData.obstacles;
+        spinnersRef.current = mapData.spinners;
+        mapDataRef.current = mapData;
+      } finally {
+        // Восстанавливаем Math.random сразу после генерации карты
+        Math.random = originalRandom;
+      }
 
       // Create balls with deterministic positions
       const newBalls: Ball[] = [];
@@ -592,7 +604,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
           indicator.visible = false;
 
-          const screenHeight = (mapData as any).screenHeight || 800;
+          const screenHeight = (mapDataRef.current as any)?.screenHeight || 800;
           const startX = precise.add(50, precise.mul(randomRef.current.next(), 1100));
           const startY = precise.add(50, precise.mul(randomRef.current.next(), screenHeight - 100));
           const initialDX = precise.mul(precise.add(randomRef.current.next(), -0.5), 2);
@@ -623,7 +635,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       ballsRef.current = newBalls;
 
       // Remove gate barrier
-      const gateBarrier = (mapData as any).gateBarrier;
+      const gateBarrier = (mapDataRef.current as any)?.gateBarrier;
       if (gateBarrier) {
         const index = obstaclesRef.current.indexOf(gateBarrier);
         if (index > -1) {
@@ -651,11 +663,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
         gameLoopRef.current = null;
-      }
-
-      // Restore original Math.random
-      if (typeof (Math as any).originalRandom === 'function') {
-        Math.random = (Math as any).originalRandom;
       }
 
       if (appRef.current) {
@@ -710,11 +717,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (gameLoopRef.current) {
           cancelAnimationFrame(gameLoopRef.current);
           gameLoopRef.current = null;
-        }
-        
-        // Restore original Math.random
-        if (typeof (Math as any).originalRandom === 'function') {
-          Math.random = (Math as any).originalRandom;
         }
         
         try {
