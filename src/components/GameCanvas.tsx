@@ -261,20 +261,20 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ball.dy = 0;
           ball.dx = precise.mul(ball.dx, SURFACE_FRICTION);
           
-          if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
+          if (precise.abs(ball.dx) < 0.03) ball.dx = 0;
           ball.x = precise.add(ball.x, ball.dx);
           
           // Детерминированный шум
           const noise = randomRef.current!.next();
-          if (Math.abs(ball.dx) < 0.1) {
-            const noiseValue = precise.mul(precise.add(noise, -0.5), 0.2);
+          if (precise.abs(ball.dx) < 0.1) {
+            const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.2);
             ball.dx = precise.add(ball.dx, noiseValue);
           }
 
           // Проверка падения
           if (obs.destroyed || 
-              ball.x < obs.x - halfW - 24 || 
-              ball.x > obs.x + halfW + 24) {
+              ball.x < precise.sub(precise.sub(obs.x, halfW), 24) || 
+              ball.x > precise.add(precise.add(obs.x, halfW), 24)) {
             (ball as any).onSurface = false;
             (ball as any).surfaceObstacle = null;
             ball.dy = 1;
@@ -301,15 +301,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (obstacle.destroyed) return;
 
         if (obstacle.type === "peg") {
-          const dx = precise.add(ball.x, -obstacle.x);
-          const dy = precise.add(ball.y, -obstacle.y);
+          const dx = precise.sub(ball.x, obstacle.x);
+          const dy = precise.sub(ball.y, obstacle.y);
           const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
           
-          // Избегаем sqrt где возможно
           if (distanceSq < 1296 && distanceSq > 0) { // 36^2 = 1296
             const distance = precise.sqrt(distanceSq);
-            const normalX = precise.mul(dx, 1 / distance);
-            const normalY = precise.mul(dy, 1 / distance);
+            const normalX = precise.div(dx, distance);
+            const normalY = precise.div(dy, distance);
 
             ball.x = precise.add(obstacle.x, precise.mul(normalX, 36));
             ball.y = precise.add(obstacle.y, precise.mul(normalY, 36));
@@ -319,7 +318,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               precise.mul(ball.dy, normalY)
             );
             
-            // Строго фиксированный порядок операций
             const impulseX = precise.mul(precise.mul(dotProduct, normalX), -2);
             const impulseY = precise.mul(precise.mul(dotProduct, normalY), -2);
             
@@ -335,46 +333,46 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             playMelodyNote();
           }
         } else if (obstacle.type === "barrier") {
-          const halfW = obstacle.width / 2;
-          const halfH = obstacle.height / 2;
+          const halfW = precise.div(obstacle.width, 2);
+          const halfH = precise.div(obstacle.height, 2);
 
-          if (Math.abs(ball.x - obstacle.x) < halfW + 24 && Math.abs(ball.y - obstacle.y) < halfH + 24) {
-            const overlapX = halfW + 24 - Math.abs(ball.x - obstacle.x);
-            const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
+          if (precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 && precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24) {
+            const overlapX = precise.sub(halfW + 24, precise.abs(precise.sub(ball.x, obstacle.x)));
+            const overlapY = precise.sub(halfH + 24, precise.abs(precise.sub(ball.y, obstacle.y)));
 
             if (overlapX < overlapY) {
               if (ball.x < obstacle.x) {
-                ball.x = precise.add(obstacle.x - halfW, -24);
+                ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
               } else {
-                ball.x = precise.add(obstacle.x + halfW, 24);
+                ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
               }
               ball.dx = precise.mul(ball.dx, -BRICK_BOUNCE);
             } else {
               if (ball.y < obstacle.y) {
-                ball.y = precise.add(obstacle.y - halfH, -24);
+                ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
                 (ball as any).onSurface = true;
                 (ball as any).surfaceObstacle = obstacle;
                 ball.dy = 0;
                 ball.dx = precise.mul(ball.dx, PEG_BOUNCE);
               } else {
-                ball.y = precise.add(obstacle.y + halfH, 24);
+                ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
                 ball.dy = precise.mul(ball.dy, -BRICK_BOUNCE);
               }
             }
             playMelodyNote();
           }
         } else if (obstacle.type === "brick") {
-          const halfW = obstacle.width / 2;
-          const halfH = obstacle.height / 2;
+          const halfW = precise.div(obstacle.width, 2);
+          const halfH = precise.div(obstacle.height, 2);
 
-          if (Math.abs(ball.x - obstacle.x) < halfW + 24 && Math.abs(ball.y - obstacle.y) < halfH + 24) {
+          if (precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 && precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24) {
             obstacle.destroyed = true;
             if (obstacle.graphics && appRef.current) {
               appRef.current.stage.removeChild(obstacle.graphics);
             }
 
-            const overlapX = halfW + 24 - Math.abs(ball.x - obstacle.x);
-            const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
+            const overlapX = precise.sub(halfW + 24, precise.abs(precise.sub(ball.x, obstacle.x)));
+            const overlapY = precise.sub(halfH + 24, precise.abs(precise.sub(ball.y, obstacle.y)));
 
             if (overlapX < overlapY) {
               ball.dx = precise.mul(ball.dx, -BRICK_BOUNCE);
@@ -384,19 +382,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             playMelodyNote();
           }
         } else if (obstacle.type === "spinner") {
-          const dx = precise.add(ball.x, -obstacle.x);
-          const dy = precise.add(ball.y, -obstacle.y);
+          const dx = precise.sub(ball.x, obstacle.x);
+          const dy = precise.sub(ball.y, obstacle.y);
           const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
 
           if (distanceSq < 2304 && distanceSq > 0) { // 48^2 = 2304
             const distance = precise.sqrt(distanceSq);
-            const normalX = precise.mul(dx, 1 / distance);
-            const normalY = precise.mul(dy, 1 / distance);
+            const normalX = precise.div(dx, distance);
+            const normalY = precise.div(dy, distance);
 
             ball.x = precise.add(obstacle.x, precise.mul(normalX, 48));
             ball.y = precise.add(obstacle.y, precise.mul(normalY, 48));
 
-            const tangentX = -normalY;
+            const tangentX = precise.mul(normalY, -1);
             const tangentY = normalX;
             const currentSpeed = precise.sqrt(distanceSq);
 
@@ -412,26 +410,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       ballsRef.current.forEach((otherBall) => {
         if (otherBall === ball || otherBall.finished) return;
 
-        const dx = precise.add(ball.x, -otherBall.x);
-        const dy = precise.add(ball.y, -otherBall.y);
+        const dx = precise.sub(ball.x, otherBall.x);
+        const dy = precise.sub(ball.y, otherBall.y);
         const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
         
         if (distanceSq < 2304 && distanceSq > 0) { // 48^2 = 2304
           const distance = precise.sqrt(distanceSq);
-          const normalX = precise.mul(dx, 1 / distance);
-          const normalY = precise.mul(dy, 1 / distance);
+          const normalX = precise.div(dx, distance);
+          const normalY = precise.div(dy, distance);
 
-          const overlap = precise.add(48, -distance);
+          const overlap = precise.sub(48, distance);
           const halfOverlap = precise.mul(overlap, 0.5);
 
-          // Строго фиксированный порядок коррекции позиции
           ball.x = precise.add(ball.x, precise.mul(normalX, halfOverlap));
           ball.y = precise.add(ball.y, precise.mul(normalY, halfOverlap));
-          otherBall.x = precise.add(otherBall.x, precise.mul(normalX, -halfOverlap));
-          otherBall.y = precise.add(otherBall.y, precise.mul(normalY, -halfOverlap));
+          otherBall.x = precise.sub(otherBall.x, precise.mul(normalX, halfOverlap));
+          otherBall.y = precise.sub(otherBall.y, precise.mul(normalY, halfOverlap));
 
-          const relVelX = precise.add(ball.dx, -otherBall.dx);
-          const relVelY = precise.add(ball.dy, -otherBall.dy);
+          const relVelX = precise.sub(ball.dx, otherBall.dx);
+          const relVelY = precise.sub(ball.dy, otherBall.dy);
           const relSpeed = precise.add(
             precise.mul(relVelX, normalX),
             precise.mul(relVelY, normalY)
@@ -442,9 +439,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const impulse = precise.mul(relSpeed, BALL_BOUNCE);
           const halfImpulse = precise.mul(impulse, 0.5);
 
-          // Строго фиксированный порядок импульсов
-          ball.dx = precise.add(ball.dx, precise.mul(normalX, -halfImpulse));
-          ball.dy = precise.add(ball.dy, precise.mul(normalY, -halfImpulse));
+          ball.dx = precise.sub(ball.dx, precise.mul(normalX, halfImpulse));
+          ball.dy = precise.sub(ball.dy, precise.mul(normalY, halfImpulse));
           otherBall.dx = precise.add(otherBall.dx, precise.mul(normalX, halfImpulse));
           otherBall.dy = precise.add(otherBall.dy, precise.mul(normalY, halfImpulse));
 
@@ -455,11 +451,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       // === ГРАНИЧНЫЕ КОЛЛИЗИИ ===
       if (ball.x < 24) {
         ball.x = 24;
-        ball.dx = precise.mul(Math.abs(ball.dx), PEG_BOUNCE);
+        ball.dx = precise.mul(precise.abs(ball.dx), PEG_BOUNCE);
       }
       if (ball.x > 1176) {
         ball.x = 1176;
-        ball.dx = precise.mul(-Math.abs(ball.dx), PEG_BOUNCE);
+        ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), PEG_BOUNCE);
       }
 
       // Win/death zones
@@ -491,13 +487,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       const deviceWidth = window.innerWidth;
       const deviceHeight = window.innerHeight;
-      const scale = deviceWidth / 1200; // Фиксированные мировые координаты
+      const scale = precise.div(deviceWidth, 1200); // Фиксированные мировые координаты
       appRef.current.stage.scale.set(scale);
 
       ballsRef.current.forEach((ball) => {
-        ball.graphics.position.set(Math.round(ball.x), Math.round(ball.y));
+        ball.graphics.position.set(precise.floor(ball.x), precise.floor(ball.y));
         if (ball.indicator) {
-          ball.indicator.position.set(Math.round(ball.x), Math.round(ball.y - 40));
+          ball.indicator.position.set(precise.floor(ball.x), precise.floor(precise.sub(ball.y, 40)));
         }
       });
 
@@ -526,32 +522,32 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           if (cameraModeRef.current === "leader") {
             const maxCameraY = mapDataRef.current
-              ? mapDataRef.current.mapHeight * scale - deviceHeight + 60
-              : 2500 * scale;
-            const targetCameraY = Math.max(0, Math.min(maxCameraY, leadingBall.y * scale - 320));
+              ? precise.add(precise.mul(mapDataRef.current.mapHeight, scale), precise.sub(deviceHeight, -60))
+              : precise.mul(2500, scale);
+            const targetCameraY = precise.abs(precise.sub(0, precise.abs(precise.sub(maxCameraY, precise.sub(precise.mul(leadingBall.y, scale), 320)))));
 
-            const currentCameraY = -appRef.current.stage.y;
-            const newCameraY = currentCameraY + (targetCameraY - currentCameraY) * 0.03;
-            appRef.current.stage.y = -newCameraY;
+            const currentCameraY = precise.mul(appRef.current.stage.y, -1);
+            const newCameraY = precise.add(currentCameraY, precise.mul(precise.sub(targetCameraY, currentCameraY), 0.03));
+            appRef.current.stage.y = precise.mul(newCameraY, -1);
 
             const mapWidth = mapDataRef.current?.mapWidth || 1200;
-            const targetCameraX = leadingBall.x * scale - deviceWidth / 2;
+            const targetCameraX = precise.sub(precise.mul(leadingBall.x, scale), precise.div(deviceWidth, 2));
             const minCameraX = 0;
-            const maxCameraX = mapWidth * scale - deviceWidth;
-            const clampedCameraX = Math.max(minCameraX, Math.min(maxCameraX, targetCameraX));
+            const maxCameraX = precise.sub(precise.mul(mapWidth, scale), deviceWidth);
+            const clampedCameraX = precise.abs(precise.sub(minCameraX, precise.abs(precise.sub(maxCameraX, targetCameraX))));
 
-            const currentCameraX = -appRef.current.stage.x;
-            const newCameraX = currentCameraX + (clampedCameraX - currentCameraX) * 0.03;
-            appRef.current.stage.x = -newCameraX;
+            const currentCameraX = precise.mul(appRef.current.stage.x, -1);
+            const newCameraX = precise.add(currentCameraX, precise.mul(precise.sub(clampedCameraX, currentCameraX), 0.03));
+            appRef.current.stage.x = precise.mul(newCameraX, -1);
           }
         }
       }
 
       if (cameraModeRef.current === "swipe") {
         const mapWidth = mapDataRef.current?.mapWidth || 1200;
-        const centerX = (mapWidth * scale - deviceWidth) / 2;
-        appRef.current.stage.x = -Math.max(0, centerX);
-        appRef.current.stage.y = -scrollYRef.current;
+        const centerX = precise.div(precise.sub(precise.mul(mapWidth, scale), deviceWidth), 2);
+        appRef.current.stage.x = precise.mul(precise.abs(precise.sub(0, precise.abs(precise.sub(0, centerX)))), -1);
+        appRef.current.stage.y = precise.mul(scrollYRef.current, -1);
       }
     };
 
@@ -821,6 +817,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           backgroundColor: 0x1a1a2e,
           antialias: false,
         });
+
+        // Фиксированный FPS для детерминизма
+        PIXI.Ticker.shared.maxFPS = FIXED_FPS;
+        PIXI.Ticker.shared.minFPS = FIXED_FPS;
 
         if (canvasRef.current && pixiApp.canvas) {
           canvasRef.current.appendChild(pixiApp.canvas);
