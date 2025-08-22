@@ -72,26 +72,27 @@ export const generateMapFromId = (
   const leftBottomX = worldWidth / 2 - funnelWidthBottom / 2;
   const rightBottomX = worldWidth / 2 + funnelWidthBottom / 2;
   
-  // Уменьшаем размеры барьеров и увеличиваем количество сегментов для плавности
-  const segments = 30;
+  // Create smooth funnel barriers with fewer, longer segments
+  const segments = 15;
   for (let i = 0; i < segments; i++) {
     const t = i / (segments - 1);
     const x1 = leftTopX + (leftBottomX - leftTopX) * t;
     const x2 = rightTopX + (rightBottomX - rightTopX) * t;
     const y = topY + funnelHeight * t;
 
-    obstacles.push(
-      { x: x1, y: y, width: 10, height: 5, type: 'barrier' },
-      { x: x2, y: y, width: 10, height: 5, type: 'barrier' }
-    );
+    // Left barrier
+    obstacles.push({ x: x1, y: y, width: 30, height: 10, type: 'barrier' });
+    
+    // Right barrier
+    obstacles.push({ x: x2, y: y, width: 30, height: 10, type: 'barrier' });
   }
 
-  const passageSegments = 15;
-  for (let i = 0; i < passageSegments; i++) {
-    const y = bottomY + (verticalPassage / passageSegments) * i;
+  // Vertical passage barriers
+  for (let i = 0; i < 5; i++) {
+    const y = bottomY + (verticalPassage / 5) * i;
     obstacles.push(
-      { x: leftBottomX, y: y, width: 10, height: 5, type: 'barrier' },
-      { x: rightBottomX, y: y, width: 10, height: 5, type: 'barrier' }
+      { x: leftBottomX, y: y, width: 10, height: 10, type: 'barrier' },
+      { x: rightBottomX, y: y, width: 10, height: 10, type: 'barrier' }
     );
   }
 

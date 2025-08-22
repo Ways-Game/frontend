@@ -12,7 +12,7 @@ export const MAP_BLOCKS: MapBlock[] = [
 
       for (let row = 0; row < 4; row++) {
         for (let col = 0; col < Math.floor(mapWidth / 100); col++) {
-          const x = 100 + col * 100 + (row % 2) * 50;
+          const x = col * 100 + (row % 2) * 50;
           const y = startY + 50 + row * 80;
           
           const brick = new PIXI.Graphics();
@@ -24,22 +24,7 @@ export const MAP_BLOCKS: MapBlock[] = [
         }
       }
 
-      // Edge barriers to prevent balls from hugging the sides
-      for (let row = 0; row < 4; row++) {
-        const y = startY + 50 + row * 80;
-        const leftBar = new PIXI.Graphics();
-        leftBar.roundRect(24 - 20, y - 10, 40, 20, 4);
-        leftBar.fill(0x8B4513).stroke({ width: 1, color: 0x654321 });
-        app.stage.addChild(leftBar);
-        obstacles.push({ x: 24, y, width: 40, height: 20, type: 'barrier', graphics: leftBar as any });
 
-        const rightBarX = mapWidth - 24;
-        const rightBar = new PIXI.Graphics();
-        rightBar.roundRect(rightBarX - 20, y - 10, 40, 20, 4);
-        rightBar.fill(0x8B4513).stroke({ width: 1, color: 0x654321 });
-        app.stage.addChild(rightBar);
-        obstacles.push({ x: rightBarX, y, width: 40, height: 20, type: 'barrier', graphics: rightBar as any });
-      }
 
       return { obstacles, spinners };
     }
@@ -55,7 +40,7 @@ export const MAP_BLOCKS: MapBlock[] = [
 
       for (let row = 0; row < 4; row++) {
         for (let col = 0; col < Math.floor(mapWidth / 120); col++) {
-          const x = 120 + col * 120 + (row % 2) * 60;
+          const x = col * 120 + (row % 2) * 60;
           const y = startY + 80 + row * 120;
           
           obstacles.push({ x, y, width: 30, height: 30, type: 'peg' });
@@ -66,20 +51,7 @@ export const MAP_BLOCKS: MapBlock[] = [
         }
       }
 
-      // Add extra pegs along edges to discourage edge-falling
-      for (let y = startY + 40; y < startY + 80 + 4 * 120; y += 60) {
-        const leftX = 40;
-        const rightX = mapWidth - 40;
-        obstacles.push({ x: leftX, y, width: 30, height: 30, type: 'peg' });
-        const pegL = new PIXI.Graphics();
-        pegL.circle(leftX, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
-        app.stage.addChild(pegL);
 
-        obstacles.push({ x: rightX, y, width: 30, height: 30, type: 'peg' });
-        const pegR = new PIXI.Graphics();
-        pegR.circle(rightX, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
-        app.stage.addChild(pegR);
-      }
 
       return { obstacles, spinners };
     }
@@ -95,7 +67,7 @@ export const MAP_BLOCKS: MapBlock[] = [
 
       for (let row = 0; row < 3; row++) {
         for (let col = 0; col < Math.floor(mapWidth / 200); col++) {
-          const x = 150 + col * 200 + (row % 2) * 100;
+          const x = col * 200 + (row % 2) * 100;
           const y = startY + 100 + row * 180;
           
           obstacles.push({ x, y, width: 80, height: 80, type: 'spinner' });
@@ -228,7 +200,7 @@ export const MAP_BLOCKS: MapBlock[] = [
 
       for (let row = 0; row < 3; row++) {
         for (let col = 0; col < Math.floor(mapWidth / 250); col++) {
-          const x = 150 + col * 250 + (row % 2) * 125;
+          const x = col * 250 + (row % 2) * 125;
           const y = startY + 100 + row * 150;
           
           obstacles.push({ x, y, width: 40, height: 40, type: 'peg' });
@@ -307,7 +279,7 @@ export const MAP_BLOCKS: MapBlock[] = [
       const spinners: Spinner[] = [];
 
       for (let i = 0; i < 6; i++) {
-        const x = 100 + i * 180;
+        const x = i * (mapWidth / 6) + (mapWidth / 12);
         const y = startY + 100 + Math.sin(i) * 50;
         const height = 80 + Math.cos(i) * 30;
         
@@ -337,8 +309,21 @@ export const MAP_BLOCKS: MapBlock[] = [
       const barWidth = Math.floor(mapWidth * 0.9);
       const barHeight = 18;
 
-      // Add an obstacle entry for physics
-      obstacles.push({ x, y, width: barWidth, height: barHeight, type: 'spinner' });
+      // Add obstacle entries for physics - multiple smaller segments for better collision
+      const segments = 8;
+      for (let i = 0; i < segments; i++) {
+        const segmentWidth = barWidth / segments;
+        const segmentX = x - barWidth/2 + segmentWidth * i + segmentWidth/2;
+        
+        obstacles.push({ 
+          x: segmentX, 
+          y, 
+          width: segmentWidth, 
+          height: barHeight, 
+          type: 'spinner',
+          destroyed: false
+        });
+      }
 
       const spinner = new PIXI.Graphics();
       // Draw a long thin bar centered at (0,0)
