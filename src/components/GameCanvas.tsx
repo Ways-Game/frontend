@@ -954,7 +954,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
             console.log((mapWidth * scale) / 2)
             const centerX = 0;
-            appRef.current.stage.x = 600;
+            appRef.current.stage.x = 300;
             appRef.current.stage.y = -scrollYRef.current; 
           }
         }
