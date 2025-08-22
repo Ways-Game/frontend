@@ -950,11 +950,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           if (cameraModeRef.current === "swipe") {
             const deviceWidth = window.innerWidth;
-            const scale = deviceWidth / 1000; // old centering formula
-            const mapWidth = mapDataRef.current?.mapWidth || 1200;
-            const centerX = (mapWidth * scale - deviceWidth) / 2;
+            const scale = deviceWidth / 1000; 
+            const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
+            const centerX = (mapWidth * scale) / 2;
             appRef.current.stage.x = -Math.max(0, centerX);
-            appRef.current.stage.y = -scrollYRef.current; // unscaled Y
+            appRef.current.stage.y = -scrollYRef.current; 
           }
         }
       };

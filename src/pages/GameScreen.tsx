@@ -206,10 +206,13 @@ const autoStartPendingRef = useRef<any | null>(null);
 
       
       if (newMode === 'swipe') {
+
         const gameSize = gameCanvasRef.current.getGameSize()
         const containerHeight = window.innerHeight - 80
         const scale = window.innerWidth / 1200
         const scaledHeight = gameSize.height * scale
+      console.log(scaledHeight, containerHeight)
+
         setMaxScrollY( 2500 + containerHeight)
       }
     }
