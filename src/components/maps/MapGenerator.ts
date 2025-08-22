@@ -2,33 +2,24 @@ import * as PIXI from "pixi.js";
 import { MAP_BLOCKS } from "./MapBlocks";
 import { Obstacle, Spinner, MapData } from "@/types/maps";
 
-export const generateMapFromId = (app: PIXI.Application, mapId: number[] | number, seed: string) => {
-  const mapWidth = 1200;
+export const generateMapFromId = (
+  app: PIXI.Application, 
+  mapId: number[] | number, 
+  options: { seed: string; worldWidth: number; worldHeight: number; random: any }
+) => {
+  const { worldWidth, worldHeight } = options;
   const obstacles: Obstacle[] = [];
   const spinners: Spinner[] = [];
-
-  // Create RNG from seed
-  let h = 1779033703 ^ seed.length;
-  for (let i = 0; i < seed.length; i++) {
-    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
-    h = (h << 13) | (h >>> 19);
-  }
-  const rng = () => {
-    h = Math.imul(h ^ (h >>> 16), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    h ^= h >>> 16;
-    return (h >>> 0) / 4294967296;
-  };
 
   // Clear stage
   app.stage.removeChildren();
 
-  const screenHeight = typeof window !== 'undefined' ? window.innerHeight - 80 : 800;
+  const screenHeight = worldHeight;
   const startSection = new PIXI.Graphics();
-  startSection.rect(0, 0, mapWidth, screenHeight).fill(0x2c3e50);
+  startSection.rect(0, 0, worldWidth, screenHeight).fill(0x2c3e50);
   app.stage.addChild(startSection);
   
-  const gateBarrier = { x: mapWidth / 2, y: screenHeight, width: mapWidth, height: 20, type: 'barrier' as const };
+  const gateBarrier = { x: worldWidth / 2, y: screenHeight, width: worldWidth, height: 20, type: 'barrier' as const };
   obstacles.push(gateBarrier);
 
   // Generate map from mapId
@@ -47,7 +38,7 @@ export const generateMapFromId = (app: PIXI.Application, mapId: number[] | numbe
   }
 
   selectedBlocks.forEach(block => {
-    const { obstacles: blockObstacles, spinners: blockSpinners } = block.createBlock(app, currentY, mapWidth);
+    const { obstacles: blockObstacles, spinners: blockSpinners } = block.createBlock(app, currentY, worldWidth);
     obstacles.push(...blockObstacles);
     spinners.push(...blockSpinners);
     currentY += block.height + 150;
@@ -64,22 +55,22 @@ export const generateMapFromId = (app: PIXI.Application, mapId: number[] | numbe
   const blueFunnel = new PIXI.Graphics();
   blueFunnel.beginFill(0x4ecdc4);
   blueFunnel.moveTo(-5, topY);
-  blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, bottomY);
-  blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, passageBottomY);
+  blueFunnel.lineTo(worldWidth / 2 - funnelWidthBottom / 2, bottomY);
+  blueFunnel.lineTo(worldWidth / 2 - funnelWidthBottom / 2, passageBottomY);
   blueFunnel.lineTo(-5, passageBottomY);
   blueFunnel.closePath();
-  blueFunnel.moveTo(mapWidth + 5, topY);
-  blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, bottomY);
-  blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, passageBottomY);
-  blueFunnel.lineTo(mapWidth + 5, passageBottomY);
+  blueFunnel.moveTo(worldWidth + 5, topY);
+  blueFunnel.lineTo(worldWidth / 2 + funnelWidthBottom / 2, bottomY);
+  blueFunnel.lineTo(worldWidth / 2 + funnelWidthBottom / 2, passageBottomY);
+  blueFunnel.lineTo(worldWidth + 5, passageBottomY);
   blueFunnel.closePath();
   blueFunnel.endFill();
   app.stage.addChild(blueFunnel);
 
   const leftTopX = -5;
-  const rightTopX = mapWidth + 5;
-  const leftBottomX = mapWidth / 2 - funnelWidthBottom / 2;
-  const rightBottomX = mapWidth / 2 + funnelWidthBottom / 2;
+  const rightTopX = worldWidth + 5;
+  const leftBottomX = worldWidth / 2 - funnelWidthBottom / 2;
+  const rightBottomX = worldWidth / 2 + funnelWidthBottom / 2;
   
   // Уменьшаем размеры барьеров и увеличиваем количество сегментов для плавности
   const segments = 30;
@@ -109,7 +100,7 @@ export const generateMapFromId = (app: PIXI.Application, mapId: number[] | numbe
   const cellSize = 20;
 
   const finishLine = new PIXI.Graphics();
-  for (let x = 0; x < mapWidth; x += cellSize) {
+  for (let x = 0; x < worldWidth; x += cellSize) {
     for (let y = 0; y < stripeHeight; y += cellSize) {
       const isBlack = ((x / cellSize) + (y / cellSize)) % 2 === 0;
       finishLine.beginFill(isBlack ? 0x000000 : 0xffffff, 0.8);
@@ -122,9 +113,9 @@ export const generateMapFromId = (app: PIXI.Application, mapId: number[] | numbe
   const winY = finishY + stripeHeight;
   const deathY = winY + 200;
 
-  const mapData = { obstacles, spinners, mapWidth, mapHeight: currentY + funnelHeight + verticalPassage + 100, winY, deathY };
+  const mapData = { obstacles, spinners, mapWidth: worldWidth, mapHeight: currentY + funnelHeight + verticalPassage + 100, winY, deathY };
   (mapData as any).gateBarrier = gateBarrier;
-  (mapData as any).screenHeight = screenHeight;
+  (mapData as any).screenHeight = worldHeight;
   return mapData;
 };
 

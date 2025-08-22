@@ -14,32 +14,27 @@ import RTTTL from "@/assets/Theme - Batman.txt?raw";
 // Константы для детерминированной физики
 const FIXED_FPS = 60;
 const FIXED_DELTA = 1000 / FIXED_FPS;
-const SECONDS_PER_STEP = 1 / 60; // ВСЕГДА используем 1/60 для детерминизма
+const WORLD_WIDTH = 1200;
+const WORLD_HEIGHT = 2500;
 
-// Предварительно вычисленные константы (захардкожены для одинакового результата)
-const GRAVITY_PER_STEP = 0.08; // 4.8 * (1/60)
-const FRICTION_PER_STEP = 0.9999800039998667; // Math.pow(0.9988, 1/60)
-const SPINNER_SPEED_PER_STEP = 0.08; // 4.8 * (1/60)
+// Предвычисленные константы (НЕ вычисляем в цикле!)
+const GRAVITY_PER_STEP = 0.08;
+const FRICTION_STEP = 0.9999800039998667; // Math.pow(0.9988, 1/60)
+const SPINNER_STEP = 0.08;
 const SURFACE_FRICTION = 0.997;
 const PEG_BOUNCE = 0.95;
 const BRICK_BOUNCE = 0.9;
 const BALL_BOUNCE = 0.92;
 
-// Точные математические операции с фиксированным порядком вычислений
+// Детерминированные математические операции
 const precise = {
-  add: (a: number, b: number) => {
-    const sum = a + b;
-    return sum === 0 ? 0 : sum; // Нормализуем -0 к 0
-  },
-  mul: (a: number, b: number) => {
-    const product = a * b;
-    return product === 0 ? 0 : product;
-  },
-  sqrt: (x: number) => {
-    if (x === 0) return 0;
-    if (x === 1) return 1;
-    return Math.sqrt(x);
-  },
+  add: (a: number, b: number) => a + b,
+  sub: (a: number, b: number) => a - b,
+  mul: (a: number, b: number) => a * b,
+  div: (a: number, b: number) => a / b,
+  sqrt: (x: number) => Math.sqrt(x),
+  abs: (x: number) => (x < 0 ? -x : x),
+  floor: (x: number) => Math.floor(x),
 };
 
 // Детерминированный ГПСЧ
@@ -218,28 +213,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     }, [getAudioContext]);
 
-    // Детерминированный игровой цикл
-    const gameLoop = (time: number) => {
-      if (!lastTimeRef.current) lastTimeRef.current = time;
-      const delta = time - lastTimeRef.current;
-      lastTimeRef.current = time;
+    // Детерминированный игровой цикл с фиксированным шагом
+    const gameLoop = () => {
+      updatePhysics();
+      physicsTimeRef.current += FIXED_DELTA;
+    };
 
-      accumulatorRef.current += delta;
-
-      // Защита от спирали смерти - ограничиваем накопленное время
-      const MAX_ACCUMULATED = 500; // максимум 500ms накопления
-      if (accumulatorRef.current > MAX_ACCUMULATED) {
-        accumulatorRef.current = MAX_ACCUMULATED;
-      }
-
-      while (accumulatorRef.current >= FIXED_DELTA) {
-        updatePhysics();
-        accumulatorRef.current -= FIXED_DELTA;
-        physicsTimeRef.current += FIXED_DELTA;
-      }
-
+    const renderLoop = () => {
       render();
-      gameLoopRef.current = requestAnimationFrame(gameLoop);
+      gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
     // Детерминированное обновление физики
@@ -255,7 +237,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       // Обновляем спиннеры с детерминированным шагом
       spinnersRef.current.forEach((spinner) => {
-        spinner.rotation = precise.add(spinner.rotation, SPINNER_SPEED_PER_STEP);
+        spinner.rotation = precise.add(spinner.rotation, SPINNER_STEP);
       });
 
       ballsRef.current.forEach((ball, ballIndex) => {
@@ -266,8 +248,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         ball.dy = precise.add(ball.dy, GRAVITY_PER_STEP);
         
         // 2. Трение (воздух)
-        ball.dx = precise.mul(ball.dx, FRICTION_PER_STEP);
-        ball.dy = precise.mul(ball.dy, FRICTION_PER_STEP);
+        ball.dx = precise.mul(ball.dx, FRICTION_STEP);
+        ball.dy = precise.mul(ball.dy, FRICTION_STEP);
 
         // 3. Логика поверхностей
         if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
@@ -597,18 +579,29 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      // Ограниченное переопределение Math.random только для критических секций
+      // Генерация карты с фиксированными размерами мира
       const originalRandom = Math.random;
       Math.random = () => randomRef.current!.next();
       
       try {
-        // Generate map
-        const mapData = generateMapFromId(appRef.current, gameData.mapId, gameData.seed);
-        obstaclesRef.current = mapData.obstacles;
-        spinnersRef.current = mapData.spinners;
-        mapDataRef.current = mapData;
+        const mapData = generateMapFromId(appRef.current, gameData.mapId, {
+          seed: gameData.seed,
+          worldWidth: WORLD_WIDTH,
+          worldHeight: WORLD_HEIGHT,
+          random: randomRef.current
+        });
+        
+        // Сортируем для детерминированного порядка
+        obstaclesRef.current = mapData.obstacles.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+        spinnersRef.current = mapData.spinners.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+        
+        mapDataRef.current = {
+          ...mapData,
+          mapWidth: WORLD_WIDTH,
+          mapHeight: WORLD_HEIGHT,
+          screenHeight: WORLD_HEIGHT
+        };
       } finally {
-        // Восстанавливаем Math.random сразу после генерации карты
         Math.random = originalRandom;
       }
 
@@ -646,10 +639,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
           indicator.visible = false;
 
-          const screenHeight = (mapDataRef.current as any)?.screenHeight || 800;
-          const startX = precise.add(50, precise.mul(randomRef.current.next(), 1100));
-          const startY = precise.add(50, precise.mul(randomRef.current.next(), screenHeight - 100));
-          const initialDX = precise.mul(precise.add(randomRef.current.next(), -0.5), 2);
+          const startX = precise.add(50, precise.mul(randomRef.current.next(), WORLD_WIDTH - 100));
+          const startY = precise.add(50, precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100));
+          const initialDX = precise.mul(precise.sub(randomRef.current.next(), 0.5), 2);
 
           ballGraphics.position.set(startX, startY);
           indicator.position.set(startX, startY - 40);
@@ -697,11 +689,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         console.warn("Failed to init melody notes", e);
       }
 
-      // Start game loop
-      gameLoopRef.current = requestAnimationFrame(gameLoop);
+      // Запускаем физику через setInterval для стабильности
+      const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
+      (gameLoopRef as any).physicsIntervalId = physicsInterval;
+      
+      // Рендер через rAF
+      gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
     const resetGame = () => {
+      if ((gameLoopRef as any).physicsIntervalId) {
+        clearInterval((gameLoopRef as any).physicsIntervalId);
+        (gameLoopRef as any).physicsIntervalId = null;
+      }
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
         gameLoopRef.current = null;
@@ -756,6 +756,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         height: mapDataRef.current?.mapHeight || 2500,
       }),
       destroyCanvas: () => {
+        if ((gameLoopRef as any).physicsIntervalId) {
+          clearInterval((gameLoopRef as any).physicsIntervalId);
+          (gameLoopRef as any).physicsIntervalId = null;
+        }
         if (gameLoopRef.current) {
           cancelAnimationFrame(gameLoopRef.current);
           gameLoopRef.current = null;
@@ -832,6 +836,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       initGame();
 
       return () => {
+        if ((gameLoopRef as any).physicsIntervalId) {
+          clearInterval((gameLoopRef as any).physicsIntervalId);
+        }
         if (gameLoopRef.current) {
           cancelAnimationFrame(gameLoopRef.current);
         }

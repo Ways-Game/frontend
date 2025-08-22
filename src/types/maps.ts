@@ -31,6 +31,7 @@ export interface MapData {
   mapHeight: number;
   winY: number;
   deathY: number;
+  screenHeight: number;
 }
 
 export interface MapBlock {
