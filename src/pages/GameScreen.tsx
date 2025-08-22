@@ -69,7 +69,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       const scale = window.innerWidth / 1200 // Исправлено с 1000 на 1200
       const scaledHeight = gameSize.height * scale
       console.log(scaledHeight, containerHeight)
-      setMaxScrollY(Math.max(0, 2500))
+      setMaxScrollY( 2500 + containerHeight)
     }
   }
 
@@ -210,10 +210,11 @@ const autoStartPendingRef = useRef<any | null>(null);
         const containerHeight = window.innerHeight - 80
         const scale = window.innerWidth / 1200
         const scaledHeight = gameSize.height * scale
-        setMaxScrollY(2500)
+        setMaxScrollY( 2500 + containerHeight)
       }
     }
-  }
+  } 
+  
 
   const handleScrollUp = () => {
     const newY = Math.max(0, scrollY - 200)
@@ -274,12 +275,6 @@ const autoStartPendingRef = useRef<any | null>(null);
     setTouchStartY(0);
   }
 
-  const testModal = () => {
-    // open modal with dummy data for testing
-    setWinnerInfo({ name: 'Tester' });
-    setGameResult({ result: 'win', prize: 100 });
-    setGameModal('win');
-  }
 
   return (
     <div 
@@ -389,7 +384,6 @@ const autoStartPendingRef = useRef<any | null>(null);
           </WaysButton>
           
           <div className="flex items-center gap-2">
-            <button onClick={testModal} className="w-4 h-4 bg-red-500 rounded text-xs">T</button>
             <WaysButton
               variant="round"
               onClick={() => setSoundEnabled(!soundEnabled)}
