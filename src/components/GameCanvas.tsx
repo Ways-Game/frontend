@@ -730,11 +730,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       if (appRef.current && mode === "swipe") {
         const deviceWidth = window.innerWidth;
-        const scale = deviceWidth / 1000;
-        const mapWidth = mapDataRef.current?.mapWidth || 1200;
+        const scale = deviceWidth / WORLD_WIDTH; // Используем WORLD_WIDTH вместо 1000
+        const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
         const centerX = (mapWidth * scale - deviceWidth) / 2;
         appRef.current.stage.x = -Math.max(0, centerX);
-        appRef.current.stage.y = -scrollYRef.current;
+        appRef.current.stage.y = -scrollYRef.current * scale; // Умножаем на scale
 
         ballsRef.current.forEach((ball) => {
           if (ball.indicator) ball.indicator.visible = false;
@@ -793,7 +793,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     useEffect(() => {
       scrollYRef.current = scrollY;
       if (appRef.current && cameraModeRef.current === "swipe") {
-        appRef.current.stage.y = -scrollY;
+        const scale = window.innerWidth / WORLD_WIDTH;
+        appRef.current.stage.y = -scrollY * scale;
       }
     }, [scrollY]);
 

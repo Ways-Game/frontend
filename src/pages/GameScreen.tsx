@@ -66,7 +66,7 @@ const autoStartPendingRef = useRef<any | null>(null);
     if (gameCanvasRef.current && cameraMode === 'swipe') {
       const gameSize = gameCanvasRef.current.getGameSize()
       const containerHeight = window.innerHeight - 80
-      const scale = window.innerWidth / 1000
+      const scale = window.innerWidth / 1200 // Исправлено с 1000 на 1200
       const scaledHeight = gameSize.height * scale
       setMaxScrollY(Math.max(0, scaledHeight - containerHeight))
     }
@@ -206,9 +206,10 @@ const autoStartPendingRef = useRef<any | null>(null);
       if (newMode === 'swipe') {
         const gameSize = gameCanvasRef.current.getGameSize()
         const containerHeight = window.innerHeight - 80
-        const scale = window.innerWidth / 1000
+        const scale = window.innerWidth / 1200 // Исправлено с 1000 на 1200
         const scaledHeight = gameSize.height * scale
         setMaxScrollY(Math.max(0, scaledHeight - containerHeight))
+        setScrollY(0) // Сбрасываем прокрутку при переключении режима
       }
     }
   }
