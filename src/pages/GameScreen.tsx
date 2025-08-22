@@ -68,7 +68,8 @@ const autoStartPendingRef = useRef<any | null>(null);
       const containerHeight = window.innerHeight - 80
       const scale = window.innerWidth / 1200 // Исправлено с 1000 на 1200
       const scaledHeight = gameSize.height * scale
-      setMaxScrollY(Math.max(0, scaledHeight - containerHeight))
+      console.log(scaledHeight, containerHeight)
+      setMaxScrollY(Math.max(0, 2500))
     }
   }
 
