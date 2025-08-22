@@ -57,11 +57,34 @@ interface GameCanvasProps {
   soundEnabled?: boolean;
 }
 
-const FIXED_POINT_SCALE = 1000;
-const FP_SCALE = FIXED_POINT_SCALE;
+// Fixed-point arithmetic for deterministic physics
+const FIXED_SCALE = 65536; // 16.16 fixed point
 
-// Детерминированный PRNG (mulberry32)
-function stringToSeed(s: string) {
+// Convert float to fixed-point
+function toFixed(v: number): number {
+  return Math.round(v * FIXED_SCALE) | 0;
+}
+
+// Convert fixed-point to float
+function fromFixed(v: number): number {
+  return v / FIXED_SCALE;
+}
+
+// Fixed-point arithmetic operations
+function fixedAdd(a: number, b: number): number {
+  return (a + b) | 0;
+}
+
+function fixedMul(a: number, b: number): number {
+  return Math.round((a * b) / FIXED_SCALE) | 0;
+}
+
+function fixedDiv(a: number, b: number): number {
+  return Math.round((a * FIXED_SCALE) / b) | 0;
+}
+
+// Deterministic PRNG
+function stringToSeed(s: string): number {
   let h = 2166136261 >>> 0;
   for (let i = 0; i < s.length; i++) {
     h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
@@ -71,7 +94,7 @@ function stringToSeed(s: string) {
 
 function mulberry32(seed: number) {
   let t = seed >>> 0;
-  return function () {
+  return function (): number {
     t = (t + 0x6D2B79F5) >>> 0;
     let r = Math.imul(t ^ (t >>> 15), 1 | t);
     r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
@@ -79,63 +102,43 @@ function mulberry32(seed: number) {
   };
 }
 
-// Детерминированный шум
-function hash32(a: number) {
-  a = (a ^ (a >>> 16)) >>> 0;
-  a = Math.imul(a, 0x45d9f3b) >>> 0;
-  a = (a ^ (a >>> 16)) >>> 0;
-  a = Math.imul(a, 0x45d9f3b) >>> 0;
-  a = (a ^ (a >>> 16)) >>> 0;
-  return a >>> 0;
-}
-
-function deterministicNoise(seedNum: number, ballIndex: number, step: number) {
+// Deterministic noise
+function deterministicNoise(seedNum: number, ballIndex: number, step: number): number {
   const combo = ((seedNum & 0xffff) << 16) ^ ((ballIndex & 0xfff) << 4) ^ (step & 0xfff);
-  const h = hash32(combo);
+  let h = combo >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  h = Math.imul(h, 0x45d9f3b) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
   return (h >>> 0) / 4294967296;
 }
 
-// Пиксель-перфектная арифметика (только целые числа)
-const PIXEL_SCALE = 1000; // Масштаб для субпиксельной точности
-function toPixel(v: number) { return Math.round(v * PIXEL_SCALE); }
-function fromPixel(v: number) { return v / PIXEL_SCALE; }
-function pixelAdd(a: number, b: number) { return a + b; }
-function pixelMul(a: number, b: number) { return Math.round((a * b) / PIXEL_SCALE); }
+// Deterministic math functions using lookup tables
+const SIN_TABLE_SIZE = 1024;
+const sinTable = new Array(SIN_TABLE_SIZE);
+for (let i = 0; i < SIN_TABLE_SIZE; i++) {
+  sinTable[i] = toFixed(Math.sin((i * 2 * Math.PI) / SIN_TABLE_SIZE));
+}
 
-const deterministicMath = {
-  sqrt: (x: number): number => {
-    // Реализация квадратного корня через алгоритм Ньютона
-    if (x <= 0) return 0;
-    let guess = x;
-    for (let i = 0; i < 10; i++) {
-      guess = 0.5 * (guess + x / guess);
-    }
-    return guess;
-  },
+function fixedSin(angle: number): number {
+  const normalizedAngle = ((angle % toFixed(2 * Math.PI)) + toFixed(2 * Math.PI)) % toFixed(2 * Math.PI);
+  const index = Math.round((fromFixed(normalizedAngle) * SIN_TABLE_SIZE) / (2 * Math.PI)) % SIN_TABLE_SIZE;
+  return sinTable[index];
+}
 
-  atan2: (y: number, x: number): number => {
-    // Детерминированная реализация atan2
-    if (x > 0) return Math.atan(y / x);
-    if (x < 0) return Math.atan(y / x) + Math.PI;
-    return (y > 0 ? Math.PI : -Math.PI) / 2;
-  },
+function fixedCos(angle: number): number {
+  return fixedSin(fixedAdd(angle, toFixed(Math.PI / 2)));
+}
 
-  sin: (x: number): number => {
-    // Табличный синус с фиксированной точностью
-    x %= Math.PI * 2;
-    const table = [
-      0, 0.2588, 0.5, 0.7071, 0.866, 0.9659, 1, 0.9659, 0.866, 0.7071, 0.5,
-      0.2588, 0, -0.2588, -0.5, -0.7071, -0.866, -0.9659, -1, -0.9659, -0.866,
-      -0.7071, -0.5, -0.2588,
-    ];
-    const index = Math.round(x / (Math.PI / 12)) % table.length;
-    return table[index >= 0 ? index : table.length + index];
-  },
+function fixedSqrt(x: number): number {
+  if (x <= 0) return 0;
+  let guess = x >> 1;
+  for (let i = 0; i < 8; i++) {
+    guess = (guess + fixedDiv(x, guess)) >> 1;
+  }
+  return guess;
+}
 
-  cos: (x: number): number => {
-    return deterministicMath.sin(x + Math.PI / 2);
-  },
-};
+
 
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
   (
@@ -596,38 +599,40 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           app.stage.addChild(ballGraphics);
           app.stage.addChild(indicator);
 
+          const initialDX = (rngRef.current!() - 0.5) * 2;
+          
           newBalls.push({
             id: `${gameData.seed}_${ballIndex}`,
             x: startX,
             y: startY,
-            dx: (rngRef.current!() - 0.5) * 2,
+            dx: initialDX,
             dy: 0,
-            // Пиксель-перфектные координаты
-            pixelX: toPixel(startX),
-            pixelY: toPixel(startY),
-            pixelDX: toPixel((rngRef.current!() - 0.5) * 2),
-            pixelDY: toPixel(0),
+            // Fixed-point coordinates for deterministic physics
+            fixedX: toFixed(startX),
+            fixedY: toFixed(startY),
+            fixedDX: toFixed(initialDX),
+            fixedDY: toFixed(0),
             graphics: ballGraphics,
             color: 0x4ecdc4,
             playerId: playerId,
             finished: false,
             indicator: indicator,
             index: ballIndex,
-            // Для плавной интерполяции
+            // For smooth visual interpolation
             renderX: startX,
             renderY: startY,
-            prevX: startX,
-            prevY: startY,
+            prevRenderX: startX,
+            prevRenderY: startY,
           } as Ball & { 
             index: number; 
             renderX: number; 
             renderY: number; 
-            prevX: number; 
-            prevY: number;
-            pixelX: number;
-            pixelY: number;
-            pixelDX: number;
-            pixelDY: number;
+            prevRenderX: number; 
+            prevRenderY: number;
+            fixedX: number;
+            fixedY: number;
+            fixedDX: number;
+            fixedDY: number;
           });
           ballIndex++;
         }
@@ -859,72 +864,81 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         let frameCount = 0;
 
-        // Пиксель-перфектная физика (только целые числа)
+        // Fixed-point deterministic physics
         const updateBalls = () => {
           if (!rngRef.current) return;
 
           const step = physicsStepCount.current;
 
           ballsRef.current.forEach((ball, ballIndex) => {
-            const ballPixel = ball as Ball & {
-              pixelX: number; pixelY: number; pixelDX: number; pixelDY: number;
-              renderX: number; renderY: number; prevX: number; prevY: number;
+            const ballFixed = ball as Ball & {
+              fixedX: number; fixedY: number; fixedDX: number; fixedDY: number;
+              renderX: number; renderY: number; prevRenderX: number; prevRenderY: number;
               index: number;
             };
             if (ball.finished) return;
 
             if (!ball.bounceCount) ball.bounceCount = 0;
 
-            // Apply gravity (пиксель-перфектная арифметика)
-            ballPixel.pixelDY = pixelAdd(ballPixel.pixelDY, toPixel(0.08));
-            ballPixel.pixelDX = pixelMul(ballPixel.pixelDX, toPixel(0.9998));
-            ballPixel.pixelDY = pixelMul(ballPixel.pixelDY, toPixel(0.9998));
+            // Store previous render position for smooth interpolation
+            ballFixed.prevRenderX = ballFixed.renderX || ball.x;
+            ballFixed.prevRenderY = ballFixed.renderY || ball.y;
 
-            // Store previous position for collision detection
-            const prevX = ball.x;
-            const prevY = ball.y;
+            // Apply gravity (fixed-point arithmetic)
+            ballFixed.fixedDY = fixedAdd(ballFixed.fixedDY, toFixed(0.08));
+            ballFixed.fixedDX = fixedMul(ballFixed.fixedDX, toFixed(0.9998));
+            ballFixed.fixedDY = fixedMul(ballFixed.fixedDY, toFixed(0.9998));
 
-            // Rolling on surface logic: if ball is flagged as onSurface, keep it on top of the obstacle
+            // Store previous physics position
+            const prevX = fromFixed(ballFixed.fixedX);
+            const prevY = fromFixed(ballFixed.fixedY);
+
+            // Rolling on surface logic
             if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
               const obs: any = (ball as any).surfaceObstacle;
               const halfW = obs.width / 2;
               const halfH = obs.height / 2;
 
-              // keep ball sitting on top
-              ball.y = obs.y - halfH - 24;
-              ball.dy = 0;
+              // Keep ball on top (fixed-point)
+              ballFixed.fixedY = toFixed(obs.y - halfH - 24);
+              ballFixed.fixedDY = 0;
 
-              // Rolling friction and small slowdown (slightly reduced friction)
-              ball.dx *= 0.997;
-              if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
+              // Rolling friction
+              ballFixed.fixedDX = fixedMul(ballFixed.fixedDX, toFixed(0.997));
+              if (Math.abs(fromFixed(ballFixed.fixedDX)) < 0.03) ballFixed.fixedDX = 0;
 
-              // Move horizontally along surface (пиксель-перфектно)
-              ballPixel.pixelX = pixelAdd(ballPixel.pixelX, ballPixel.pixelDX);
-              // Детерминированный шум без условного RNG
-              const ballIdx = ballPixel.index || ballIndex;
+              // Move horizontally (fixed-point)
+              ballFixed.fixedX = fixedAdd(ballFixed.fixedX, ballFixed.fixedDX);
+              
+              // Deterministic noise
+              const ballIdx = ballFixed.index || ballIndex;
               const noise = deterministicNoise(seedNumRef.current, ballIdx, step);
-              if (Math.abs(ballPixel.pixelDX) < toPixel(0.1)) {
-                ballPixel.pixelDX = pixelAdd(ballPixel.pixelDX, toPixel((noise - 0.5) * 0.2));
+              if (Math.abs(fromFixed(ballFixed.fixedDX)) < 0.1) {
+                ballFixed.fixedDX = fixedAdd(ballFixed.fixedDX, toFixed((noise - 0.5) * 0.2));
               }
 
-              // If ball moved beyond obstacle edges or obstacle destroyed — fall off
+              // Check if ball falls off
+              const currentX = fromFixed(ballFixed.fixedX);
               if (
                 obs.destroyed ||
-                ball.x < obs.x - halfW - 24 ||
-                ball.x > obs.x + halfW + 24
+                currentX < obs.x - halfW - 24 ||
+                currentX > obs.x + halfW + 24
               ) {
                 (ball as any).onSurface = false;
                 (ball as any).surfaceObstacle = null;
-                // give a small downward velocity to start falling
-                ball.dy = 1;
+                ballFixed.fixedDY = toFixed(1);
               }
-
-              // skip normal collision handling for this frame
             } else {
-              // Normal movement (пиксель-перфектно)
-              ballPixel.pixelX = pixelAdd(ballPixel.pixelX, ballPixel.pixelDX);
-              ballPixel.pixelY = pixelAdd(ballPixel.pixelY, ballPixel.pixelDY);
+              // Normal movement (fixed-point)
+              ballFixed.fixedX = fixedAdd(ballFixed.fixedX, ballFixed.fixedDX);
+              ballFixed.fixedY = fixedAdd(ballFixed.fixedY, ballFixed.fixedDY);
             }
+
+            // Update physics position for collision detection
+            ball.x = fromFixed(ballFixed.fixedX);
+            ball.y = fromFixed(ballFixed.fixedY);
+            ball.dx = fromFixed(ballFixed.fixedDX);
+            ball.dy = fromFixed(ballFixed.fixedDY);
 
             // Collision detection with obstacles
             for (let i = 0; i < obstaclesRef.current.length; i++) {
@@ -932,29 +946,29 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               if (obstacle.destroyed) continue;
 
               if (obstacle.type === "peg") {
-                const obsPixelX = toPixel(obstacle.x);
-                const obsPixelY = toPixel(obstacle.y);
-                const dx = ballPixel.pixelX - obsPixelX;
-                const dy = ballPixel.pixelY - obsPixelY;
-                const distSq = dx * dx + dy * dy;
-                const collisionThresh = toPixel(36) * toPixel(36);
+                const obsFixedX = toFixed(obstacle.x);
+                const obsFixedY = toFixed(obstacle.y);
+                const dx = ballFixed.fixedX - obsFixedX;
+                const dy = ballFixed.fixedY - obsFixedY;
+                const distSq = fixedMul(dx, dx) + fixedMul(dy, dy);
+                const collisionThresh = fixedMul(toFixed(36), toFixed(36));
 
                 if (distSq < collisionThresh) {
-                  // Целочисленный квадратный корень
-                  let dist = Math.floor(Math.sqrt(distSq));
-                  if (dist === 0) dist = 1;
+                  // Fixed-point square root
+                  const dist = fixedSqrt(distSq);
+                  if (dist === 0) return;
                   
-                  const normalX = Math.round((dx * PIXEL_SCALE) / dist);
-                  const normalY = Math.round((dy * PIXEL_SCALE) / dist);
+                  const normalX = fixedDiv(dx, dist);
+                  const normalY = fixedDiv(dy, dist);
 
-                  // Move ball outside of peg (пиксель-перфектно)
-                  ballPixel.pixelX = obsPixelX + Math.round((normalX * toPixel(36)) / PIXEL_SCALE);
-                  ballPixel.pixelY = obsPixelY + Math.round((normalY * toPixel(36)) / PIXEL_SCALE);
+                  // Move ball outside of peg
+                  ballFixed.fixedX = fixedAdd(obsFixedX, fixedMul(normalX, toFixed(36)));
+                  ballFixed.fixedY = fixedAdd(obsFixedY, fixedMul(normalY, toFixed(36)));
 
-                  // Reflect velocity with energy loss (целочисленно)
-                  const dotProduct = Math.round((ballPixel.pixelDX * normalX + ballPixel.pixelDY * normalY) / PIXEL_SCALE);
-                  ballPixel.pixelDX = Math.round((ballPixel.pixelDX - 2 * dotProduct * normalX / PIXEL_SCALE) * 0.95);
-                  ballPixel.pixelDY = Math.round((ballPixel.pixelDY - 2 * dotProduct * normalY / PIXEL_SCALE) * 0.95);
+                  // Reflect velocity with energy loss
+                  const dotProduct = fixedAdd(fixedMul(ballFixed.fixedDX, normalX), fixedMul(ballFixed.fixedDY, normalY));
+                  ballFixed.fixedDX = fixedMul(fixedAdd(ballFixed.fixedDX, fixedMul(toFixed(-2), fixedMul(dotProduct, normalX))), toFixed(0.95));
+                  ballFixed.fixedDY = fixedMul(fixedAdd(ballFixed.fixedDY, fixedMul(toFixed(-2), fixedMul(dotProduct, normalY))), toFixed(0.95));
                   playMelodyNote();
                 }
               } else if (obstacle.type === "barrier") {
@@ -981,33 +995,34 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
-                    // Hit left or right side (pixel-perfect)
-                    if (ballPixel.pixelX < toPixel(obstacle.x)) {
-                      ballPixel.pixelX = toPixel(obstacle.x - halfW - 24);
+                    // Hit left or right side
+                    if (ballFixed.fixedX < toFixed(obstacle.x)) {
+                      ballFixed.fixedX = toFixed(obstacle.x - halfW - 24);
                     } else {
-                      ballPixel.pixelX = toPixel(obstacle.x + halfW + 24);
+                      ballFixed.fixedX = toFixed(obstacle.x + halfW + 24);
                     }
-                    // consider barrier angle
-                    const barrierAngle = deterministicMath.atan2(
-                      (obstacle as any).y - (obstacle as any).prevY || 0,
-                      (obstacle as any).x - (obstacle as any).prevX || 0
-                    );
-                    ballPixel.pixelDX = Math.round((-fromPixel(ballPixel.pixelDX) * 0.9 + deterministicMath.sin(barrierAngle) * 0.5) * PIXEL_SCALE);
-                    ballPixel.pixelDY = Math.round((fromPixel(ballPixel.pixelDY) - deterministicMath.cos(barrierAngle) * 0.5) * PIXEL_SCALE);
+                    // Consider barrier angle
+                    const prevY = (obstacle as any).prevY || obstacle.y;
+                    const prevX = (obstacle as any).prevX || obstacle.x;
+                    const angleY = toFixed(obstacle.y - prevY);
+                    const angleX = toFixed(obstacle.x - prevX);
+                    const angle = Math.atan2(fromFixed(angleY), fromFixed(angleX));
+                    
+                    ballFixed.fixedDX = fixedAdd(fixedMul(ballFixed.fixedDX, toFixed(-0.9)), fixedMul(toFixed(Math.sin(angle)), toFixed(0.5)));
+                    ballFixed.fixedDY = fixedAdd(ballFixed.fixedDY, fixedMul(toFixed(-Math.cos(angle)), toFixed(0.5)));
                     playMelodyNote();
                   } else {
-                    // Hit top or bottom side (pixel-perfect)
-                    if (ballPixel.pixelY < toPixel(obstacle.y)) {
-                      // place on top and start rolling along surface
-                      ballPixel.pixelY = toPixel(obstacle.y - halfH - 24);
+                    // Hit top or bottom side
+                    if (ballFixed.fixedY < toFixed(obstacle.y)) {
+                      // Place on top and start rolling
+                      ballFixed.fixedY = toFixed(obstacle.y - halfH - 24);
                       (ball as any).onSurface = true;
                       (ball as any).surfaceObstacle = obstacle;
-                      // zero vertical velocity and reduce horizontal speed a bit
-                      ballPixel.pixelDY = 0;
-                      ballPixel.pixelDX = Math.round(ballPixel.pixelDX * 0.95);
+                      ballFixed.fixedDY = 0;
+                      ballFixed.fixedDX = fixedMul(ballFixed.fixedDX, toFixed(0.95));
                     } else {
-                      ballPixel.pixelY = toPixel(obstacle.y + halfH + 24);
-                      ballPixel.pixelDY = Math.round(-ballPixel.pixelDY * 0.9);
+                      ballFixed.fixedY = toFixed(obstacle.y + halfH + 24);
+                      ballFixed.fixedDY = fixedMul(ballFixed.fixedDY, toFixed(-0.9));
                       playMelodyNote();
                     }
                   }
@@ -1029,106 +1044,116 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
-                    ballPixel.pixelDX = Math.round(-ballPixel.pixelDX * 0.9);
+                    ballFixed.fixedDX = fixedMul(ballFixed.fixedDX, toFixed(-0.9));
                   } else {
-                    ballPixel.pixelDY = Math.round(-ballPixel.pixelDY * 0.9);
+                    ballFixed.fixedDY = fixedMul(ballFixed.fixedDY, toFixed(-0.9));
                   }
                   playMelodyNote();
                 }
               } else if (obstacle.type === "spinner") {
-                const dx = ball.x - obstacle.x;
-                const dy = ball.y - obstacle.y;
-                const distance = deterministicMath.sqrt(dx * dx + dy * dy);
+                const dx = toFixed(ball.x - obstacle.x);
+                const dy = toFixed(ball.y - obstacle.y);
+                const distanceSq = fixedAdd(fixedMul(dx, dx), fixedMul(dy, dy));
+                const collisionDist = toFixed(48);
 
-                if (distance < 48) {
-                  // Уменьшаю радиус коллизии воронки
-                  const normalX = dx / distance;
-                  const normalY = dy / distance;
+                if (distanceSq < fixedMul(collisionDist, collisionDist)) {
+                  const distance = fixedSqrt(distanceSq);
+                  if (distance === 0) return;
+                  
+                  const normalX = fixedDiv(dx, distance);
+                  const normalY = fixedDiv(dy, distance);
 
-                  // Move ball outside spinner (pixel-perfect)
-                  ballPixel.pixelX = toPixel(obstacle.x + normalX * 48);
-                  ballPixel.pixelY = toPixel(obstacle.y + normalY * 48);
+                  // Move ball outside spinner
+                  ballFixed.fixedX = fixedAdd(toFixed(obstacle.x), fixedMul(normalX, collisionDist));
+                  ballFixed.fixedY = fixedAdd(toFixed(obstacle.y), fixedMul(normalY, collisionDist));
 
                   // Add spin effect
-                  const tangentX = -normalY;
+                  const tangentX = fixedMul(normalY, toFixed(-1));
                   const tangentY = normalX;
-                  const spinForce = 1.6;
+                  const spinForce = toFixed(1.6);
+                  const currentSpeed = fixedSqrt(fixedAdd(fixedMul(ballFixed.fixedDX, ballFixed.fixedDX), fixedMul(ballFixed.fixedDY, ballFixed.fixedDY)));
 
-                  ballPixel.pixelDX = Math.round((normalX * Math.abs(fromPixel(ballPixel.pixelDX)) * 0.75 + tangentX * spinForce) * PIXEL_SCALE);
-                  ballPixel.pixelDY = Math.round((normalY * Math.abs(fromPixel(ballPixel.pixelDY)) * 0.75 + tangentY * spinForce) * PIXEL_SCALE);
+                  ballFixed.fixedDX = fixedAdd(fixedMul(normalX, fixedMul(currentSpeed, toFixed(0.75))), fixedMul(tangentX, spinForce));
+                  ballFixed.fixedDY = fixedAdd(fixedMul(normalY, fixedMul(currentSpeed, toFixed(0.75))), fixedMul(tangentY, spinForce));
                   playMelodyNote();
                 }
               }
             }
 
-            // Ball-to-ball collisions with proper physics
+            // Ball-to-ball collisions with fixed-point physics
             ballsRef.current.forEach((otherBall) => {
               if (otherBall === ball || otherBall.finished) return;
 
-              const dx = ball.x - otherBall.x;
-              const dy = ball.y - otherBall.y;
-              const distance = deterministicMath.sqrt(dx * dx + dy * dy);
+              const otherFixed = otherBall as Ball & { fixedX: number; fixedY: number; fixedDX: number; fixedDY: number };
+              
+              const dx = ballFixed.fixedX - otherFixed.fixedX;
+              const dy = ballFixed.fixedY - otherFixed.fixedY;
+              const distSq = fixedAdd(fixedMul(dx, dx), fixedMul(dy, dy));
+              const collisionThresh = fixedMul(toFixed(48), toFixed(48));
 
-              if (distance < 48 && distance > 0) {
-                const normalX = dx / distance;
-                const normalY = dy / distance;
-
-                // Ball-to-ball collisions (pixel-perfect)
-                const ballPixel2 = ball as Ball & { pixelX: number; pixelY: number; pixelDX: number; pixelDY: number };
-                const otherPixel = otherBall as Ball & { pixelX: number; pixelY: number; pixelDX: number; pixelDY: number };
+              if (distSq < collisionThresh && distSq > 0) {
+                const distance = fixedSqrt(distSq);
+                if (distance === 0) return;
                 
-                const dx2 = ballPixel2.pixelX - otherPixel.pixelX;
-                const dy2 = ballPixel2.pixelY - otherPixel.pixelY;
-                const distSq2 = dx2 * dx2 + dy2 * dy2;
-                const collisionThresh2 = toPixel(48) * toPixel(48);
+                const normalX = fixedDiv(dx, distance);
+                const normalY = fixedDiv(dy, distance);
                 
-                if (distSq2 < collisionThresh2 && distSq2 > 0) {
-                  let dist2 = Math.floor(Math.sqrt(distSq2));
-                  if (dist2 === 0) dist2 = 1;
-                  
-                  const normalX2 = Math.round((dx2 * PIXEL_SCALE) / dist2);
-                  const normalY2 = Math.round((dy2 * PIXEL_SCALE) / dist2);
-                  
-                  // Separate balls
-                  const overlap2 = toPixel(48) - dist2;
-                  const halfOverlap = Math.round(overlap2 / 2);
-                  
-                  ballPixel2.pixelX += Math.round((normalX2 * halfOverlap) / PIXEL_SCALE);
-                  ballPixel2.pixelY += Math.round((normalY2 * halfOverlap) / PIXEL_SCALE);
-                  otherPixel.pixelX -= Math.round((normalX2 * halfOverlap) / PIXEL_SCALE);
-                  otherPixel.pixelY -= Math.round((normalY2 * halfOverlap) / PIXEL_SCALE);
-                  
-                  // Calculate relative velocity
-                  const relVelX = ballPixel2.pixelDX - otherPixel.pixelDX;
-                  const relVelY = ballPixel2.pixelDY - otherPixel.pixelDY;
-                  const relSpeed = Math.round((relVelX * normalX2 + relVelY * normalY2) / PIXEL_SCALE);
-                  
-                  if (relSpeed > 0) return; // Balls moving apart
-                  
-                  // Collision response
-                  const impulse2 = Math.round(relSpeed * 0.92);
-                  
-                  ballPixel2.pixelDX -= Math.round((impulse2 * normalX2) / (2 * PIXEL_SCALE));
-                  ballPixel2.pixelDY -= Math.round((impulse2 * normalY2) / (2 * PIXEL_SCALE));
-                  otherPixel.pixelDX += Math.round((impulse2 * normalX2) / (2 * PIXEL_SCALE));
-                  otherPixel.pixelDY += Math.round((impulse2 * normalY2) / (2 * PIXEL_SCALE));
-                  
-                  playMelodyNote();
-                }
+                // Separate balls
+                const overlap = fixedAdd(toFixed(48), fixedMul(distance, toFixed(-1)));
+                const halfOverlap = fixedDiv(overlap, toFixed(2));
+                
+                ballFixed.fixedX = fixedAdd(ballFixed.fixedX, fixedMul(normalX, halfOverlap));
+                ballFixed.fixedY = fixedAdd(ballFixed.fixedY, fixedMul(normalY, halfOverlap));
+                otherFixed.fixedX = fixedAdd(otherFixed.fixedX, fixedMul(normalX, fixedMul(halfOverlap, toFixed(-1))));
+                otherFixed.fixedY = fixedAdd(otherFixed.fixedY, fixedMul(normalY, fixedMul(halfOverlap, toFixed(-1))));
+                
+                // Calculate relative velocity
+                const relVelX = fixedAdd(ballFixed.fixedDX, fixedMul(otherFixed.fixedDX, toFixed(-1)));
+                const relVelY = fixedAdd(ballFixed.fixedDY, fixedMul(otherFixed.fixedDY, toFixed(-1)));
+                const relSpeed = fixedAdd(fixedMul(relVelX, normalX), fixedMul(relVelY, normalY));
+                
+                if (relSpeed > 0) return; // Balls moving apart
+                
+                // Collision response
+                const impulse = fixedMul(relSpeed, toFixed(0.92));
+                const halfImpulse = fixedDiv(impulse, toFixed(2));
+                
+                ballFixed.fixedDX = fixedAdd(ballFixed.fixedDX, fixedMul(normalX, fixedMul(halfImpulse, toFixed(-1))));
+                ballFixed.fixedDY = fixedAdd(ballFixed.fixedDY, fixedMul(normalY, fixedMul(halfImpulse, toFixed(-1))));
+                otherFixed.fixedDX = fixedAdd(otherFixed.fixedDX, fixedMul(normalX, halfImpulse));
+                otherFixed.fixedDY = fixedAdd(otherFixed.fixedDY, fixedMul(normalY, halfImpulse));
+                
                 playMelodyNote();
               }
             });
 
-            // Boundary collisions (pixel-perfect)
-            if (ballPixel.pixelX < toPixel(24)) {
-              ballPixel.pixelX = toPixel(24);
-              ballPixel.pixelDX = Math.round(Math.abs(ballPixel.pixelDX) * 0.95);
+            // Boundary collisions (fixed-point)
+            if (ballFixed.fixedX < toFixed(24)) {
+              ballFixed.fixedX = toFixed(24);
+              ballFixed.fixedDX = fixedMul(toFixed(Math.abs(fromFixed(ballFixed.fixedDX))), toFixed(0.95));
               playCollisionSound();
             }
-            if (ballPixel.pixelX > toPixel(1176)) {
-              ballPixel.pixelX = toPixel(1176);
-              ballPixel.pixelDX = Math.round(-Math.abs(ballPixel.pixelDX) * 0.95);
+            if (ballFixed.fixedX > toFixed(1176)) {
+              ballFixed.fixedX = toFixed(1176);
+              ballFixed.fixedDX = fixedMul(toFixed(-Math.abs(fromFixed(ballFixed.fixedDX))), toFixed(0.95));
               playCollisionSound();
+            }
+
+            // Update physics position
+            ball.x = fromFixed(ballFixed.fixedX);
+            ball.y = fromFixed(ballFixed.fixedY);
+            ball.dx = fromFixed(ballFixed.fixedDX);
+            ball.dy = fromFixed(ballFixed.fixedDY);
+
+            // Smooth interpolation for rendering
+            const alpha = 0.8; // Interpolation factor
+            ballFixed.renderX = ballFixed.prevRenderX + (ball.x - ballFixed.prevRenderX) * alpha;
+            ballFixed.renderY = ballFixed.prevRenderY + (ball.y - ballFixed.prevRenderY) * alpha;
+
+            // Update visual position
+            ball.graphics.position.set(ballFixed.renderX, ballFixed.renderY);
+            if (ball.indicator) {
+              ball.indicator.position.set(ballFixed.renderX, ballFixed.renderY - 40);
             }
 
             // Check win/death zones - dynamic based on map
@@ -1157,17 +1182,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               }
             }
 
-            // Обновляем legacy координаты и сохраняем для интерполяции
-            ballPixel.prevX = ballPixel.renderX || fromPixel(ballPixel.pixelX);
-            ballPixel.prevY = ballPixel.renderY || fromPixel(ballPixel.pixelY);
-            ballPixel.renderX = fromPixel(ballPixel.pixelX);
-            ballPixel.renderY = fromPixel(ballPixel.pixelY);
-            
-            // Синхронизируем legacy свойства
-            ball.x = ballPixel.renderX;
-            ball.y = ballPixel.renderY;
-            ball.dx = fromPixel(ballPixel.pixelDX);
-            ball.dy = fromPixel(ballPixel.pixelDY);
+
           });
 
           // Remove finished balls
@@ -1294,9 +1309,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             pixiApp.stage.x = -Math.max(0, centerX);
           }
 
-          // Update spinner rotations (pixel-perfect)
+          // Update spinner rotations (fixed-point)
           spinnersRef.current.forEach((spinner) => {
-            spinner.rotation = Math.round((spinner.rotation + 0.08) * PIXEL_SCALE) / PIXEL_SCALE;
+            spinner.rotation += 0.08;
             spinner.graphics.rotation = spinner.rotation;
           });
         };
