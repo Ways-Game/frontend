@@ -57,30 +57,21 @@ interface GameCanvasProps {
   soundEnabled?: boolean;
 }
 
-// Fixed-point arithmetic for deterministic physics
-const FIXED_SCALE = 65536; // 16.16 fixed point
+// Deterministic physics with pixel-perfect precision
+const PRECISION = 1000; // Scale for sub-pixel precision
 
-// Convert float to fixed-point
-function toFixed(v: number): number {
-  return Math.round(v * FIXED_SCALE) | 0;
+// Round to deterministic precision
+function toPrecise(v: number): number {
+  return Math.round(v * PRECISION) / PRECISION;
 }
 
-// Convert fixed-point to float
-function fromFixed(v: number): number {
-  return v / FIXED_SCALE;
+// Deterministic math operations
+function preciseAdd(a: number, b: number): number {
+  return toPrecise(a + b);
 }
 
-// Fixed-point arithmetic operations
-function fixedAdd(a: number, b: number): number {
-  return (a + b) | 0;
-}
-
-function fixedMul(a: number, b: number): number {
-  return Math.round((a * b) / FIXED_SCALE) | 0;
-}
-
-function fixedDiv(a: number, b: number): number {
-  return Math.round((a * FIXED_SCALE) / b) | 0;
+function preciseMul(a: number, b: number): number {
+  return toPrecise(a * b);
 }
 
 // Deterministic PRNG
@@ -112,30 +103,10 @@ function deterministicNoise(seedNum: number, ballIndex: number, step: number): n
   return (h >>> 0) / 4294967296;
 }
 
-// Deterministic math functions using lookup tables
-const SIN_TABLE_SIZE = 1024;
-const sinTable = new Array(SIN_TABLE_SIZE);
-for (let i = 0; i < SIN_TABLE_SIZE; i++) {
-  sinTable[i] = toFixed(Math.sin((i * 2 * Math.PI) / SIN_TABLE_SIZE));
-}
-
-function fixedSin(angle: number): number {
-  const normalizedAngle = ((angle % toFixed(2 * Math.PI)) + toFixed(2 * Math.PI)) % toFixed(2 * Math.PI);
-  const index = Math.round((fromFixed(normalizedAngle) * SIN_TABLE_SIZE) / (2 * Math.PI)) % SIN_TABLE_SIZE;
-  return sinTable[index];
-}
-
-function fixedCos(angle: number): number {
-  return fixedSin(fixedAdd(angle, toFixed(Math.PI / 2)));
-}
-
-function fixedSqrt(x: number): number {
+// Deterministic math functions
+function preciseSqrt(x: number): number {
   if (x <= 0) return 0;
-  let guess = x >> 1;
-  for (let i = 0; i < 8; i++) {
-    guess = (guess + fixedDiv(x, guess)) >> 1;
-  }
-  return guess;
+  return toPrecise(Math.sqrt(x));
 }
 
 
@@ -599,41 +570,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           app.stage.addChild(ballGraphics);
           app.stage.addChild(indicator);
 
-          const initialDX = (rngRef.current!() - 0.5) * 2;
+          const initialDX = toPrecise((rngRef.current!() - 0.5) * 2);
           
           newBalls.push({
             id: `${gameData.seed}_${ballIndex}`,
-            x: startX,
-            y: startY,
+            x: toPrecise(startX),
+            y: toPrecise(startY),
             dx: initialDX,
             dy: 0,
-            // Fixed-point coordinates for deterministic physics
-            fixedX: toFixed(startX),
-            fixedY: toFixed(startY),
-            fixedDX: toFixed(initialDX),
-            fixedDY: toFixed(0),
             graphics: ballGraphics,
             color: 0x4ecdc4,
             playerId: playerId,
             finished: false,
             indicator: indicator,
-            index: ballIndex,
-            // For smooth visual interpolation
-            renderX: startX,
-            renderY: startY,
-            prevRenderX: startX,
-            prevRenderY: startY,
-          } as Ball & { 
-            index: number; 
-            renderX: number; 
-            renderY: number; 
-            prevRenderX: number; 
-            prevRenderY: number;
-            fixedX: number;
-            fixedY: number;
-            fixedDX: number;
-            fixedDY: number;
-          });
+            bounceCount: 0,
+          } as Ball);
           ballIndex++;
         }
       }
@@ -864,34 +815,24 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         let frameCount = 0;
 
-        // Fixed-point deterministic physics
+        // Deterministic physics with pixel-perfect precision
         const updateBalls = () => {
           if (!rngRef.current) return;
 
           const step = physicsStepCount.current;
 
           ballsRef.current.forEach((ball, ballIndex) => {
-            const ballFixed = ball as Ball & {
-              fixedX: number; fixedY: number; fixedDX: number; fixedDY: number;
-              renderX: number; renderY: number; prevRenderX: number; prevRenderY: number;
-              index: number;
-            };
             if (ball.finished) return;
 
             if (!ball.bounceCount) ball.bounceCount = 0;
 
-            // Store previous render position for smooth interpolation
-            ballFixed.prevRenderX = ballFixed.renderX || ball.x;
-            ballFixed.prevRenderY = ballFixed.renderY || ball.y;
+            // Apply gravity with deterministic precision
+            ball.dy = preciseAdd(ball.dy, 0.08);
+            ball.dx = preciseMul(ball.dx, 0.9998);
+            ball.dy = preciseMul(ball.dy, 0.9998);
 
-            // Apply gravity (fixed-point arithmetic)
-            ballFixed.fixedDY = fixedAdd(ballFixed.fixedDY, toFixed(0.08));
-            ballFixed.fixedDX = fixedMul(ballFixed.fixedDX, toFixed(0.9998));
-            ballFixed.fixedDY = fixedMul(ballFixed.fixedDY, toFixed(0.9998));
-
-            // Store previous physics position
-            const prevX = fromFixed(ballFixed.fixedX);
-            const prevY = fromFixed(ballFixed.fixedY);
+            const prevX = ball.x;
+            const prevY = ball.y;
 
             // Rolling on surface logic
             if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
@@ -899,46 +840,38 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               const halfW = obs.width / 2;
               const halfH = obs.height / 2;
 
-              // Keep ball on top (fixed-point)
-              ballFixed.fixedY = toFixed(obs.y - halfH - 24);
-              ballFixed.fixedDY = 0;
+              // Keep ball on top
+              ball.y = toPrecise(obs.y - halfH - 24);
+              ball.dy = 0;
 
               // Rolling friction
-              ballFixed.fixedDX = fixedMul(ballFixed.fixedDX, toFixed(0.997));
-              if (Math.abs(fromFixed(ballFixed.fixedDX)) < 0.03) ballFixed.fixedDX = 0;
+              ball.dx = preciseMul(ball.dx, 0.997);
+              if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
 
-              // Move horizontally (fixed-point)
-              ballFixed.fixedX = fixedAdd(ballFixed.fixedX, ballFixed.fixedDX);
+              // Move horizontally
+              ball.x = preciseAdd(ball.x, ball.dx);
               
               // Deterministic noise
-              const ballIdx = ballFixed.index || ballIndex;
-              const noise = deterministicNoise(seedNumRef.current, ballIdx, step);
-              if (Math.abs(fromFixed(ballFixed.fixedDX)) < 0.1) {
-                ballFixed.fixedDX = fixedAdd(ballFixed.fixedDX, toFixed((noise - 0.5) * 0.2));
+              const noise = deterministicNoise(seedNumRef.current, ballIndex, step);
+              if (Math.abs(ball.dx) < 0.1) {
+                ball.dx = preciseAdd(ball.dx, (noise - 0.5) * 0.2);
               }
 
               // Check if ball falls off
-              const currentX = fromFixed(ballFixed.fixedX);
               if (
                 obs.destroyed ||
-                currentX < obs.x - halfW - 24 ||
-                currentX > obs.x + halfW + 24
+                ball.x < obs.x - halfW - 24 ||
+                ball.x > obs.x + halfW + 24
               ) {
                 (ball as any).onSurface = false;
                 (ball as any).surfaceObstacle = null;
-                ballFixed.fixedDY = toFixed(1);
+                ball.dy = 1;
               }
             } else {
-              // Normal movement (fixed-point)
-              ballFixed.fixedX = fixedAdd(ballFixed.fixedX, ballFixed.fixedDX);
-              ballFixed.fixedY = fixedAdd(ballFixed.fixedY, ballFixed.fixedDY);
+              // Normal movement
+              ball.x = preciseAdd(ball.x, ball.dx);
+              ball.y = preciseAdd(ball.y, ball.dy);
             }
-
-            // Update physics position for collision detection
-            ball.x = fromFixed(ballFixed.fixedX);
-            ball.y = fromFixed(ballFixed.fixedY);
-            ball.dx = fromFixed(ballFixed.fixedDX);
-            ball.dy = fromFixed(ballFixed.fixedDY);
 
             // Collision detection with obstacles
             for (let i = 0; i < obstaclesRef.current.length; i++) {
@@ -946,29 +879,22 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               if (obstacle.destroyed) continue;
 
               if (obstacle.type === "peg") {
-                const obsFixedX = toFixed(obstacle.x);
-                const obsFixedY = toFixed(obstacle.y);
-                const dx = ballFixed.fixedX - obsFixedX;
-                const dy = ballFixed.fixedY - obsFixedY;
-                const distSq = fixedMul(dx, dx) + fixedMul(dy, dy);
-                const collisionThresh = fixedMul(toFixed(36), toFixed(36));
+                const dx = ball.x - obstacle.x;
+                const dy = ball.y - obstacle.y;
+                const distance = preciseSqrt(dx * dx + dy * dy);
 
-                if (distSq < collisionThresh) {
-                  // Fixed-point square root
-                  const dist = fixedSqrt(distSq);
-                  if (dist === 0) return;
-                  
-                  const normalX = fixedDiv(dx, dist);
-                  const normalY = fixedDiv(dy, dist);
+                if (distance < 36) {
+                  const normalX = toPrecise(dx / distance);
+                  const normalY = toPrecise(dy / distance);
 
                   // Move ball outside of peg
-                  ballFixed.fixedX = fixedAdd(obsFixedX, fixedMul(normalX, toFixed(36)));
-                  ballFixed.fixedY = fixedAdd(obsFixedY, fixedMul(normalY, toFixed(36)));
+                  ball.x = toPrecise(obstacle.x + normalX * 36);
+                  ball.y = toPrecise(obstacle.y + normalY * 36);
 
                   // Reflect velocity with energy loss
-                  const dotProduct = fixedAdd(fixedMul(ballFixed.fixedDX, normalX), fixedMul(ballFixed.fixedDY, normalY));
-                  ballFixed.fixedDX = fixedMul(fixedAdd(ballFixed.fixedDX, fixedMul(toFixed(-2), fixedMul(dotProduct, normalX))), toFixed(0.95));
-                  ballFixed.fixedDY = fixedMul(fixedAdd(ballFixed.fixedDY, fixedMul(toFixed(-2), fixedMul(dotProduct, normalY))), toFixed(0.95));
+                  const dotProduct = ball.dx * normalX + ball.dy * normalY;
+                  ball.dx = preciseMul(ball.dx - 2 * dotProduct * normalX, 0.95);
+                  ball.dy = preciseMul(ball.dy - 2 * dotProduct * normalY, 0.95);
                   playMelodyNote();
                 }
               } else if (obstacle.type === "barrier") {
@@ -996,33 +922,31 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
                   if (overlapX < overlapY) {
                     // Hit left or right side
-                    if (ballFixed.fixedX < toFixed(obstacle.x)) {
-                      ballFixed.fixedX = toFixed(obstacle.x - halfW - 24);
+                    if (ball.x < obstacle.x) {
+                      ball.x = toPrecise(obstacle.x - halfW - 24);
                     } else {
-                      ballFixed.fixedX = toFixed(obstacle.x + halfW + 24);
+                      ball.x = toPrecise(obstacle.x + halfW + 24);
                     }
                     // Consider barrier angle
                     const prevY = (obstacle as any).prevY || obstacle.y;
                     const prevX = (obstacle as any).prevX || obstacle.x;
-                    const angleY = toFixed(obstacle.y - prevY);
-                    const angleX = toFixed(obstacle.x - prevX);
-                    const angle = Math.atan2(fromFixed(angleY), fromFixed(angleX));
+                    const angle = Math.atan2(obstacle.y - prevY, obstacle.x - prevX);
                     
-                    ballFixed.fixedDX = fixedAdd(fixedMul(ballFixed.fixedDX, toFixed(-0.9)), fixedMul(toFixed(Math.sin(angle)), toFixed(0.5)));
-                    ballFixed.fixedDY = fixedAdd(ballFixed.fixedDY, fixedMul(toFixed(-Math.cos(angle)), toFixed(0.5)));
+                    ball.dx = preciseAdd(preciseMul(ball.dx, -0.9), preciseMul(Math.sin(angle), 0.5));
+                    ball.dy = preciseAdd(ball.dy, preciseMul(-Math.cos(angle), 0.5));
                     playMelodyNote();
                   } else {
                     // Hit top or bottom side
-                    if (ballFixed.fixedY < toFixed(obstacle.y)) {
+                    if (ball.y < obstacle.y) {
                       // Place on top and start rolling
-                      ballFixed.fixedY = toFixed(obstacle.y - halfH - 24);
+                      ball.y = toPrecise(obstacle.y - halfH - 24);
                       (ball as any).onSurface = true;
                       (ball as any).surfaceObstacle = obstacle;
-                      ballFixed.fixedDY = 0;
-                      ballFixed.fixedDX = fixedMul(ballFixed.fixedDX, toFixed(0.95));
+                      ball.dy = 0;
+                      ball.dx = preciseMul(ball.dx, 0.95);
                     } else {
-                      ballFixed.fixedY = toFixed(obstacle.y + halfH + 24);
-                      ballFixed.fixedDY = fixedMul(ballFixed.fixedDY, toFixed(-0.9));
+                      ball.y = toPrecise(obstacle.y + halfH + 24);
+                      ball.dy = preciseMul(ball.dy, -0.9);
                       playMelodyNote();
                     }
                   }
@@ -1044,116 +968,95 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
 
                   if (overlapX < overlapY) {
-                    ballFixed.fixedDX = fixedMul(ballFixed.fixedDX, toFixed(-0.9));
+                    ball.dx = preciseMul(ball.dx, -0.9);
                   } else {
-                    ballFixed.fixedDY = fixedMul(ballFixed.fixedDY, toFixed(-0.9));
+                    ball.dy = preciseMul(ball.dy, -0.9);
                   }
                   playMelodyNote();
                 }
               } else if (obstacle.type === "spinner") {
-                const dx = toFixed(ball.x - obstacle.x);
-                const dy = toFixed(ball.y - obstacle.y);
-                const distanceSq = fixedAdd(fixedMul(dx, dx), fixedMul(dy, dy));
-                const collisionDist = toFixed(48);
+                const dx = ball.x - obstacle.x;
+                const dy = ball.y - obstacle.y;
+                const distance = preciseSqrt(dx * dx + dy * dy);
 
-                if (distanceSq < fixedMul(collisionDist, collisionDist)) {
-                  const distance = fixedSqrt(distanceSq);
-                  if (distance === 0) return;
-                  
-                  const normalX = fixedDiv(dx, distance);
-                  const normalY = fixedDiv(dy, distance);
+                if (distance < 48) {
+                  const normalX = toPrecise(dx / distance);
+                  const normalY = toPrecise(dy / distance);
 
                   // Move ball outside spinner
-                  ballFixed.fixedX = fixedAdd(toFixed(obstacle.x), fixedMul(normalX, collisionDist));
-                  ballFixed.fixedY = fixedAdd(toFixed(obstacle.y), fixedMul(normalY, collisionDist));
+                  ball.x = toPrecise(obstacle.x + normalX * 48);
+                  ball.y = toPrecise(obstacle.y + normalY * 48);
 
                   // Add spin effect
-                  const tangentX = fixedMul(normalY, toFixed(-1));
+                  const tangentX = -normalY;
                   const tangentY = normalX;
-                  const spinForce = toFixed(1.6);
-                  const currentSpeed = fixedSqrt(fixedAdd(fixedMul(ballFixed.fixedDX, ballFixed.fixedDX), fixedMul(ballFixed.fixedDY, ballFixed.fixedDY)));
+                  const spinForce = 1.6;
+                  const currentSpeed = preciseSqrt(ball.dx * ball.dx + ball.dy * ball.dy);
 
-                  ballFixed.fixedDX = fixedAdd(fixedMul(normalX, fixedMul(currentSpeed, toFixed(0.75))), fixedMul(tangentX, spinForce));
-                  ballFixed.fixedDY = fixedAdd(fixedMul(normalY, fixedMul(currentSpeed, toFixed(0.75))), fixedMul(tangentY, spinForce));
+                  ball.dx = preciseAdd(preciseMul(normalX * currentSpeed, 0.75), tangentX * spinForce);
+                  ball.dy = preciseAdd(preciseMul(normalY * currentSpeed, 0.75), tangentY * spinForce);
                   playMelodyNote();
                 }
               }
             }
 
-            // Ball-to-ball collisions with fixed-point physics
+            // Ball-to-ball collisions
             ballsRef.current.forEach((otherBall) => {
               if (otherBall === ball || otherBall.finished) return;
-
-              const otherFixed = otherBall as Ball & { fixedX: number; fixedY: number; fixedDX: number; fixedDY: number };
               
-              const dx = ballFixed.fixedX - otherFixed.fixedX;
-              const dy = ballFixed.fixedY - otherFixed.fixedY;
-              const distSq = fixedAdd(fixedMul(dx, dx), fixedMul(dy, dy));
-              const collisionThresh = fixedMul(toFixed(48), toFixed(48));
+              const dx = ball.x - otherBall.x;
+              const dy = ball.y - otherBall.y;
+              const distance = preciseSqrt(dx * dx + dy * dy);
 
-              if (distSq < collisionThresh && distSq > 0) {
-                const distance = fixedSqrt(distSq);
-                if (distance === 0) return;
-                
-                const normalX = fixedDiv(dx, distance);
-                const normalY = fixedDiv(dy, distance);
+              if (distance < 48 && distance > 0) {
+                const normalX = toPrecise(dx / distance);
+                const normalY = toPrecise(dy / distance);
                 
                 // Separate balls
-                const overlap = fixedAdd(toFixed(48), fixedMul(distance, toFixed(-1)));
-                const halfOverlap = fixedDiv(overlap, toFixed(2));
+                const overlap = 48 - distance;
+                const halfOverlap = overlap / 2;
                 
-                ballFixed.fixedX = fixedAdd(ballFixed.fixedX, fixedMul(normalX, halfOverlap));
-                ballFixed.fixedY = fixedAdd(ballFixed.fixedY, fixedMul(normalY, halfOverlap));
-                otherFixed.fixedX = fixedAdd(otherFixed.fixedX, fixedMul(normalX, fixedMul(halfOverlap, toFixed(-1))));
-                otherFixed.fixedY = fixedAdd(otherFixed.fixedY, fixedMul(normalY, fixedMul(halfOverlap, toFixed(-1))));
+                ball.x = preciseAdd(ball.x, normalX * halfOverlap);
+                ball.y = preciseAdd(ball.y, normalY * halfOverlap);
+                otherBall.x = preciseAdd(otherBall.x, -normalX * halfOverlap);
+                otherBall.y = preciseAdd(otherBall.y, -normalY * halfOverlap);
                 
                 // Calculate relative velocity
-                const relVelX = fixedAdd(ballFixed.fixedDX, fixedMul(otherFixed.fixedDX, toFixed(-1)));
-                const relVelY = fixedAdd(ballFixed.fixedDY, fixedMul(otherFixed.fixedDY, toFixed(-1)));
-                const relSpeed = fixedAdd(fixedMul(relVelX, normalX), fixedMul(relVelY, normalY));
+                const relVelX = ball.dx - otherBall.dx;
+                const relVelY = ball.dy - otherBall.dy;
+                const relSpeed = relVelX * normalX + relVelY * normalY;
                 
                 if (relSpeed > 0) return; // Balls moving apart
                 
                 // Collision response
-                const impulse = fixedMul(relSpeed, toFixed(0.92));
-                const halfImpulse = fixedDiv(impulse, toFixed(2));
+                const impulse = preciseMul(relSpeed, 0.92);
+                const halfImpulse = impulse / 2;
                 
-                ballFixed.fixedDX = fixedAdd(ballFixed.fixedDX, fixedMul(normalX, fixedMul(halfImpulse, toFixed(-1))));
-                ballFixed.fixedDY = fixedAdd(ballFixed.fixedDY, fixedMul(normalY, fixedMul(halfImpulse, toFixed(-1))));
-                otherFixed.fixedDX = fixedAdd(otherFixed.fixedDX, fixedMul(normalX, halfImpulse));
-                otherFixed.fixedDY = fixedAdd(otherFixed.fixedDY, fixedMul(normalY, halfImpulse));
+                ball.dx = preciseAdd(ball.dx, -normalX * halfImpulse);
+                ball.dy = preciseAdd(ball.dy, -normalY * halfImpulse);
+                otherBall.dx = preciseAdd(otherBall.dx, normalX * halfImpulse);
+                otherBall.dy = preciseAdd(otherBall.dy, normalY * halfImpulse);
                 
                 playMelodyNote();
               }
             });
 
-            // Boundary collisions (fixed-point)
-            if (ballFixed.fixedX < toFixed(24)) {
-              ballFixed.fixedX = toFixed(24);
-              ballFixed.fixedDX = fixedMul(toFixed(Math.abs(fromFixed(ballFixed.fixedDX))), toFixed(0.95));
+            // Boundary collisions
+            if (ball.x < 24) {
+              ball.x = 24;
+              ball.dx = preciseMul(Math.abs(ball.dx), 0.95);
               playCollisionSound();
             }
-            if (ballFixed.fixedX > toFixed(1176)) {
-              ballFixed.fixedX = toFixed(1176);
-              ballFixed.fixedDX = fixedMul(toFixed(-Math.abs(fromFixed(ballFixed.fixedDX))), toFixed(0.95));
+            if (ball.x > 1176) {
+              ball.x = 1176;
+              ball.dx = preciseMul(-Math.abs(ball.dx), 0.95);
               playCollisionSound();
             }
-
-            // Update physics position
-            ball.x = fromFixed(ballFixed.fixedX);
-            ball.y = fromFixed(ballFixed.fixedY);
-            ball.dx = fromFixed(ballFixed.fixedDX);
-            ball.dy = fromFixed(ballFixed.fixedDY);
-
-            // Smooth interpolation for rendering
-            const alpha = 0.8; // Interpolation factor
-            ballFixed.renderX = ballFixed.prevRenderX + (ball.x - ballFixed.prevRenderX) * alpha;
-            ballFixed.renderY = ballFixed.prevRenderY + (ball.y - ballFixed.prevRenderY) * alpha;
 
             // Update visual position
-            ball.graphics.position.set(ballFixed.renderX, ballFixed.renderY);
+            ball.graphics.position.set(ball.x, ball.y);
             if (ball.indicator) {
-              ball.indicator.position.set(ballFixed.renderX, ballFixed.renderY - 40);
+              ball.indicator.position.set(ball.x, ball.y - 40);
             }
 
             // Check win/death zones - dynamic based on map
@@ -1219,27 +1122,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             accumulator.current -= FIXED_STEP;
           }
 
-          // Плавная интерполяция для рендеринга
-          const alpha = accumulator.current / FIXED_STEP;
-          ballsRef.current.forEach((ball) => {
-            const ballExt = ball as Ball & { renderX: number; renderY: number; prevX: number; prevY: number };
-            if (ballExt.prevX !== undefined && ballExt.prevY !== undefined) {
-              // Интерполируем между предыдущей и текущей позицией
-              const interpX = ballExt.prevX + (ballExt.renderX - ballExt.prevX) * alpha;
-              const interpY = ballExt.prevY + (ballExt.renderY - ballExt.prevY) * alpha;
-              
-              ball.graphics.position.set(interpX, interpY);
-              
-              if (ball.indicator) {
-                ball.indicator.position.set(interpX, interpY - 40);
-              }
-            } else {
-              ball.graphics.position.set(ball.x, ball.y);
-              if (ball.indicator) {
-                ball.indicator.position.set(ball.x, ball.y - 40);
-              }
-            }
-          });
+
 
           // Рендеринг
           const deviceWidth = window.innerWidth;
@@ -1253,11 +1136,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             );
             if (activeBalls.length > 0) {
               const leadingBall = activeBalls.reduce((leader, ball) => {
-                const ballExt = ball as Ball & { renderX: number; renderY: number };
-                const leaderExt = leader as Ball & { renderX: number; renderY: number };
-                const ballY = ballExt.renderY || ball.y;
-                const leaderY = leaderExt.renderY || leader.y;
-                return ballY > leaderY ? ball : leader;
+                return ball.y > leader.y ? ball : leader;
               });
 
               ballsRef.current.forEach((ball) => {
