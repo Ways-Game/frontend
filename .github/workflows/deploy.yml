@@ -23,8 +23,32 @@ jobs:
       - name: Deploy to Server
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
+            # Проверяем свободное место
+            df -h
+            
+            # Очищаем Docker-ресурсы
+            docker system prune -f --all
+            docker volume prune -f
+            docker builder prune -f --all
+            
+            # Останавливаем и очищаем проект
             cd frontend
             git pull origin main
-            docker-compose down
-            docker-compose up --build -d
+            
+            # Используем DOCKER_BUILDKIT для эффективной сборки
+            export DOCKER_BUILDKIT=1
+            export COMPOSE_DOCKER_CLI_BUILD=1
+            
+            docker-compose down --remove-orphans
+            
+            # Собираем и запускаем с очисткой кэша
+            docker-compose build --no-cache --pull
+            docker-compose up -d
+            
+            # Дополнительная очистка после запуска
+            docker image prune -f --all
+            docker builder prune -f --all
+            
+            # Проверяем свободное место после очистки
+            df -h
           "
