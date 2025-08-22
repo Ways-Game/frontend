@@ -19,6 +19,7 @@ export interface ParticipantData {
   balls_count: number;
   avatar_url?: string;
   wallet_address?: string;
+  user?: ParticipantData;
 }
 
 export enum GameState {
