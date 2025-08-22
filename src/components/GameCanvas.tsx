@@ -495,9 +495,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       appRef.current.stage.scale.set(scale);
 
       ballsRef.current.forEach((ball) => {
-        ball.graphics.position.set(precise.floor(ball.x), precise.floor(ball.y));
+        ball.graphics.position.set(ball.x, ball.y);
         if (ball.indicator) {
-          ball.indicator.position.set(precise.floor(ball.x), precise.floor(precise.sub(ball.y, 40)));
+          ball.indicator.position.set(ball.x, ball.y - 40);
         }
       });
 
@@ -506,52 +506,32 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         spinner.graphics.rotation = spinner.rotation;
       });
 
-      // CAMERA (REPLACED)
-      if (mapDataRef.current && ballsRef.current.length > 0) {
-        const mapWidth = mapDataRef.current.mapWidth || WORLD_WIDTH;
-        const mapHeight = mapDataRef.current.mapHeight || WORLD_HEIGHT;
-
-        const activeBalls = ballsRef.current.filter(b => !b.finished);
+      // Camera logic
+      if (ballsRef.current.length > 0 && cameraModeRef.current === "leader") {
+        const activeBalls = ballsRef.current.filter(ball => !ball.finished);
         if (activeBalls.length > 0) {
-          const leadingBall = activeBalls.reduce((leader, b) => (b.y > leader.y ? b : leader), activeBalls[0]);
+          const leadingBall = activeBalls.reduce((prev, current) => 
+            prev.y > current.y ? prev : current
+          );
 
           // показываем индикатор только для лидера
           ballsRef.current.forEach((ball) => {
             if (ball.indicator) {
-              ball.indicator.visible = cameraModeRef.current === "leader" && ball === leadingBall && !ball.finished;
+              ball.indicator.visible = ball === leadingBall && !ball.finished;
             }
           });
 
-          if (cameraModeRef.current === "leader") {
-            // Screen bounds for camera in pixels
-            const maxCameraY = Math.max(0, mapHeight * scale - deviceHeight);
-            const desiredCameraY = clamp(leadingBall.y * scale - deviceHeight / 2 + 80, 0, maxCameraY);
+          // Центрируем камеру на leadingBall
+          const targetX = -leadingBall.x * scale + deviceWidth / 2;
+          const targetY = -leadingBall.y * scale + deviceHeight / 2;
 
-            const currentCameraY = -appRef.current.stage.y;
-            const newCameraY = lerp(currentCameraY, desiredCameraY, 0.12);
-            appRef.current.stage.y = -newCameraY;
-
-            const maxCameraX = Math.max(0, mapWidth * scale - deviceWidth);
-            const desiredCameraX = clamp(leadingBall.x * scale - deviceWidth / 2, 0, maxCameraX);
-
-            const currentCameraX = -appRef.current.stage.x;
-            const newCameraX = lerp(currentCameraX, desiredCameraX, 0.12);
-            appRef.current.stage.x = -newCameraX;
-          }
+          // Плавное перемещение камеры
+          appRef.current.stage.x += (targetX - appRef.current.stage.x) * 0.05;
+          appRef.current.stage.y += (targetY - appRef.current.stage.y) * 0.05;
         }
-      }
-
-      // Swipe camera (фиксированная прокрутка)
-      if (cameraModeRef.current === "swipe" && mapDataRef.current) {
-        const mapWidth = mapDataRef.current.mapWidth || WORLD_WIDTH;
-        const mapHeight = mapDataRef.current.mapHeight || WORLD_HEIGHT;
-
-        const centerX = clamp((mapWidth * scale - deviceWidth) / 2, 0, Math.max(0, mapWidth * scale - deviceWidth));
-        appRef.current.stage.x = -centerX;
-
-        const maxCameraY = Math.max(0, mapHeight * scale - deviceHeight);
-        const targetY = clamp(scrollYRef.current * scale, 0, maxCameraY);
-        appRef.current.stage.y = -targetY;
+      } else if (cameraModeRef.current === "swipe") {
+        // Для режима прокрутки
+        appRef.current.stage.y = -scrollYRef.current * scale;
       }
     };
 
@@ -760,7 +740,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       setScrollY: (y: number) => {
         scrollYRef.current = y;
         if (appRef.current && cameraModeRef.current === "swipe") {
-          appRef.current.stage.y = -y;
+          const scale = window.innerWidth / WORLD_WIDTH;
+          appRef.current.stage.y = -y * scale;
         }
       },
       getGameSize: () => ({
@@ -816,40 +797,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Resize handler
     useEffect(() => {
-      const onResize = () => {
-        if (!appRef.current || !mapDataRef.current) return;
-
-        const w = window.innerWidth;
-        const h = Math.max(200, window.innerHeight - 80);
-
-        appRef.current.renderer.resize(w, h);
-
-        const scale = w / WORLD_WIDTH;
-        appRef.current.stage.scale.set(scale);
-
-        // Поддерживаем камеру — центрируем на лидере (если есть), иначе сброс
-        if (cameraModeRef.current === "leader" && ballsRef.current.length > 0) {
-          const activeBalls = ballsRef.current.filter(b => !b.finished);
-          if (activeBalls.length > 0) {
-            const leader = activeBalls.reduce((a,b) => b.y > a.y ? b : a, activeBalls[0]);
-            const maxCameraY = Math.max(0, mapDataRef.current.mapHeight * scale - h);
-            const desiredCameraY = clamp(leader.y * scale - h / 2 + 80, 0, maxCameraY);
-            appRef.current.stage.y = -desiredCameraY;
-
-            const maxCameraX = Math.max(0, mapDataRef.current.mapWidth * scale - w);
-            const desiredCameraX = clamp(leader.x * scale - w / 2, 0, maxCameraX);
-            appRef.current.stage.x = -desiredCameraX;
-          }
-        } else if (cameraModeRef.current === "swipe") {
-          const centerX = clamp((mapDataRef.current.mapWidth * scale - w) / 2, 0, Math.max(0, mapDataRef.current.mapWidth * scale - w));
-          appRef.current.stage.x = -centerX;
-          const maxCameraY = Math.max(0, mapDataRef.current.mapHeight * scale - h);
-          appRef.current.stage.y = -clamp(scrollYRef.current * scale, 0, maxCameraY);
+      const handleResize = () => {
+        if (appRef.current) {
+          appRef.current.renderer.resize(window.innerWidth, window.innerHeight - 80);
         }
       };
 
-      window.addEventListener("resize", onResize);
-      return () => window.removeEventListener("resize", onResize);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
     }, []);
 
     // Initialize PIXI
@@ -866,8 +821,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         await pixiApp.init({
           width: deviceWidth,
           height: deviceHeight - 80,
-          resolution: 1,
-          autoDensity: false,
+          resolution: window.devicePixelRatio || 1,
+          autoDensity: true,
           backgroundColor: 0x1a1a2e,
           antialias: false,
         });
