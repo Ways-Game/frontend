@@ -134,7 +134,7 @@ export const MAP_BLOCKS: MapBlock[] = [
         spinners.push({ x: leftX, y, rotation: 0, graphics: leftSpinner });
         
         // Right edge
-        const rightX = mapWidth - 100;
+        const rightX = mapWidth - 50;
         obstacles.push({ x: rightX, y, width: 80, height: 80, type: 'spinner' });
         const rightSpinner = new PIXI.Graphics();
         rightSpinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
@@ -293,7 +293,7 @@ export const MAP_BLOCKS: MapBlock[] = [
       }
 
       // Add edge circles
-      for (let row = 0; row < 3; row++) {
+      for (let row = 0; row < 8; row++) {
         const y = startY + 100 + row * 150;
         // Left edge
         const leftX = 80;
