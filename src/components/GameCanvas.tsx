@@ -213,10 +213,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       lastTimeRef.current = time;
 
       accumulatorRef.current += delta;
-      while (accumulatorRef.current >= FIXED_DELTA) {
+
+      let steps = 0;
+      while (accumulatorRef.current >= FIXED_DELTA && steps < 5) {
         updatePhysics();
         accumulatorRef.current -= FIXED_DELTA;
         physicsTimeRef.current += FIXED_DELTA;
+        steps++;
       }
 
       render();
@@ -226,6 +229,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     // Детерминированное обновление физики
     const updatePhysics = () => {
       if (!randomRef.current) return;
+
+      // Update spinners in physics
+      spinnersRef.current.forEach((spinner) => {
+        spinner.rotation = precise.add(spinner.rotation, 0.08);
+      });
 
       ballsRef.current.forEach((ball, ballIndex) => {
         if (ball.finished) return;
@@ -450,7 +458,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       const deviceWidth = window.innerWidth;
       const deviceHeight = window.innerHeight;
-      const scale = deviceWidth / 1000;
+      const scale = deviceWidth / 1200; // Используем мировые координаты 1200px
       appRef.current.stage.scale.set(scale);
 
       ballsRef.current.forEach((ball) => {
@@ -458,6 +466,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (ball.indicator) {
           ball.indicator.position.set(Math.round(ball.x), Math.round(ball.y - 40));
         }
+      });
+
+      // Update spinner graphics rotation
+      spinnersRef.current.forEach((spinner) => {
+        spinner.graphics.rotation = spinner.rotation;
       });
 
       // Camera logic
@@ -507,12 +520,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         appRef.current.stage.x = -Math.max(0, centerX);
         appRef.current.stage.y = -scrollYRef.current;
       }
-
-      // Update spinners
-      spinnersRef.current.forEach((spinner) => {
-        spinner.rotation += 0.08;
-        spinner.graphics.rotation = spinner.rotation;
-      });
     };
 
     // Запуск игры с детерминированными параметрами
@@ -528,6 +535,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       physicsTimeRef.current = 0;
       lastTimeRef.current = 0;
       accumulatorRef.current = 0;
+
+      // Override Math.random to ensure deterministic behavior
+      if (!(Math as any).originalRandom) {
+        (Math as any).originalRandom = Math.random;
+      }
+      Math.random = () => randomRef.current!.next();
 
       // Clear previous game
       setActualWinners([]);
@@ -640,6 +653,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         gameLoopRef.current = null;
       }
 
+      // Restore original Math.random
+      if (typeof (Math as any).originalRandom === 'function') {
+        Math.random = (Math as any).originalRandom;
+      }
+
       if (appRef.current) {
         ballsRef.current.forEach((ball) => {
           appRef.current!.stage.removeChild(ball.graphics);
@@ -692,6 +710,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (gameLoopRef.current) {
           cancelAnimationFrame(gameLoopRef.current);
           gameLoopRef.current = null;
+        }
+        
+        // Restore original Math.random
+        if (typeof (Math as any).originalRandom === 'function') {
+          Math.random = (Math as any).originalRandom;
         }
         
         try {
