@@ -313,6 +313,7 @@ export function PvPScreen() {
           </button>
           <button
             onClick={() => {
+              console.log(selectedGame, user)
               if (!selectedGame || !user) return
 
               // Find participant in selected game
@@ -320,8 +321,9 @@ export function PvPScreen() {
                 const participantUser = p.user ? p.user : p
                 return participantUser.id === user.id
               })
-
               const currentBalls = participant ? (participant.balls_count ?? 0) : 0
+ console.log(participant, currentBalls)
+
               if (currentBalls <= 0) return
 
               handleBuyBallz(currentBalls * 2)

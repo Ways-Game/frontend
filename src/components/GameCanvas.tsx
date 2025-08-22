@@ -109,10 +109,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const randomRef = useRef<DeterministicRandom | null>(null);
     const gameLoopRef = useRef<number | null>(null);
 
-    const [gameState, setGameState] = useState<"waiting" | "playing" | "finished">("waiting");
+    const [gameState, setGameState] = useState<
+      "waiting" | "playing" | "finished"
+    >("waiting");
     const [actualWinners, setActualWinners] = useState<string[]>([]);
     const actualWinnersRef = useRef<string[]>([]);
-    const [cameraMode, setCameraMode] = useState<"leader" | "swipe">(initialCameraMode);
+    const [cameraMode, setCameraMode] = useState<"leader" | "swipe">(
+      initialCameraMode
+    );
     const cameraModeRef = useRef<"leader" | "swipe">(initialCameraMode);
     const scrollYRef = useRef<number>(scrollY);
 
@@ -125,18 +129,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const isPlayingRef = useRef(false);
     const lastCollisionAtRef = useRef<number>(0);
 
-    const { soundEnabledRef, audioContextRef, getAudioContext } = useGameSound(soundEnabled);
+    const { soundEnabledRef, audioContextRef, getAudioContext } =
+      useGameSound(soundEnabled);
 
     // RTTTL parser (unchanged)
     const parseRTTTL = (rtttl: string) => {
       try {
-        if (!rtttl || typeof rtttl !== 'string') return [];
-        const parts = rtttl.split(':');
+        if (!rtttl || typeof rtttl !== "string") return [];
+        const parts = rtttl.split(":");
         if (parts.length < 3) return [];
         const [name, settingsStr, notesStr] = parts;
         const settings: any = {};
-        settingsStr.split(',').forEach(s => {
-          const [key, value] = s.split('=');
+        settingsStr.split(",").forEach((s) => {
+          const [key, value] = s.split("=");
           settings[key] = value;
         });
 
@@ -144,9 +149,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const defaultOctave = parseInt(settings.o) || 5;
         const bpm = parseInt(settings.b) || 63;
 
-        const notes = notesStr.split(',').map(noteStr => {
+        const notes = notesStr.split(",").map((noteStr) => {
           let duration = defaultDuration;
-          let noteChar = '';
+          let noteChar = "";
           let dot = false;
           let octave = defaultOctave;
 
@@ -158,19 +163,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             rest = rest.substring(durationMatch[0].length);
           }
 
-          if (rest[0] === 'p') {
-            noteChar = 'p';
+          if (rest[0] === "p") {
+            noteChar = "p";
             rest = rest.substring(1);
           } else {
             noteChar = rest[0];
             rest = rest.substring(1);
-            if (rest[0] === '#' || rest[0] === 'b') {
+            if (rest[0] === "#" || rest[0] === "b") {
               noteChar += rest[0];
               rest = rest.substring(1);
             }
           }
 
-          if (rest[0] === '.') {
+          if (rest[0] === ".") {
             dot = true;
             rest = rest.substring(1);
           }
@@ -183,9 +188,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const durationMs = (240000 / bpm) * (1 / duration) * (dot ? 1.5 : 1);
 
           let frequency = 0;
-          if (noteChar !== 'p') {
+          if (noteChar !== "p") {
             const noteMap: { [key: string]: number } = {
-              'c': 0, 'c#': 1, 'db': 1, 'd': 2, 'd#': 3, 'eb': 3, 'e': 4, 'f': 5, 'f#': 6, 'gb': 6, 'g': 7, 'g#': 8, 'ab': 8, 'a': 9, 'a#': 10, 'bb': 10, 'b': 11
+              c: 0,
+              "c#": 1,
+              db: 1,
+              d: 2,
+              "d#": 3,
+              eb: 3,
+              e: 4,
+              f: 5,
+              "f#": 6,
+              gb: 6,
+              g: 7,
+              "g#": 8,
+              ab: 8,
+              a: 9,
+              "a#": 10,
+              bb: 10,
+              b: 11,
             };
             const noteValue = noteMap[noteChar.toLowerCase()];
             if (noteValue === undefined) {
@@ -201,7 +222,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         return notes;
       } catch (error) {
-        console.error('Failed to parse RTTTL:', error);
+        console.error("Failed to parse RTTTL:", error);
         return [];
       }
     };
@@ -211,7 +232,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       return () => {
         try {
           if (oscillatorRef.current) {
-            try { oscillatorRef.current.stop(); } catch (e) {}
+            try {
+              oscillatorRef.current.stop();
+            } catch (e) {}
             oscillatorRef.current = null;
           }
         } catch (e) {}
@@ -252,7 +275,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         isPlayingRef.current = true;
         setTimeout(() => {
           isPlayingRef.current = false;
-          currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+          currentNoteIndexRef.current =
+            (currentNoteIndexRef.current + 1) % notes.length;
         }, note.duration);
         return;
       }
@@ -260,32 +284,39 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       try {
         // Ensure audio context exists
         if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          audioContextRef.current = new (window.AudioContext ||
+            (window as any).webkitAudioContext)();
         }
         const context = audioContextRef.current!;
         // Resume if suspended (user gesture / autoplay policies)
-        if (context.state === 'suspended') {
+        if (context.state === "suspended") {
           context.resume().catch((err) => {
             // resume may fail if not allowed; silently ignore
-            console.warn('AudioContext resume failed:', err);
+            console.warn("AudioContext resume failed:", err);
           });
         }
 
         const oscillator = context.createOscillator();
         oscillatorRef.current = oscillator;
-        oscillator.type = 'sine';
+        oscillator.type = "sine";
 
         const filter = context.createBiquadFilter();
-        filter.type = 'lowpass';
+        filter.type = "lowpass";
         filter.frequency.value = 2000;
         currentFilterRef.current = filter;
 
         const gainNode = context.createGain();
         currentGainRef.current = gainNode;
         gainNode.gain.setValueAtTime(0.12, context.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + note.duration / 1000);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.001,
+          context.currentTime + note.duration / 1000
+        );
 
-        oscillator.frequency.setValueAtTime(note.frequency, context.currentTime);
+        oscillator.frequency.setValueAtTime(
+          note.frequency,
+          context.currentTime
+        );
 
         oscillator.connect(filter);
         filter.connect(gainNode);
@@ -299,15 +330,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         oscillator.onended = () => {
           try {
             // ensure we clean up refs
-            if (oscillatorRef.current === oscillator) oscillatorRef.current = null;
-            if (currentGainRef.current === gainNode) currentGainRef.current = null;
-            if (currentFilterRef.current === filter) currentFilterRef.current = null;
+            if (oscillatorRef.current === oscillator)
+              oscillatorRef.current = null;
+            if (currentGainRef.current === gainNode)
+              currentGainRef.current = null;
+            if (currentFilterRef.current === filter)
+              currentFilterRef.current = null;
           } catch (e) {}
           isPlayingRef.current = false;
-          currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+          currentNoteIndexRef.current =
+            (currentNoteIndexRef.current + 1) % notes.length;
         };
       } catch (error) {
-        console.error('Failed to play note:', error);
+        console.error("Failed to play note:", error);
         isPlayingRef.current = false;
       }
     }, [audioContextRef, soundEnabledRef]);
@@ -327,9 +362,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       if (!randomRef.current) return;
 
       if (physicsTimeRef.current % 1000 === 0 && physicsTimeRef.current > 0) {
-        const checksum = ballsRef.current.reduce((sum, b) =>
-          sum + b.x * 10000 + b.y * 100 + b.dx * 10 + b.dy, 0);
-        console.log(`Sync check at ${physicsTimeRef.current}ms: ${checksum.toFixed(2)}`);
+        const checksum = ballsRef.current.reduce(
+          (sum, b) => sum + b.x * 10000 + b.y * 100 + b.dx * 10 + b.dy,
+          0
+        );
+        console.log(
+          `Sync check at ${physicsTimeRef.current}ms: ${checksum.toFixed(2)}`
+        );
       }
 
       spinnersRef.current.forEach((spinner) => {
@@ -361,9 +400,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             ball.dx = precise.add(ball.dx, noiseValue);
           }
 
-          if (obs.destroyed ||
-              ball.x < precise.sub(precise.sub(obs.x, halfW), 24) ||
-              ball.x > precise.add(precise.add(obs.x, halfW), 24)) {
+          if (
+            obs.destroyed ||
+            ball.x < precise.sub(precise.sub(obs.x, halfW), 24) ||
+            ball.x > precise.add(precise.add(obs.x, halfW), 24)
+          ) {
             (ball as any).onSurface = false;
             (ball as any).surfaceObstacle = null;
             ball.dy = 1;
@@ -388,7 +429,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (obstacle.type === "peg") {
           const dx = precise.sub(ball.x, obstacle.x);
           const dy = precise.sub(ball.y, obstacle.y);
-          const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+          const distanceSq = precise.add(
+            precise.mul(dx, dx),
+            precise.mul(dy, dy)
+          );
 
           if (distanceSq < 1296) {
             const distance = precise.sqrt(distanceSq);
@@ -404,11 +448,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             );
 
             ball.dx = precise.mul(
-              precise.sub(ball.dx, precise.mul(precise.mul(dotProduct, 2), normalX)),
+              precise.sub(
+                ball.dx,
+                precise.mul(precise.mul(dotProduct, 2), normalX)
+              ),
               0.82
             );
             ball.dy = precise.mul(
-              precise.sub(ball.dy, precise.mul(precise.mul(dotProduct, 2), normalY)),
+              precise.sub(
+                ball.dy,
+                precise.mul(precise.mul(dotProduct, 2), normalY)
+              ),
               0.82
             );
 
@@ -418,9 +468,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const halfW = precise.div(obstacle.width, 2);
           const halfH = precise.div(obstacle.height, 2);
 
-          if (precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 && precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24) {
-            const overlapX = precise.sub(halfW + 24, precise.abs(precise.sub(ball.x, obstacle.x)));
-            const overlapY = precise.sub(halfH + 24, precise.abs(precise.sub(ball.y, obstacle.y)));
+          if (
+            precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+            precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+          ) {
+            const overlapX = precise.sub(
+              halfW + 24,
+              precise.abs(precise.sub(ball.x, obstacle.x))
+            );
+            const overlapY = precise.sub(
+              halfH + 24,
+              precise.abs(precise.sub(ball.y, obstacle.y))
+            );
 
             if (overlapX < overlapY) {
               if (ball.x < obstacle.x) {
@@ -447,14 +506,23 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const halfW = precise.div(obstacle.width, 2);
           const halfH = precise.div(obstacle.height, 2);
 
-          if (precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 && precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24) {
+          if (
+            precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+            precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+          ) {
             obstacle.destroyed = true;
             if (obstacle.graphics && appRef.current) {
               appRef.current.stage.removeChild(obstacle.graphics);
             }
 
-            const overlapX = precise.sub(halfW + 24, precise.abs(precise.sub(ball.x, obstacle.x)));
-            const overlapY = precise.sub(halfH + 24, precise.abs(precise.sub(ball.y, obstacle.y)));
+            const overlapX = precise.sub(
+              halfW + 24,
+              precise.abs(precise.sub(ball.x, obstacle.x))
+            );
+            const overlapY = precise.sub(
+              halfH + 24,
+              precise.abs(precise.sub(ball.y, obstacle.y))
+            );
 
             if (overlapX < overlapY) {
               ball.dx = precise.mul(ball.dx, -0.78);
@@ -466,7 +534,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         } else if (obstacle.type === "spinner") {
           const dx = precise.sub(ball.x, obstacle.x);
           const dy = precise.sub(ball.y, obstacle.y);
-          const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+          const distanceSq = precise.add(
+            precise.mul(dx, dx),
+            precise.mul(dy, dy)
+          );
 
           if (distanceSq < 2304 && distanceSq > 0) {
             const distance = precise.sqrt(distanceSq);
@@ -478,10 +549,27 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
             const tangentX = precise.mul(normalY, -1);
             const tangentY = normalX;
-            const currentSpeed = precise.sqrt(precise.add(precise.mul(ball.dx, ball.dx), precise.mul(ball.dy, ball.dy)));
+            const currentSpeed = precise.sqrt(
+              precise.add(
+                precise.mul(ball.dx, ball.dx),
+                precise.mul(ball.dy, ball.dy)
+              )
+            );
 
-            ball.dx = precise.mul(precise.add(precise.mul(precise.mul(normalX, currentSpeed), 0.75), precise.mul(tangentX, 1.6)), 1.1);
-            ball.dy = precise.mul(precise.add(precise.mul(precise.mul(normalY, currentSpeed), 0.75), precise.mul(tangentY, 1.6)), 1.1);
+            ball.dx = precise.mul(
+              precise.add(
+                precise.mul(precise.mul(normalX, currentSpeed), 0.75),
+                precise.mul(tangentX, 1.6)
+              ),
+              1.1
+            );
+            ball.dy = precise.mul(
+              precise.add(
+                precise.mul(precise.mul(normalY, currentSpeed), 0.75),
+                precise.mul(tangentY, 1.6)
+              ),
+              1.1
+            );
 
             playMelodyNote();
           }
@@ -494,7 +582,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         const dx = precise.sub(ball.x, otherBall.x);
         const dy = precise.sub(ball.y, otherBall.y);
-        const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+        const distanceSq = precise.add(
+          precise.mul(dx, dx),
+          precise.mul(dy, dy)
+        );
 
         if (distanceSq < 2304 && distanceSq > 0) {
           const distance = precise.sqrt(distanceSq);
@@ -506,8 +597,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           ball.x = precise.add(ball.x, precise.mul(normalX, halfOverlap));
           ball.y = precise.add(ball.y, precise.mul(normalY, halfOverlap));
-          otherBall.x = precise.sub(otherBall.x, precise.mul(normalX, halfOverlap));
-          otherBall.y = precise.sub(otherBall.y, precise.mul(normalY, halfOverlap));
+          otherBall.x = precise.sub(
+            otherBall.x,
+            precise.mul(normalX, halfOverlap)
+          );
+          otherBall.y = precise.sub(
+            otherBall.y,
+            precise.mul(normalY, halfOverlap)
+          );
 
           const relVelX = precise.sub(ball.dx, otherBall.dx);
           const relVelY = precise.sub(ball.dy, otherBall.dy);
@@ -523,8 +620,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           ball.dx = precise.sub(ball.dx, precise.mul(normalX, halfImpulse));
           ball.dy = precise.sub(ball.dy, precise.mul(normalY, halfImpulse));
-          otherBall.dx = precise.add(otherBall.dx, precise.mul(normalX, halfImpulse));
-          otherBall.dy = precise.add(otherBall.dy, precise.mul(normalY, halfImpulse));
+          otherBall.dx = precise.add(
+            otherBall.dx,
+            precise.mul(normalX, halfImpulse)
+          );
+          otherBall.dy = precise.add(
+            otherBall.dy,
+            precise.mul(normalY, halfImpulse)
+          );
 
           playMelodyNote();
         }
@@ -582,7 +685,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       });
 
       if (ballsRef.current.length > 0 && cameraModeRef.current === "leader") {
-        const activeBalls = ballsRef.current.filter(ball => !ball.finished);
+        const activeBalls = ballsRef.current.filter((ball) => !ball.finished);
         if (activeBalls.length > 0) {
           const leadingBall = activeBalls.reduce((prev, current) =>
             prev.y > current.y ? prev : current
@@ -609,12 +712,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           appRef.current.stage.y += (targetY - appRef.current.stage.y) * 0.05;
         }
       } else if (cameraModeRef.current === "swipe") {
-        // OLD swipe behavior integrated:
         const deviceWidth = window.innerWidth;
-        const scaleForCenter = deviceWidth / 1000; // older centering formula restored
-        const mapWidth = mapDataRef.current?.mapWidth || 1200;
-        const centerX = (mapWidth * scaleForCenter - deviceWidth) / 2;
-        appRef.current.stage.x = -Math.max(0, centerX);
+        const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
+
+        const scale = deviceWidth / WORLD_WIDTH;
+        appRef.current.stage.scale.set(scale);
+
+        // Центрирование по X (учитываем масштаб)
+        const targetX = (deviceWidth - mapWidth * scale) / 2;
+        appRef.current.stage.x = targetX;
 
         // Use unscaled Y for swipe (matches old behaviour)
         appRef.current.stage.y = -scrollYRef.current;
@@ -656,17 +762,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           seed: gameData.seed,
           worldWidth: WORLD_WIDTH,
           worldHeight: WORLD_HEIGHT,
-          random: randomRef.current
+          random: randomRef.current,
         });
 
-        obstaclesRef.current = mapData.obstacles.sort((a, b) => (a.x + a.y) - (b.x + b.y));
-        spinnersRef.current = mapData.spinners.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+        obstaclesRef.current = mapData.obstacles.sort(
+          (a, b) => a.x + a.y - (b.x + b.y)
+        );
+        spinnersRef.current = mapData.spinners.sort(
+          (a, b) => a.x + a.y - (b.x + b.y)
+        );
 
         mapDataRef.current = {
           ...mapData,
           mapWidth: WORLD_WIDTH,
           mapHeight: WORLD_HEIGHT,
-          screenHeight: WORLD_HEIGHT
+          screenHeight: WORLD_HEIGHT,
         };
 
         if (appRef.current) {
@@ -687,8 +797,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       for (const rawParticipant of gameData.participants) {
         const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-        const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
-        const avatarUrl = rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
+        const ballsCount = Number(
+          rawParticipant.balls_count ?? user.balls_count ?? 0
+        );
+        const avatarUrl =
+          rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
         const playerId = (user.id ?? rawParticipant.id ?? "").toString();
 
         if (ballsCount <= 0) continue;
@@ -702,12 +815,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               const proxyUrl = "https://api.corsproxy.io/";
               const finalUrl = proxyUrl + encodedUrl;
               const texture = await PIXI.Assets.load(finalUrl);
-              ballGraphics.circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
+              ballGraphics
+                .circle(0, 0, 24)
+                .fill({ texture })
+                .stroke({ width: 2, color: 0xffffff });
             } catch (error) {
-              ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
+              ballGraphics
+                .circle(0, 0, 24)
+                .fill(0x4ecdc4)
+                .stroke({ width: 2, color: 0xffffff });
             }
           } else {
-            ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
+            ballGraphics
+              .circle(0, 0, 24)
+              .fill(0x4ecdc4)
+              .stroke({ width: 2, color: 0xffffff });
           }
 
           const indicator = new PIXI.Graphics();
@@ -715,9 +837,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
           indicator.visible = false;
 
-          const startX = precise.add(50, precise.mul(randomRef.current.next(), WORLD_WIDTH - 100));
-          const startY = precise.add(50, precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100));
-          const initialDX = precise.mul(precise.sub(randomRef.current.next(), 0.5), 2);
+          const startX = precise.add(
+            50,
+            precise.mul(randomRef.current.next(), WORLD_WIDTH - 100)
+          );
+          const startY = precise.add(
+            50,
+            precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100)
+          );
+          const initialDX = precise.mul(
+            precise.sub(randomRef.current.next(), 0.5),
+            2
+          );
 
           ballGraphics.position.set(startX, startY);
           indicator.position.set(startX, startY - 40);
@@ -802,10 +933,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       if (appRef.current && mode === "swipe") {
         const deviceWidth = window.innerWidth;
-        const scale = deviceWidth / 1000; // restored older centering formula
-        const mapWidth = mapDataRef.current?.mapWidth || 1200;
-        const centerX = (mapWidth * scale - deviceWidth) / 2;
-        appRef.current.stage.x = -Math.max(0, centerX);
+        const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
+
+        const scale = deviceWidth / WORLD_WIDTH;
+        appRef.current.stage.scale.set(scale);
+
+        // Центрирование по X (учитываем масштаб)
+        const targetX = (deviceWidth - mapWidth * scale) / 2;
+        appRef.current.stage.x = targetX;
         // use unscaled Y as in the old implementation
         appRef.current.stage.y = -scrollYRef.current;
 
@@ -850,7 +985,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 appRef.current!.stage.removeChild(ball.graphics);
               } catch (e) {}
               try {
-                if (ball.indicator) appRef.current!.stage.removeChild(ball.indicator);
+                if (ball.indicator)
+                  appRef.current!.stage.removeChild(ball.indicator);
               } catch (e) {}
             });
 
@@ -866,7 +1002,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         // Ensure audio fully cleaned
         try {
           if (oscillatorRef.current) {
-            try { oscillatorRef.current.stop(); } catch (e) {}
+            try {
+              oscillatorRef.current.stop();
+            } catch (e) {}
             oscillatorRef.current = null;
           }
         } catch (e) {}
@@ -897,21 +1035,29 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         // Stop any playing oscillator and mark not playing
         try {
           if (oscillatorRef.current) {
-            try { oscillatorRef.current.onended = null; } catch (e) {}
-            try { oscillatorRef.current.stop(); } catch (e) {}
+            try {
+              oscillatorRef.current.onended = null;
+            } catch (e) {}
+            try {
+              oscillatorRef.current.stop();
+            } catch (e) {}
             oscillatorRef.current = null;
           }
         } catch (e) {}
 
         try {
           if (currentGainRef.current) {
-            try { currentGainRef.current.disconnect(); } catch (e) {}
+            try {
+              currentGainRef.current.disconnect();
+            } catch (e) {}
             currentGainRef.current = null;
           }
         } catch (e) {}
         try {
           if (currentFilterRef.current) {
-            try { currentFilterRef.current.disconnect(); } catch (e) {}
+            try {
+              currentFilterRef.current.disconnect();
+            } catch (e) {}
             currentFilterRef.current = null;
           }
         } catch (e) {}
@@ -930,7 +1076,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         // on enabling, ensure audio context exists and try to resume it
         try {
           if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            audioContextRef.current = new (window.AudioContext ||
+              (window as any).webkitAudioContext)();
           }
           const ctx = audioContextRef.current;
           if (ctx.state === "suspended") {
@@ -946,22 +1093,28 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     useEffect(() => {
       const handleResize = () => {
         if (appRef.current) {
-          appRef.current.renderer.resize(window.innerWidth, window.innerHeight - 80);
+          appRef.current.renderer.resize(
+            window.innerWidth,
+            window.innerHeight - 80
+          );
 
           if (cameraModeRef.current === "swipe") {
             const deviceWidth = window.innerWidth;
-            const scale = deviceWidth / 1000; 
             const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
-            console.log((mapWidth * scale) / 2)
-            const centerX = 0;
-            appRef.current.stage.x = 300;
-            appRef.current.stage.y = -scrollYRef.current; 
+
+            const scale = deviceWidth / WORLD_WIDTH;
+            appRef.current.stage.scale.set(scale);
+
+            // Центрирование по X (учитываем масштаб)
+            const targetX = (deviceWidth - mapWidth * scale) / 2;
+            appRef.current.stage.x = targetX;
+            appRef.current.stage.y = -scrollYRef.current;
           }
         }
       };
 
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
     }, []);
 
     // PIXI initialization (unchanged)
