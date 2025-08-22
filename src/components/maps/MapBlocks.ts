@@ -24,6 +24,26 @@ export const MAP_BLOCKS: MapBlock[] = [
         }
       }
 
+      // Add edge elements
+      for (let row = 0; row < 4; row++) {
+        const y = startY + 50 + row * 80;
+        // Left edge
+        const leftX = 50;
+        const leftBrick = new PIXI.Graphics();
+        leftBrick.roundRect(leftX - 25, y - 10, 50, 20, 5);
+        leftBrick.fill(0x8B4513).stroke({ width: 1, color: 0x654321 });
+        app.stage.addChild(leftBrick);
+        obstacles.push({ x: leftX, y, width: 50, height: 20, type: 'brick', destroyed: false, graphics: leftBrick });
+        
+        // Right edge
+        const rightX = mapWidth - 50;
+        const rightBrick = new PIXI.Graphics();
+        rightBrick.roundRect(rightX - 25, y - 10, 50, 20, 5);
+        rightBrick.fill(0x8B4513).stroke({ width: 1, color: 0x654321 });
+        app.stage.addChild(rightBrick);
+        obstacles.push({ x: rightX, y, width: 50, height: 20, type: 'brick', destroyed: false, graphics: rightBrick });
+      }
+
 
 
       return { obstacles, spinners };
@@ -49,6 +69,24 @@ export const MAP_BLOCKS: MapBlock[] = [
           peg.circle(x, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
           app.stage.addChild(peg);
         }
+      }
+
+      // Add edge pegs
+      for (let row = 0; row < 4; row++) {
+        const y = startY + 80 + row * 120;
+        // Left edge
+        const leftX = 60;
+        obstacles.push({ x: leftX, y, width: 30, height: 30, type: 'peg' });
+        const leftPeg = new PIXI.Graphics();
+        leftPeg.circle(leftX, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
+        app.stage.addChild(leftPeg);
+        
+        // Right edge
+        const rightX = mapWidth - 60;
+        obstacles.push({ x: rightX, y, width: 30, height: 30, type: 'peg' });
+        const rightPeg = new PIXI.Graphics();
+        rightPeg.circle(rightX, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
+        app.stage.addChild(rightPeg);
       }
 
 
@@ -80,6 +118,30 @@ export const MAP_BLOCKS: MapBlock[] = [
 
           spinners.push({ x, y, rotation: 0, graphics: spinner });
         }
+      }
+
+      // Add edge spinners
+      for (let row = 0; row < 3; row++) {
+        const y = startY + 100 + row * 180;
+        // Left edge
+        const leftX = 100;
+        obstacles.push({ x: leftX, y, width: 80, height: 80, type: 'spinner' });
+        const leftSpinner = new PIXI.Graphics();
+        leftSpinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
+        leftSpinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
+        leftSpinner.position.set(leftX, y);
+        app.stage.addChild(leftSpinner);
+        spinners.push({ x: leftX, y, rotation: 0, graphics: leftSpinner });
+        
+        // Right edge
+        const rightX = mapWidth - 100;
+        obstacles.push({ x: rightX, y, width: 80, height: 80, type: 'spinner' });
+        const rightSpinner = new PIXI.Graphics();
+        rightSpinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
+        rightSpinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
+        rightSpinner.position.set(rightX, y);
+        app.stage.addChild(rightSpinner);
+        spinners.push({ x: rightX, y, rotation: 0, graphics: rightSpinner });
       }
 
       return { obstacles, spinners };
@@ -186,6 +248,25 @@ export const MAP_BLOCKS: MapBlock[] = [
         app.stage.addChild(bar);
       }
 
+      // Add edge barriers
+      const leftX = mapWidth * 0.1;
+      const rightX = mapWidth * 0.9;
+      for (let i = 0; i < 3; i++) {
+        const y = startY + 100 + i * 100;
+        
+        // Left edge barrier
+        obstacles.push({ x: leftX, y, width: 80, height: 20, type: 'barrier' });
+        const leftBar = new PIXI.Graphics();
+        leftBar.roundRect(leftX - 40, y - 10, 80, 20, 5).fill(0xe74c3c);
+        app.stage.addChild(leftBar);
+        
+        // Right edge barrier
+        obstacles.push({ x: rightX, y, width: 80, height: 20, type: 'barrier' });
+        const rightBar = new PIXI.Graphics();
+        rightBar.roundRect(rightX - 40, y - 10, 80, 20, 5).fill(0xe74c3c);
+        app.stage.addChild(rightBar);
+      }
+
       return { obstacles, spinners };
     }
   },
@@ -209,6 +290,24 @@ export const MAP_BLOCKS: MapBlock[] = [
           circle.circle(x, y, 20).fill(0x2ecc71).stroke({ width: 3, color: 0x27ae60 });
           app.stage.addChild(circle);
         }
+      }
+
+      // Add edge circles
+      for (let row = 0; row < 3; row++) {
+        const y = startY + 100 + row * 150;
+        // Left edge
+        const leftX = 80;
+        obstacles.push({ x: leftX, y, width: 40, height: 40, type: 'peg' });
+        const leftCircle = new PIXI.Graphics();
+        leftCircle.circle(leftX, y, 20).fill(0x2ecc71).stroke({ width: 3, color: 0x27ae60 });
+        app.stage.addChild(leftCircle);
+        
+        // Right edge
+        const rightX = mapWidth - 80;
+        obstacles.push({ x: rightX, y, width: 40, height: 40, type: 'peg' });
+        const rightCircle = new PIXI.Graphics();
+        rightCircle.circle(rightX, y, 20).fill(0x2ecc71).stroke({ width: 3, color: 0x27ae60 });
+        app.stage.addChild(rightCircle);
       }
 
       return { obstacles, spinners };
@@ -309,21 +408,8 @@ export const MAP_BLOCKS: MapBlock[] = [
       const barWidth = Math.floor(mapWidth * 0.9);
       const barHeight = 18;
 
-      // Add obstacle entries for physics - multiple smaller segments for better collision
-      const segments = 8;
-      for (let i = 0; i < segments; i++) {
-        const segmentWidth = barWidth / segments;
-        const segmentX = x - barWidth/2 + segmentWidth * i + segmentWidth/2;
-        
-        obstacles.push({ 
-          x: segmentX, 
-          y, 
-          width: segmentWidth, 
-          height: barHeight, 
-          type: 'spinner',
-          destroyed: false
-        });
-      }
+      // Add single obstacle for physics like regular spinners
+      obstacles.push({ x, y, width: barWidth, height: barHeight, type: 'spinner' });
 
       const spinner = new PIXI.Graphics();
       // Draw a long thin bar centered at (0,0)
