@@ -10,9 +10,10 @@ interface GameResultModalProps {
   onClose: () => void
   winnerName?: string
   winnerAvatar?: string
+  musicTitle?: string
 }
 
-export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, winnerName, winnerAvatar }: GameResultModalProps) {
+export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, winnerName, winnerAvatar, musicTitle }: GameResultModalProps) {
   const [countdown, setCountdown] = useState(20)
   const [shareError, setShareError] = useState<string | null>(null)
   const { user, shareGameStory } = useTelegram()
@@ -80,7 +81,7 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
           <div className="w-full flex justify-between items-center">
             <span className="text-zinc-500 text-xs">GAME #23245</span>
             <div className="flex items-center gap-1">
-              <span className="text-zinc-500 text-xs">Yesterday - beatles</span>
+              <span className="text-zinc-500 text-xs">{musicTitle || "Unknown track"}</span>
               <img src="/src/assets/icons/music.svg" className="w-4 h-4" alt="music" />
             </div>
           </div>

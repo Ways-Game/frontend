@@ -38,6 +38,9 @@ export interface GameDetailResponse {
   total_price: number;
   status: GameState;
   participants: ParticipantData[];
+  start_wait_play?: string;
+  music_title ?: string;
+  music_content?: string;
 }
 
 export interface Player {

@@ -19,7 +19,6 @@ const quickActions = ["210", "5", "10", "X2"]
 export function PvPScreen() {
   const navigate = useNavigate()
   const { user, webApp, getUserDisplayName, showAlert, hapticFeedback } = useTelegram()
-  const { isActive: isLiveActive, timeLeft } = useLiveTimer(30)
   
   const [activeAction, setActiveAction] = useState<string | null>(null)
   const [selectedGame, setSelectedGame] = useState<GameDetailResponse | null>(null)
@@ -27,23 +26,58 @@ export function PvPScreen() {
   
   const { games, isConnected } = useGames()
 
+  // Function to calculate elapsed seconds from start_wait_play
+  const getElapsedSeconds = (game: GameDetailResponse) => {
+    if (!game.start_wait_play) return 0;
+    const startTime = new Date(game.start_wait_play).getTime();
+    const currentTime = Date.now();
+    return Math.floor((currentTime - startTime) / 1000);
+  };
+
+  // Function to handle LIVE game transition
+  const handleLiveGame = (game: GameDetailResponse) => {
+    const elapsedSeconds = getElapsedSeconds(game);
+    const speedUpTime = elapsedSeconds > 35 ? elapsedSeconds - 33 : 0;
+    
+    navigate('/game', { 
+      state: {
+        game_id: game.game_id,
+        seed: game.seed,
+        mapId: game.map_id,
+        participants: game.participants,
+        prize: game.total_price,
+        total_balls: game.total_balls,
+        fullGame: game,
+        autoStart: true,
+        speedUpTime: speedUpTime,
+        music_content: game.music_content,
+        music_title: game.music_title
+      }
+    });
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Select first waiting game by default (only when nothing is selected)
-        if (games.length > 0 && !selectedGame) {
-          const waitingGame = games.find(g => g.status === GameState.WAIT_PLAYERS || g.status === GameState.WAIT_PLAY)
-          if (waitingGame) {
-            setSelectedGame(waitingGame)
-          }
+        // Exclude PLAY games from selection
+        const availableGames = games.filter(g => g.status !== GameState.PLAY);
+        
+        // Select first available game by default
+        if (availableGames.length > 0 && !selectedGame) {
+          setSelectedGame(availableGames[0])
         }
 
-        // If a game is already selected, keep it in sync with the latest games list
+        // Sync selected game with latest data
         if (selectedGame) {
           const updatedGame = games.find(g => g.seed === selectedGame.seed)
-          // update local selectedGame reference when backend sent newer object
           if (updatedGame && updatedGame !== selectedGame) {
-            setSelectedGame(updatedGame)
+            // If game moved to PLAY status, deselect it
+            if (updatedGame.status === GameState.PLAY) {
+              const newSelected = availableGames[0] || null;
+              setSelectedGame(newSelected);
+            } else {
+              setSelectedGame(updatedGame)
+            }
           }
         }
       } catch (error) {
@@ -68,7 +102,9 @@ export function PvPScreen() {
           prize: fresh.total_price,
           total_balls: fresh.total_balls,
           fullGame: fresh,
-          autoStart: true
+          autoStart: true,
+          music_content: fresh.music_content,
+          music_title: fresh.music_title
         }})
       }
     } catch (error) {
@@ -122,35 +158,60 @@ export function PvPScreen() {
           <div className="flex-1 relative flex justify-start items-center gap-3 overflow-hidden">
             <div className="flex gap-3 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               {games.map((game) => {
-                const isActive = game.status === GameState.PLAY
-                const isSelected = selectedGame?.seed === game.seed
+                const isWaitPlayers = game.status === GameState.WAIT_PLAYERS;
+                const isWaitPlay = game.status === GameState.WAIT_PLAY;
+                const isPlay = game.status === GameState.PLAY;
+                const isSelected = selectedGame?.seed === game.seed && !isPlay;
+                
+                // LIVE games get special treatment
+                if (isPlay) {
+                  return (
+                    <div 
+                      key={game.seed} 
+                      onClick={() => handleLiveGame(game)}
+                      className="h-8 px-3 py-2 rounded-[20px] flex items-center gap-2 relative overflow-hidden flex-shrink-0 cursor-pointer bg-red-500"
+                    >
+                      <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                      
+                      <div className="flex items-center gap-1.5 relative z-10">         
+                        <span className="text-white text-base font-semibold">LIVE</span>
+                        <Smile className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex items-center gap-1 relative z-10">
+                        <span className="text-white/80 text-base font-semibold">{game.participants.length}</span>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                // Waiting games
                 return (
                   <div 
                     key={game.seed} 
-                    onClick={() => isActive ? handleStartGame() : setSelectedGame(game)}
+                    onClick={() => setSelectedGame(game)}
                     className={`h-8 px-3 py-2 rounded-[20px] flex items-center gap-2 relative overflow-hidden flex-shrink-0 cursor-pointer ${
-                      isActive ? 'bg-red-500' : isSelected ? 'bg-gray-600' : 'bg-gray-500'
+                      isSelected ? 'bg-gray-600' : 'bg-gray-500'
                     }`}
                   >
-                    {isActive && (
+                    {/* Progress bar for WAIT_PLAY */}
+                    {isWaitPlay && (
                       <div 
-                        className="absolute inset-0 bg-white/20 transition-all duration-500 ease-out"
+                        className="absolute inset-0 bg-white/20 transition-all duration-1000 ease-out"
                         style={{
-                          width: `${((30 - timeLeft) / 30) * 100}%`,
+                          width: `${Math.min(100, (getElapsedSeconds(game) / 30) * 100)}%`,
                         }}
                       />
                     )}
+                    
                     <div className="flex items-center gap-1.5 relative z-10">         
-                      <span className="text-white text-base font-semibold">
-                        {isActive ? 'LIVE' : 'WAIT'}
-                      </span>
+                      <span className="text-white text-base font-semibold">WAIT</span>
                       <Smile className="w-4 h-4 text-white" />
                     </div>
                     <div className="flex items-center gap-1 relative z-10">
                       <span className="text-white/80 text-base font-semibold">{game.participants.length}</span>
                     </div>
                   </div>
-                )
+                );
               })}
             </div>
             <div className="w-5 h-8 bg-gradient-to-l from-black to-black/0 absolute right-[-2px]" />
@@ -181,7 +242,9 @@ export function PvPScreen() {
                 prize: fresh.total_price,
                 total_balls: fresh.total_balls,
                 fullGame: fresh,
-                autoStart: true
+                autoStart: true,
+                music_content: fresh.music_content,
+                music_title: fresh.music_title
               }})
             }}
             className="absolute left-1/2 -translate-x-1/2 -top-4 z-20 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-xs"
@@ -198,10 +261,13 @@ export function PvPScreen() {
               }`} />
             </div>
             <div className="flex items-center gap-2">
-              <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-400" />
-                <span className="text-neutral-50 text-sm">15s</span>
-              </div>
+              {/* Timer only for WAIT_PLAY */}
+              {selectedGame?.status === GameState.WAIT_PLAY && (
+                <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <span className="text-neutral-50 text-sm">{getElapsedSeconds(selectedGame)}s</span>
+                </div>
+              )}
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
                 <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
                 <span className="text-neutral-50 text-sm">{selectedGame?.total_balls || 0}<span className="text-neutral-50/40">/300</span></span>

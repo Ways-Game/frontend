@@ -79,6 +79,7 @@ interface GameCanvasProps {
   initialCameraMode?: "leader" | "swipe";
   scrollY?: number;
   soundEnabled?: boolean;
+  musicContent?: string;
 }
 
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
@@ -92,6 +93,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       initialCameraMode = "leader",
       scrollY = 0,
       soundEnabled = true,
+      musicContent,
     },
     ref
   ) => {
@@ -887,8 +889,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       onGameStart?.();
 
       try {
-        if (RTTTL && typeof RTTTL === "string") {
-          melodyNotesRef.current = parseRTTTL(RTTTL);
+        const rtttlContent = musicContent || RTTTL;
+        if (rtttlContent && typeof rtttlContent === "string") {
+          melodyNotesRef.current = parseRTTTL(rtttlContent);
           currentNoteIndexRef.current = 0;
         }
       } catch (e) {

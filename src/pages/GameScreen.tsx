@@ -28,7 +28,7 @@ export function GameScreen() {
   const [scrollY, setScrollY] = useState(0)
   const [maxScrollY, setMaxScrollY] = useState(0)
   const [touchStartY, setTouchStartY] = useState(0) 
- const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0 })
+ const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0, music_content: "", music_title: "" })
 // ref to keep latest gameData accessible to callbacks
 const gameDataRef = useRef<typeof gameData>(gameData);
 
@@ -175,7 +175,9 @@ const autoStartPendingRef = useRef<any | null>(null);
         mapId: payload.map_id ?? payload.mapId ?? state.mapId ?? 0,
         participants: payload.participants || state.participants || [],
         prize: payload.total_price ?? payload.total_price ?? payload.prize ?? state.prize ?? 0,
-        total_balls: payload.total_balls ?? payload.totalBalls ?? state.total_balls ?? 0
+        total_balls: payload.total_balls ?? payload.totalBalls ?? state.total_balls ?? 0,
+        music_content: payload.music_content || state.music_content || "",
+        music_title: payload.music_title || state.music_title || ""
       };
       setGameData(nextGameData as any);
       if (state.autoStart) {
@@ -296,6 +298,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           initialCameraMode={cameraMode}
           scrollY={cameraMode === 'swipe' ? scrollY : 0}
           soundEnabled={soundEnabled}
+          musicContent={gameData.music_content}
         />
       </div>
       
@@ -410,6 +413,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           onClose={handleClose}
           winnerName={winnerInfo?.name}
           winnerAvatar={winnerInfo?.avatar}
+          musicTitle={gameData.music_title}
         />
       )}
     </div>
