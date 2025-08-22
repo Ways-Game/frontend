@@ -952,8 +952,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             const deviceWidth = window.innerWidth;
             const scale = deviceWidth / 1000; 
             const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
-            const centerX = (mapWidth * scale) / 2;
-            appRef.current.stage.x = -Math.max(0, centerX);
+            console.log((mapWidth * scale) / 2)
+            const centerX = 0;
+            appRef.current.stage.x = 600;
             appRef.current.stage.y = -scrollYRef.current; 
           }
         }
