@@ -17,14 +17,15 @@ const FIXED_DELTA = 1000 / FIXED_FPS;
 const WORLD_WIDTH = 1200;
 const WORLD_HEIGHT = 2500;
 
-// Предвычисленные константы (НЕ вычисляем в цикле!)
+// Предвычисленные константы физики
 const GRAVITY_PER_STEP = 0.08;
 const FRICTION_STEP = 0.9999800039998667; // Math.pow(0.9988, 1/60)
 const SPINNER_STEP = 0.08;
 const SURFACE_FRICTION = 0.997;
-const PEG_BOUNCE = 0.95;
-const BRICK_BOUNCE = 0.9;
-const BALL_BOUNCE = 0.92;
+const PEG_BOUNCE = 0.82;
+const BRICK_BOUNCE = 0.78;
+const BALL_BOUNCE = 0.86;
+const SPINNER_BOUNCE = 1.1;
 
 // Детерминированные математические операции
 const precise = {
@@ -309,28 +310,27 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const dy = precise.sub(ball.y, obstacle.y);
           const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
           
-          if (distanceSq < 1296 && distanceSq > 0) { // 36^2 = 1296
+          if (distanceSq < 1296) {
             const distance = precise.sqrt(distanceSq);
             const normalX = precise.div(dx, distance);
             const normalY = precise.div(dy, distance);
 
+            // Корректировка позиции
             ball.x = precise.add(obstacle.x, precise.mul(normalX, 36));
             ball.y = precise.add(obstacle.y, precise.mul(normalY, 36));
 
+            // Расчет отражения
             const dotProduct = precise.add(
               precise.mul(ball.dx, normalX),
               precise.mul(ball.dy, normalY)
             );
             
-            const impulseX = precise.mul(precise.mul(dotProduct, normalX), -2);
-            const impulseY = precise.mul(precise.mul(dotProduct, normalY), -2);
-            
             ball.dx = precise.mul(
-              precise.add(ball.dx, impulseX),
+              precise.sub(ball.dx, precise.mul(precise.mul(dotProduct, 2), normalX)),
               PEG_BOUNCE
             );
             ball.dy = precise.mul(
-              precise.add(ball.dy, impulseY),
+              precise.sub(ball.dy, precise.mul(precise.mul(dotProduct, 2), normalY)),
               PEG_BOUNCE
             );
             
@@ -400,10 +400,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
             const tangentX = precise.mul(normalY, -1);
             const tangentY = normalX;
-            const currentSpeed = precise.sqrt(distanceSq);
+            const currentSpeed = precise.sqrt(precise.add(precise.mul(ball.dx, ball.dx), precise.mul(ball.dy, ball.dy)));
 
-            ball.dx = precise.add(precise.mul(precise.mul(normalX, currentSpeed), 0.75), precise.mul(tangentX, 1.6));
-            ball.dy = precise.add(precise.mul(precise.mul(normalY, currentSpeed), 0.75), precise.mul(tangentY, 1.6));
+            ball.dx = precise.mul(precise.add(precise.mul(precise.mul(normalX, currentSpeed), 0.75), precise.mul(tangentX, 1.6)), SPINNER_BOUNCE);
+            ball.dy = precise.mul(precise.add(precise.mul(precise.mul(normalY, currentSpeed), 0.75), precise.mul(tangentY, 1.6)), SPINNER_BOUNCE);
             
             playMelodyNote();
           }
