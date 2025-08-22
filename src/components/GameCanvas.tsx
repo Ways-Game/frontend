@@ -521,9 +521,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             }
           });
 
-          // Центрируем камеру на leadingBall
-          const targetX = -leadingBall.x * scale + deviceWidth / 2;
-          const targetY = -leadingBall.y * scale + deviceHeight / 2;
+          // Центрируем камеру на leadingBall с границами
+          const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
+          const mapHeight = mapDataRef.current?.mapHeight || WORLD_HEIGHT;
+          
+          let targetX = -leadingBall.x * scale + deviceWidth / 2;
+          let targetY = -leadingBall.y * scale + deviceHeight / 2;
+          
+          // Ограничиваем камеру границами карты
+          const minX = Math.min(0, deviceWidth - mapWidth * scale);
+          const maxX = 0;
+          const minY = Math.min(0, deviceHeight - mapHeight * scale);
+          const maxY = 0;
+          
+          targetX = Math.max(minX, Math.min(maxX, targetX));
+          targetY = Math.max(minY, Math.min(maxY, targetY));
 
           // Плавное перемещение камеры
           appRef.current.stage.x += (targetX - appRef.current.stage.x) * 0.05;
