@@ -14,18 +14,32 @@ import RTTTL from "@/assets/Theme - Batman.txt?raw";
 // Константы для детерминированной физики
 const FIXED_FPS = 60;
 const FIXED_DELTA = 1000 / FIXED_FPS;
-const SECONDS_PER_STEP = FIXED_DELTA / 1000;
+const SECONDS_PER_STEP = 1 / 60; // ВСЕГДА используем 1/60 для детерминизма
 
-// Физические константы в единицах в секунду
-const GRAVITY_PER_SEC = 4.8; // 0.08 * 60 = 4.8 units/s^2
-const FRICTION_PER_SEC = 0.9988; // 0.9998^60 ≈ 0.9988 per second
-const SPINNER_SPEED_PER_SEC = 4.8; // 0.08 * 60 = 4.8 rad/s
+// Предварительно вычисленные константы (захардкожены для одинакового результата)
+const GRAVITY_PER_STEP = 0.08; // 4.8 * (1/60)
+const FRICTION_PER_STEP = 0.9999800039998667; // Math.pow(0.9988, 1/60)
+const SPINNER_SPEED_PER_STEP = 0.08; // 4.8 * (1/60)
+const SURFACE_FRICTION = 0.997;
+const PEG_BOUNCE = 0.95;
+const BRICK_BOUNCE = 0.9;
+const BALL_BOUNCE = 0.92;
 
-// Точные математические операции без округления
+// Точные математические операции с фиксированным порядком вычислений
 const precise = {
-  add: (a: number, b: number) => a + b,
-  mul: (a: number, b: number) => a * b,
-  sqrt: (x: number) => Math.sqrt(x),
+  add: (a: number, b: number) => {
+    const sum = a + b;
+    return sum === 0 ? 0 : sum; // Нормализуем -0 к 0
+  },
+  mul: (a: number, b: number) => {
+    const product = a * b;
+    return product === 0 ? 0 : product;
+  },
+  sqrt: (x: number) => {
+    if (x === 0) return 0;
+    if (x === 1) return 1;
+    return Math.sqrt(x);
+  },
 };
 
 // Детерминированный ГПСЧ
@@ -232,48 +246,53 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const updatePhysics = () => {
       if (!randomRef.current) return;
 
-      // Update spinners in physics
-      spinnersRef.current.forEach((spinner) => {
-        spinner.rotation = precise.add(spinner.rotation, SPINNER_SPEED_PER_SEC * SECONDS_PER_STEP);
-      });
-
-      // Debug: log state every second
-      const stepCount = Math.floor(physicsTimeRef.current / FIXED_DELTA);
-      if (stepCount % 60 === 0 && stepCount > 0) {
-        const state = ballsRef.current.map(b => [b.x, b.y, b.dx, b.dy]);
-        console.log(`Physics step ${stepCount}:`, state);
+      // Валидация синхронизации каждую секунду
+      if (physicsTimeRef.current % 1000 === 0 && physicsTimeRef.current > 0) {
+        const checksum = ballsRef.current.reduce((sum, b) => 
+          sum + b.x * 10000 + b.y * 100 + b.dx * 10 + b.dy, 0);
+        console.log(`Sync check at ${physicsTimeRef.current}ms: ${checksum.toFixed(2)}`);
       }
+
+      // Обновляем спиннеры с детерминированным шагом
+      spinnersRef.current.forEach((spinner) => {
+        spinner.rotation = precise.add(spinner.rotation, SPINNER_SPEED_PER_STEP);
+      });
 
       ballsRef.current.forEach((ball, ballIndex) => {
         if (ball.finished) return;
 
-        // Применяем детерминированные физические вычисления
-        ball.dy = precise.add(ball.dy, GRAVITY_PER_SEC * SECONDS_PER_STEP);
-        ball.dx = precise.mul(ball.dx, Math.pow(FRICTION_PER_SEC, SECONDS_PER_STEP));
-        ball.dy = precise.mul(ball.dy, Math.pow(FRICTION_PER_SEC, SECONDS_PER_STEP));
+        // === ДЕТЕРМИНИРОВАННАЯ ФИЗИКА ===
+        // 1. Гравитация
+        ball.dy = precise.add(ball.dy, GRAVITY_PER_STEP);
+        
+        // 2. Трение (воздух)
+        ball.dx = precise.mul(ball.dx, FRICTION_PER_STEP);
+        ball.dy = precise.mul(ball.dy, FRICTION_PER_STEP);
 
-        // Rolling surface logic
+        // 3. Логика поверхностей
         if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
           const obs: any = (ball as any).surfaceObstacle;
           const halfW = obs.width / 2;
           const halfH = obs.height / 2;
 
-          ball.y = precise.add(obs.y - halfH, -24);
+          ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
           ball.dy = 0;
-          ball.dx = precise.mul(ball.dx, 0.997);
+          ball.dx = precise.mul(ball.dx, SURFACE_FRICTION);
           
           if (Math.abs(ball.dx) < 0.03) ball.dx = 0;
-          
           ball.x = precise.add(ball.x, ball.dx);
           
-          // Add deterministic noise
-          const noise = randomRef.current.next();
+          // Детерминированный шум
+          const noise = randomRef.current!.next();
           if (Math.abs(ball.dx) < 0.1) {
-            ball.dx = precise.add(ball.dx, precise.mul(noise - 0.5, 0.2));
+            const noiseValue = precise.mul(precise.add(noise, -0.5), 0.2);
+            ball.dx = precise.add(ball.dx, noiseValue);
           }
 
-          // Check if falls off
-          if (obs.destroyed || ball.x < obs.x - halfW - 24 || ball.x > obs.x + halfW + 24) {
+          // Проверка падения
+          if (obs.destroyed || 
+              ball.x < obs.x - halfW - 24 || 
+              ball.x > obs.x + halfW + 24) {
             (ball as any).onSurface = false;
             (ball as any).surfaceObstacle = null;
             ball.dy = 1;
@@ -283,7 +302,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ball.y = precise.add(ball.y, ball.dy);
         }
 
-        // Детерминированные коллизии
+        // 4. Коллизии
+
         checkCollisions(ball);
       });
 
@@ -293,27 +313,42 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       );
     };
 
-    // Детерминированная проверка коллизий
     const checkCollisions = (ball: Ball) => {
-      // Obstacle collisions
+      // === ДЕТЕРМИНИРОВАННАЯ ОБРАБОТКА КОЛЛИЗИЙ ===
       obstaclesRef.current.forEach((obstacle) => {
         if (obstacle.destroyed) return;
 
         if (obstacle.type === "peg") {
           const dx = precise.add(ball.x, -obstacle.x);
           const dy = precise.add(ball.y, -obstacle.y);
-          const distance = precise.sqrt(precise.add(precise.mul(dx, dx), precise.mul(dy, dy)));
-
-          if (distance < 36 && distance > 0) {
+          const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+          
+          // Избегаем sqrt где возможно
+          if (distanceSq < 1296 && distanceSq > 0) { // 36^2 = 1296
+            const distance = precise.sqrt(distanceSq);
             const normalX = precise.mul(dx, 1 / distance);
             const normalY = precise.mul(dy, 1 / distance);
 
             ball.x = precise.add(obstacle.x, precise.mul(normalX, 36));
             ball.y = precise.add(obstacle.y, precise.mul(normalY, 36));
 
-            const dotProduct = precise.add(precise.mul(ball.dx, normalX), precise.mul(ball.dy, normalY));
-            ball.dx = precise.mul(precise.add(ball.dx, precise.mul(precise.mul(dotProduct, normalX), -2)), 0.95);
-            ball.dy = precise.mul(precise.add(ball.dy, precise.mul(precise.mul(dotProduct, normalY), -2)), 0.95);
+            const dotProduct = precise.add(
+              precise.mul(ball.dx, normalX),
+              precise.mul(ball.dy, normalY)
+            );
+            
+            // Строго фиксированный порядок операций
+            const impulseX = precise.mul(precise.mul(dotProduct, normalX), -2);
+            const impulseY = precise.mul(precise.mul(dotProduct, normalY), -2);
+            
+            ball.dx = precise.mul(
+              precise.add(ball.dx, impulseX),
+              PEG_BOUNCE
+            );
+            ball.dy = precise.mul(
+              precise.add(ball.dy, impulseY),
+              PEG_BOUNCE
+            );
             
             playMelodyNote();
           }
@@ -331,17 +366,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               } else {
                 ball.x = precise.add(obstacle.x + halfW, 24);
               }
-              ball.dx = precise.mul(ball.dx, -0.9);
+              ball.dx = precise.mul(ball.dx, -BRICK_BOUNCE);
             } else {
               if (ball.y < obstacle.y) {
                 ball.y = precise.add(obstacle.y - halfH, -24);
                 (ball as any).onSurface = true;
                 (ball as any).surfaceObstacle = obstacle;
                 ball.dy = 0;
-                ball.dx = precise.mul(ball.dx, 0.95);
+                ball.dx = precise.mul(ball.dx, PEG_BOUNCE);
               } else {
                 ball.y = precise.add(obstacle.y + halfH, 24);
-                ball.dy = precise.mul(ball.dy, -0.9);
+                ball.dy = precise.mul(ball.dy, -BRICK_BOUNCE);
               }
             }
             playMelodyNote();
@@ -360,18 +395,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             const overlapY = halfH + 24 - Math.abs(ball.y - obstacle.y);
 
             if (overlapX < overlapY) {
-              ball.dx = precise.mul(ball.dx, -0.9);
+              ball.dx = precise.mul(ball.dx, -BRICK_BOUNCE);
             } else {
-              ball.dy = precise.mul(ball.dy, -0.9);
+              ball.dy = precise.mul(ball.dy, -BRICK_BOUNCE);
             }
             playMelodyNote();
           }
         } else if (obstacle.type === "spinner") {
           const dx = precise.add(ball.x, -obstacle.x);
           const dy = precise.add(ball.y, -obstacle.y);
-          const distance = precise.sqrt(precise.add(precise.mul(dx, dx), precise.mul(dy, dy)));
+          const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
 
-          if (distance < 48 && distance > 0) {
+          if (distanceSq < 2304 && distanceSq > 0) { // 48^2 = 2304
+            const distance = precise.sqrt(distanceSq);
             const normalX = precise.mul(dx, 1 / distance);
             const normalY = precise.mul(dy, 1 / distance);
 
@@ -380,7 +416,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
             const tangentX = -normalY;
             const tangentY = normalX;
-            const currentSpeed = precise.sqrt(precise.add(precise.mul(ball.dx, ball.dx), precise.mul(ball.dy, ball.dy)));
+            const currentSpeed = precise.sqrt(distanceSq);
 
             ball.dx = precise.add(precise.mul(precise.mul(normalX, currentSpeed), 0.75), precise.mul(tangentX, 1.6));
             ball.dy = precise.add(precise.mul(precise.mul(normalY, currentSpeed), 0.75), precise.mul(tangentY, 1.6));
@@ -390,21 +426,23 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      // Ball-to-ball collisions
+      // === КОЛЛИЗИИ МЕЖДУ МЯЧАМИ ===
       ballsRef.current.forEach((otherBall) => {
         if (otherBall === ball || otherBall.finished) return;
 
         const dx = precise.add(ball.x, -otherBall.x);
         const dy = precise.add(ball.y, -otherBall.y);
-        const distance = precise.sqrt(precise.add(precise.mul(dx, dx), precise.mul(dy, dy)));
-
-        if (distance < 48 && distance > 0) {
+        const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+        
+        if (distanceSq < 2304 && distanceSq > 0) { // 48^2 = 2304
+          const distance = precise.sqrt(distanceSq);
           const normalX = precise.mul(dx, 1 / distance);
           const normalY = precise.mul(dy, 1 / distance);
 
           const overlap = precise.add(48, -distance);
           const halfOverlap = precise.mul(overlap, 0.5);
 
+          // Строго фиксированный порядок коррекции позиции
           ball.x = precise.add(ball.x, precise.mul(normalX, halfOverlap));
           ball.y = precise.add(ball.y, precise.mul(normalY, halfOverlap));
           otherBall.x = precise.add(otherBall.x, precise.mul(normalX, -halfOverlap));
@@ -412,13 +450,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           const relVelX = precise.add(ball.dx, -otherBall.dx);
           const relVelY = precise.add(ball.dy, -otherBall.dy);
-          const relSpeed = precise.add(precise.mul(relVelX, normalX), precise.mul(relVelY, normalY));
+          const relSpeed = precise.add(
+            precise.mul(relVelX, normalX),
+            precise.mul(relVelY, normalY)
+          );
 
           if (relSpeed > 0) return;
 
-          const impulse = precise.mul(relSpeed, 0.92);
+          const impulse = precise.mul(relSpeed, BALL_BOUNCE);
           const halfImpulse = precise.mul(impulse, 0.5);
 
+          // Строго фиксированный порядок импульсов
           ball.dx = precise.add(ball.dx, precise.mul(normalX, -halfImpulse));
           ball.dy = precise.add(ball.dy, precise.mul(normalY, -halfImpulse));
           otherBall.dx = precise.add(otherBall.dx, precise.mul(normalX, halfImpulse));
@@ -428,14 +470,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      // Boundary collisions
+      // === ГРАНИЧНЫЕ КОЛЛИЗИИ ===
       if (ball.x < 24) {
         ball.x = 24;
-        ball.dx = precise.mul(Math.abs(ball.dx), 0.95);
+        ball.dx = precise.mul(Math.abs(ball.dx), PEG_BOUNCE);
       }
       if (ball.x > 1176) {
         ball.x = 1176;
-        ball.dx = precise.mul(-Math.abs(ball.dx), 0.95);
+        ball.dx = precise.mul(-Math.abs(ball.dx), PEG_BOUNCE);
       }
 
       // Win/death zones
