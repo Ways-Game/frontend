@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Chip } from "@/components/ui/ways-chip"
 import { WaysButton } from "@/components/ui/ways-button"
@@ -230,7 +230,7 @@ const autoStartPendingRef = useRef<any | null>(null);
     }
   }
 
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     if (cameraMode === 'swipe') {
       e.preventDefault();
       const newY = Math.max(0, Math.min(maxScrollY, scrollY + e.deltaY));
@@ -239,7 +239,15 @@ const autoStartPendingRef = useRef<any | null>(null);
         gameCanvasRef.current.setScrollY(newY);
       }
     }
-  }
+  }, [cameraMode, maxScrollY, scrollY]);
+
+  useEffect(() => {
+    const element = document.querySelector('.game-container');
+    if (element) {
+      element.addEventListener('wheel', handleWheel, { passive: false });
+      return () => element.removeEventListener('wheel', handleWheel);
+    }
+  }, [handleWheel]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (cameraMode === 'swipe') {
@@ -275,16 +283,14 @@ const autoStartPendingRef = useRef<any | null>(null);
   return (
     <div 
       className="min-h-screen bg-black relative overflow-hidden"
-      onWheel={handleWheel}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       {/* Game Canvas - Full Screen */}
       <div 
-        className="absolute inset-0 w-full h-full overflow-hidden"
+        className="game-container absolute inset-0 w-full h-full overflow-hidden"
         style={{ display: showCountdown ? 'none' : 'block' }}
-        onWheel={handleWheel}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -307,7 +313,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           {scrollY > 0 && (
             <button 
               onClick={handleScrollUp}
-              className="absolute left-1/2 transform -translate-x-1/2 top-20 z-30 w-12 h-8 bg-gray-800/70 rounded-full flex items-center justify-center backdrop-blur-sm"
+              className="absolute left-1/2 transform -translate-x-1/2 top-20 z-50 w-12 h-8 bg-gray-800/70 rounded-full flex items-center justify-center backdrop-blur-sm pointer-events-auto"
             >
               <ChevronLeft className="w-5 h-5 text-white transform rotate-90" />
             </button>
@@ -315,7 +321,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           {scrollY < maxScrollY && (
             <button 
               onClick={handleScrollDown}
-              className="absolute left-1/2 transform -translate-x-1/2 bottom-32 z-30 w-12 h-8 bg-gray-800/70 rounded-full flex items-center justify-center backdrop-blur-sm"
+              className="absolute left-1/2 transform -translate-x-1/2 bottom-32 z-50 w-12 h-8 bg-gray-800/70 rounded-full flex items-center justify-center backdrop-blur-sm pointer-events-auto"
             >
               <ChevronRight className="w-5 h-5 text-white transform rotate-90" />
             </button>
@@ -325,7 +331,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       
       {/* Полоса прокрутки (только в режиме swipe) */}
       {cameraMode === 'swipe' && maxScrollY > 0 && (
-        <div className="absolute right-2 top-20 bottom-32 z-30 w-2 bg-gray-800/50 rounded-full">
+        <div className="absolute right-2 top-20 bottom-32 z-50 w-2 bg-gray-800/50 rounded-full pointer-events-none">
           <div 
             className="w-full bg-yellow-500 rounded-full transition-all duration-300"
             style={{ height: `${(scrollY / maxScrollY) * 100}%` }}

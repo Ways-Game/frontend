@@ -164,14 +164,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     const parseRTTTL = (rtttl: string) => {
       try {
-        if (!rtttl || typeof rtttl !== "string") return [];
-        let raw = rtttl.replace(/^\uFEFF/, "").trim();
-        let parts = raw.split(":");
+        if (!rtttl || typeof rtttl !== 'string') return [];
+        const parts = rtttl.split(':');
         if (parts.length < 3) return [];
-        
+        const [name, settingsStr, notesStr] = parts;
         const settings: any = {};
-        parts[1].split(",").forEach((s) => {
-          const [key, value] = s.split("=");
+        settingsStr.split(',').forEach(s => {
+          const [key, value] = s.split('=');
           settings[key] = value;
         });
 
@@ -179,96 +178,167 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const defaultOctave = parseInt(settings.o) || 5;
         const bpm = parseInt(settings.b) || 63;
 
-        const baseFreq: Record<string, number> = {
-          'c': 261.63, 'c#': 277.18, 'd': 293.66, 'd#': 311.13, 'e': 329.63,
-          'f': 349.23, 'f#': 369.99, 'g': 392.00, 'g#': 415.30, 'a': 440.00,
-          'a#': 466.16, 'b': 493.88
-        };
-
-        const notes = parts[2].split(",").map((noteStr) => {
-          noteStr = noteStr.trim();
+        const notes = notesStr.split(',').map(noteStr => {
           let duration = defaultDuration;
+          let noteChar = '';
+          let dot = false;
           let octave = defaultOctave;
-          let noteName = "a";
 
-          const durationMatch = noteStr.match(/^\d+/);
+          let rest = noteStr.trim();
+
+          const durationMatch = rest.match(/^\d+/);
           if (durationMatch) {
             duration = parseInt(durationMatch[0]);
-            noteStr = noteStr.substring(durationMatch[0].length);
+            rest = rest.substring(durationMatch[0].length);
           }
 
-          if (noteStr.toLowerCase().startsWith('p')) {
-            return { frequency: 0, duration: (240000 / bpm) * (1 / duration) };
-          }
-
-          const noteMatch = noteStr.match(/^[a-g]#?/i);
-          if (noteMatch) {
-            noteName = noteMatch[0].toLowerCase();
-            const restStr = noteStr.substring(noteMatch[0].length);
-            const octaveMatch = restStr.match(/^\d/);
-            if (octaveMatch) {
-              octave = parseInt(octaveMatch[0]);
+          if (rest[0] === 'p') {
+            noteChar = 'p';
+            rest = rest.substring(1);
+          } else {
+            noteChar = rest[0];
+            rest = rest.substring(1);
+            if (rest[0] === '#' || rest[0] === 'b') {
+              noteChar += rest[0];
+              rest = rest.substring(1);
             }
           }
 
-          let frequency = baseFreq[noteName] || 440;
-          frequency = frequency * Math.pow(2, octave - 4);
-          
-          const durationMs = (240000 / bpm) * (1 / duration);
+          if (rest[0] === '.') {
+            dot = true;
+            rest = rest.substring(1);
+          }
+
+          if (rest.length > 0) {
+            const oct = parseInt(rest);
+            if (!isNaN(oct)) octave = oct;
+          }
+
+          const durationMs = (240000 / bpm) * (1 / duration) * (dot ? 1.5 : 1);
+
+          let frequency = 0;
+          if (noteChar !== 'p') {
+            const noteMap: { [key: string]: number } = {
+              'c': 0, 'c#': 1, 'db': 1, 'd': 2, 'd#': 3, 'eb': 3, 'e': 4, 'f': 5, 'f#': 6, 'gb': 6, 'g': 7, 'g#': 8, 'ab': 8, 'a': 9, 'a#': 10, 'bb': 10, 'b': 11
+            };
+            const noteValue = noteMap[noteChar.toLowerCase()];
+            if (noteValue === undefined) {
+              console.warn(`Unknown note: ${noteChar}`);
+            } else {
+              const semitone = (octave + 1) * 12 + noteValue;
+              frequency = 440 * Math.pow(2, (semitone - 49) / 12);
+            }
+          }
+
           return { frequency, duration: durationMs };
         });
 
         return notes;
       } catch (error) {
+        console.error('Failed to parse RTTTL:', error);
         return [];
       }
     };
 
-    const playMelodyNote = useCallback(() => {
-      if (!soundEnabledRef.current) return;
-      
-      const notes = melodyNotesRef.current;
-      if (notes.length === 0) {
-        // Fallback to 440Hz if no melody loaded
+    // Cleanup audio resources on unmount
+    useEffect(() => {
+      return () => {
         try {
-          const context = getAudioContext();
-          const oscillator = context.createOscillator();
-          const gainNode = context.createGain();
-          
-          oscillator.frequency.setValueAtTime(440, context.currentTime);
-          gainNode.gain.setValueAtTime(0.05, context.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
-          
-          oscillator.connect(gainNode);
-          gainNode.connect(context.destination);
-          
-          oscillator.start();
-          oscillator.stop(context.currentTime + 0.1);
-        } catch (error) {}
-        return;
+          if (oscillatorRef.current) {
+            oscillatorRef.current.stop();
+          }
+        } catch (e) {}
+        try {
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+          }
+        } catch (e) {}
+      };
+    }, []);
+
+    const lastCollisionAtRef = useRef<number>(0);
+
+    const playCollisionSound = (intensity = 0.5) => {
+      // Legacy function retained for compatibility but no longer plays wav.
+      // Keep a minimal rate limiter so earlier logic relying on this doesn't spam.
+      if (!soundEnabledRef.current) return;
+      const now = Date.now();
+      const minInterval = 60;
+      if (now - lastCollisionAtRef.current < minInterval) return;
+      lastCollisionAtRef.current = now;
+    };
+
+    // Play a single melody note using WebAudio (softer oscillator, low-pass filter, fadeout)
+    const playMelodyNote = useCallback(() => {
+      if (!soundEnabledRef.current || isPlayingRef.current) return;
+
+      const notes = melodyNotesRef.current;
+      if (currentNoteIndexRef.current >= notes.length) {
+        currentNoteIndexRef.current = 0;
       }
 
       const note = notes[currentNoteIndexRef.current];
-      currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+      if (!note) return;
 
-      if (note.frequency === 0) return; // Skip pauses
+      // Pause (rest)
+      if (note.frequency === 0) {
+        isPlayingRef.current = true;
+        setTimeout(() => {
+          isPlayingRef.current = false;
+          currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+        }, note.duration);
+        return;
+      }
 
       try {
-        const context = getAudioContext();
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+
+        const context = audioContextRef.current;
+        if (context.state === 'suspended') {
+          context.resume();
+        }
+
         const oscillator = context.createOscillator();
+        oscillatorRef.current = oscillator;
+
+        // Softer waveform
+        oscillator.type = 'sine';
+
+        // Low-pass filter to smooth high frequencies
+        const filter = context.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 2000;
+
+        // Gain node with gentle volume and exponential fade-out
         const gainNode = context.createGain();
-        
+        gainNode.gain.setValueAtTime(0.12, context.currentTime);
+        // Avoid ramping to zero (use a small value)
+        gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + note.duration / 1000);
+
         oscillator.frequency.setValueAtTime(note.frequency, context.currentTime);
-        gainNode.gain.setValueAtTime(0.05, context.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
-        
-        oscillator.connect(gainNode);
+
+        // Chain: oscillator -> filter -> gain -> destination
+        oscillator.connect(filter);
+        filter.connect(gainNode);
         gainNode.connect(context.destination);
-        
+
         oscillator.start();
-        oscillator.stop(context.currentTime + 0.1);
-      } catch (error) {}
-    }, [getAudioContext]);
+        oscillator.stop(context.currentTime + note.duration / 1000);
+
+        isPlayingRef.current = true;
+
+        oscillator.onended = () => {
+          isPlayingRef.current = false;
+          currentNoteIndexRef.current = (currentNoteIndexRef.current + 1) % notes.length;
+        };
+      } catch (error) {
+        console.error('Failed to play note:', error);
+        isPlayingRef.current = false;
+      }
+    }, [soundEnabledRef]);
 
     // Детерминированный игровой цикл с фиксированным шагом
     const gameLoop = () => {
