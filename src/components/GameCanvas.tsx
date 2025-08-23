@@ -897,9 +897,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           obstaclesRef.current.splice(index, 1);
         }
       }
+        console.log('gamecanvas speedtime1:', speedUpTime)
 
       setGameState("playing");
       onGameStart?.();
+        console.log('gamecanvas speedtime2:', speedUpTime)
 
       try {
         const rtttlContent = musicContent || RTTTL;
