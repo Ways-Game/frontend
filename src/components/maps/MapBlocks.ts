@@ -9,42 +9,34 @@ export const MAP_BLOCKS: MapBlock[] = [
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
+      const brickWidth = 50;
+      const brickHeight = 20;
+      const horizontalSpacing = 60;
+      const verticalSpacing = 90;
 
       for (let row = 0; row < 4; row++) {
-        for (let col = 0; col < Math.floor(mapWidth / 100); col++) {
-          const x = col * 100 + (row % 2) * 50;
-          const y = startY + 50 + row * 80;
+        const bricksPerRow = Math.floor((mapWidth - horizontalSpacing) / (brickWidth + horizontalSpacing));
+        const startX = (mapWidth - (bricksPerRow * (brickWidth + horizontalSpacing) - horizontalSpacing)) / 2;
+        
+        for (let col = 0; col < bricksPerRow; col++) {
+          const x = startX + col * (brickWidth + horizontalSpacing);
+          const y = startY + 70 + row * verticalSpacing;
           
           const brick = new PIXI.Graphics();
-          brick.roundRect(x - 25, y - 10, 50, 20, 5);
+          brick.roundRect(x - brickWidth/2, y - brickHeight/2, brickWidth, brickHeight, 5);
           brick.fill(0x8B4513).stroke({ width: 1, color: 0x654321 });
           app.stage.addChild(brick);
           
-          obstacles.push({ x, y, width: 50, height: 20, type: 'brick', destroyed: false, graphics: brick });
+          obstacles.push({ 
+            x, y, 
+            width: brickWidth, 
+            height: brickHeight, 
+            type: 'brick', 
+            destroyed: false, 
+            graphics: brick 
+          });
         }
       }
-
-      // Add edge elements
-      for (let row = 0; row < 4; row++) {
-        const y = startY + 50 + row * 80;
-        // Left edge
-        const leftX = 50;
-        const leftBrick = new PIXI.Graphics();
-        leftBrick.roundRect(leftX - 25, y - 10, 50, 20, 5);
-        leftBrick.fill(0x8B4513).stroke({ width: 1, color: 0x654321 });
-        app.stage.addChild(leftBrick);
-        obstacles.push({ x: leftX, y, width: 50, height: 20, type: 'brick', destroyed: false, graphics: leftBrick });
-        
-        // Right edge
-        const rightX = mapWidth - 50;
-        const rightBrick = new PIXI.Graphics();
-        rightBrick.roundRect(rightX - 25, y - 10, 50, 20, 5);
-        rightBrick.fill(0x8B4513).stroke({ width: 1, color: 0x654321 });
-        app.stage.addChild(rightBrick);
-        obstacles.push({ x: rightX, y, width: 50, height: 20, type: 'brick', destroyed: false, graphics: rightBrick });
-      }
-
-
 
       return { obstacles, spinners };
     }
@@ -57,39 +49,33 @@ export const MAP_BLOCKS: MapBlock[] = [
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
+      const pegRadius = 15;
+      const horizontalSpacing = 100;
+      const verticalSpacing = 130;
 
       for (let row = 0; row < 4; row++) {
-        for (let col = 0; col < Math.floor(mapWidth / 120); col++) {
-          const x = col * 120 + (row % 2) * 60;
-          const y = startY + 80 + row * 120;
+        const pegsPerRow = Math.floor((mapWidth - horizontalSpacing) / horizontalSpacing);
+        const startX = (mapWidth - (pegsPerRow * horizontalSpacing - horizontalSpacing/2)) / 2;
+        
+        for (let col = 0; col < pegsPerRow; col++) {
+          const x = startX + col * horizontalSpacing + (row % 2) * (horizontalSpacing / 2);
+          const y = startY + 100 + row * verticalSpacing;
           
-          obstacles.push({ x, y, width: 30, height: 30, type: 'peg' });
-
           const peg = new PIXI.Graphics();
-          peg.circle(x, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
+          peg.circle(0, 0, pegRadius).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
+          peg.position.set(x, y);
           app.stage.addChild(peg);
+          
+          obstacles.push({ 
+            x, y, 
+            width: pegRadius * 2, 
+            height: pegRadius * 2, 
+            type: 'peg',
+            destroyed: false,
+            graphics: peg
+          });
         }
       }
-
-      // Add edge pegs
-      for (let row = 0; row < 4; row++) {
-        const y = startY + 80 + row * 120;
-        // Left edge
-        const leftX = 60;
-        obstacles.push({ x: leftX, y, width: 30, height: 30, type: 'peg' });
-        const leftPeg = new PIXI.Graphics();
-        leftPeg.circle(leftX, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
-        app.stage.addChild(leftPeg);
-        
-        // Right edge
-        const rightX = mapWidth - 60;
-        obstacles.push({ x: rightX, y, width: 30, height: 30, type: 'peg' });
-        const rightPeg = new PIXI.Graphics();
-        rightPeg.circle(rightX, y, 15).fill(0x4A90E2).stroke({ width: 2, color: 0x357ABD });
-        app.stage.addChild(rightPeg);
-      }
-
-
 
       return { obstacles, spinners };
     }
@@ -102,46 +88,40 @@ export const MAP_BLOCKS: MapBlock[] = [
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
+      const spinnerSize = 80;
+      const horizontalSpacing = 220;
+      const verticalSpacing = 200;
 
       for (let row = 0; row < 3; row++) {
-        for (let col = 0; col < Math.floor(mapWidth / 200); col++) {
-          const x = col * 200 + (row % 2) * 100;
-          const y = startY + 100 + row * 180;
+        const spinnersPerRow = Math.floor((mapWidth - horizontalSpacing/2) / horizontalSpacing);
+        const startX = (mapWidth - (spinnersPerRow * horizontalSpacing - horizontalSpacing/2)) / 2;
+        
+        for (let col = 0; col < spinnersPerRow; col++) {
+          const x = startX + col * horizontalSpacing + (row % 2) * (horizontalSpacing / 2);
+          const y = startY + 120 + row * verticalSpacing;
           
-          obstacles.push({ x, y, width: 80, height: 80, type: 'spinner' });
-
           const spinner = new PIXI.Graphics();
-          spinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
+          spinner.rect(-spinnerSize/2, -8, spinnerSize, 16)
+                 .rect(-8, -spinnerSize/2, 16, spinnerSize);
           spinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
           spinner.position.set(x, y);
           app.stage.addChild(spinner);
 
-          spinners.push({ x, y, rotation: 0, graphics: spinner });
+          obstacles.push({ 
+            x, y, 
+            width: spinnerSize, 
+            height: spinnerSize, 
+            type: 'spinner',
+            destroyed: false,
+            graphics: spinner
+          });
+          
+          spinners.push({ 
+            x, y, 
+            rotation: 0, 
+            graphics: spinner 
+          });
         }
-      }
-
-      // Add edge spinners
-      for (let row = 0; row < 3; row++) {
-        const y = startY + 100 + row * 180;
-        // Left edge
-        const leftX = 100;
-        obstacles.push({ x: leftX, y, width: 80, height: 80, type: 'spinner' });
-        const leftSpinner = new PIXI.Graphics();
-        leftSpinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
-        leftSpinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
-        leftSpinner.position.set(leftX, y);
-        app.stage.addChild(leftSpinner);
-        spinners.push({ x: leftX, y, rotation: 0, graphics: leftSpinner });
-        
-        // Right edge
-        const rightX = mapWidth - 50;
-        obstacles.push({ x: rightX, y, width: 80, height: 80, type: 'spinner' });
-        const rightSpinner = new PIXI.Graphics();
-        rightSpinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
-        rightSpinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
-        rightSpinner.position.set(rightX, y);
-        app.stage.addChild(rightSpinner);
-        spinners.push({ x: rightX, y, rotation: 0, graphics: rightSpinner });
       }
 
       return { obstacles, spinners };
@@ -164,12 +144,20 @@ export const MAP_BLOCKS: MapBlock[] = [
       ];
 
       mazeWalls.forEach(wall => {
-        obstacles.push({ x: wall.x, y: wall.y, width: wall.width, height: wall.height, type: 'barrier' });
-        
         const graphics = new PIXI.Graphics();
         graphics.roundRect(wall.x - wall.width/2, wall.y - wall.height/2, wall.width, wall.height, 5);
         graphics.fill(0x9B59B6).stroke({ width: 2, color: 0x7B4397 });
         app.stage.addChild(graphics);
+        
+        obstacles.push({ 
+          x: wall.x, 
+          y: wall.y, 
+          width: wall.width, 
+          height: wall.height, 
+          type: 'barrier',
+          destroyed: false,
+          graphics
+        });
       });
 
       return { obstacles, spinners };
@@ -190,12 +178,20 @@ export const MAP_BLOCKS: MapBlock[] = [
       ];
       
       funnelBarriers.forEach(funnel => {
-        obstacles.push({ x: funnel.x, y: funnel.y, width: funnel.width, height: funnel.height, type: 'barrier' });
-        
         const graphics = new PIXI.Graphics();
         graphics.roundRect(funnel.x - funnel.width/2, funnel.y - funnel.height/2, funnel.width, funnel.height, 5);
         graphics.fill(0x666666).stroke({ width: 3, color: 0x444444 });
         app.stage.addChild(graphics);
+        
+        obstacles.push({ 
+          x: funnel.x, 
+          y: funnel.y, 
+          width: funnel.width, 
+          height: funnel.height, 
+          type: 'barrier',
+          destroyed: false,
+          graphics
+        });
       });
 
       return { obstacles, spinners };
@@ -216,13 +212,21 @@ export const MAP_BLOCKS: MapBlock[] = [
       ];
 
       diagonals.forEach(d => {
-        obstacles.push({ x: d.x, y: d.y, width: d.width, height: d.height, type: 'barrier' });
-        
         const bar = new PIXI.Graphics();
         bar.rect(-d.width / 2, -d.height / 2, d.width, d.height).fill(0x3498db);
         bar.position.set(d.x, d.y);
         bar.rotation = d.rotation;
         app.stage.addChild(bar);
+        
+        obstacles.push({ 
+          x: d.x, 
+          y: d.y, 
+          width: d.width, 
+          height: d.height, 
+          type: 'barrier',
+          destroyed: false,
+          graphics: bar
+        });
       });
 
       return { obstacles, spinners };
@@ -236,35 +240,26 @@ export const MAP_BLOCKS: MapBlock[] = [
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
+      const barWidth = 150;
+      const barHeight = 25;
+      const verticalSpacing = 80;
 
       for (let i = 0; i < 5; i++) {
         const x = (i % 2 === 0) ? mapWidth * 0.3 : mapWidth * 0.7;
-        const y = startY + 50 + i * 70;
-        
-        obstacles.push({ x, y, width: 150, height: 25, type: 'barrier' });
+        const y = startY + 70 + i * verticalSpacing;
         
         const bar = new PIXI.Graphics();
-        bar.roundRect(x - 75, y - 12, 150, 25, 5).fill(0xe74c3c);
+        bar.roundRect(x - barWidth/2, y - barHeight/2, barWidth, barHeight, 5).fill(0xe74c3c);
         app.stage.addChild(bar);
-      }
-
-      // Add edge barriers
-      const leftX = mapWidth * 0.1;
-      const rightX = mapWidth * 0.9;
-      for (let i = 0; i < 3; i++) {
-        const y = startY + 100 + i * 100;
         
-        // Left edge barrier
-        obstacles.push({ x: leftX, y, width: 80, height: 20, type: 'barrier' });
-        const leftBar = new PIXI.Graphics();
-        leftBar.roundRect(leftX - 40, y - 10, 80, 20, 5).fill(0xe74c3c);
-        app.stage.addChild(leftBar);
-        
-        // Right edge barrier
-        obstacles.push({ x: rightX, y, width: 80, height: 20, type: 'barrier' });
-        const rightBar = new PIXI.Graphics();
-        rightBar.roundRect(rightX - 40, y - 10, 80, 20, 5).fill(0xe74c3c);
-        app.stage.addChild(rightBar);
+        obstacles.push({ 
+          x, y, 
+          width: barWidth, 
+          height: barHeight, 
+          type: 'barrier',
+          destroyed: false,
+          graphics: bar
+        });
       }
 
       return { obstacles, spinners };
@@ -278,36 +273,32 @@ export const MAP_BLOCKS: MapBlock[] = [
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
+      const circleRadius = 20;
+      const horizontalSpacing = 150;
+      const verticalSpacing = 160;
 
       for (let row = 0; row < 3; row++) {
-        for (let col = 0; col < Math.floor(mapWidth / 250); col++) {
-          const x = col * 250 + (row % 2) * 125;
-          const y = startY + 100 + row * 150;
-          
-          obstacles.push({ x, y, width: 40, height: 40, type: 'peg' });
-
-          const circle = new PIXI.Graphics();
-          circle.circle(x, y, 20).fill(0x2ecc71).stroke({ width: 3, color: 0x27ae60 });
-          app.stage.addChild(circle);
-        }
-      }
-
-      // Add edge circles
-      for (let row = 0; row < 8; row++) {
-        const y = startY + 100 + row * 150;
-        // Left edge
-        const leftX = 80;
-        obstacles.push({ x: leftX, y, width: 40, height: 40, type: 'peg' });
-        const leftCircle = new PIXI.Graphics();
-        leftCircle.circle(leftX, y, 20).fill(0x2ecc71).stroke({ width: 3, color: 0x27ae60 });
-        app.stage.addChild(leftCircle);
+        const circlesPerRow = Math.floor((mapWidth - horizontalSpacing/2) / horizontalSpacing);
+        const startX = (mapWidth - (circlesPerRow * horizontalSpacing - horizontalSpacing/2)) / 2;
         
-        // Right edge
-        const rightX = mapWidth - 80;
-        obstacles.push({ x: rightX, y, width: 40, height: 40, type: 'peg' });
-        const rightCircle = new PIXI.Graphics();
-        rightCircle.circle(rightX, y, 20).fill(0x2ecc71).stroke({ width: 3, color: 0x27ae60 });
-        app.stage.addChild(rightCircle);
+        for (let col = 0; col < circlesPerRow; col++) {
+          const x = startX + col * horizontalSpacing + (row % 2) * (horizontalSpacing / 2);
+          const y = startY + 100 + row * verticalSpacing;
+          
+          const circle = new PIXI.Graphics();
+          circle.circle(0, 0, circleRadius).fill(0x2ecc71).stroke({ width: 3, color: 0x27ae60 });
+          circle.position.set(x, y);
+          app.stage.addChild(circle);
+          
+          obstacles.push({ 
+            x, y, 
+            width: circleRadius * 2, 
+            height: circleRadius * 2, 
+            type: 'peg',
+            destroyed: false,
+            graphics: circle
+          });
+        }
       }
 
       return { obstacles, spinners };
@@ -321,20 +312,36 @@ export const MAP_BLOCKS: MapBlock[] = [
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
+      const spinnerSize = 100;
+      const horizontalSpacing = mapWidth / 4;
 
       for (let i = 0; i < 4; i++) {
-        const x = 200 + i * 200;
+        const x = horizontalSpacing * 0.5 + i * horizontalSpacing;
         const y = startY + 150 + (i % 2) * 100;
         
-        obstacles.push({ x, y, width: 100, height: 100, type: 'spinner' });
-
         const spinner = new PIXI.Graphics();
-        spinner.rect(-50, -10, 100, 20).rect(-10, -50, 20, 100);
-        spinner.rect(-30, -30, 60, 60).fill(0xf39c12).stroke({ width: 3, color: 0xe67e22 });
+        spinner.rect(-spinnerSize/2, -10, spinnerSize, 20)
+               .rect(-10, -spinnerSize/2, 20, spinnerSize)
+               .rect(-30, -30, 60, 60)
+               .fill(0xf39c12)
+               .stroke({ width: 3, color: 0xe67e22 });
         spinner.position.set(x, y);
         app.stage.addChild(spinner);
 
-        spinners.push({ x, y, rotation: 0, graphics: spinner });
+        obstacles.push({ 
+          x, y, 
+          width: spinnerSize, 
+          height: spinnerSize, 
+          type: 'spinner',
+          destroyed: false,
+          graphics: spinner
+        });
+        
+        spinners.push({ 
+          x, y, 
+          rotation: 0, 
+          graphics: spinner 
+        });
       }
 
       return { obstacles, spinners };
@@ -357,12 +364,20 @@ export const MAP_BLOCKS: MapBlock[] = [
       ];
 
       passages.forEach(p => {
-        obstacles.push({ x: p.x, y: p.y, width: p.width, height: p.height, type: 'barrier' });
-        
         const bar = new PIXI.Graphics();
         bar.roundRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height, 8);
         bar.fill(0x8e44ad).stroke({ width: 2, color: 0x663399 });
         app.stage.addChild(bar);
+        
+        obstacles.push({ 
+          x: p.x, 
+          y: p.y, 
+          width: p.width, 
+          height: p.height, 
+          type: 'barrier',
+          destroyed: false,
+          graphics: bar
+        });
       });
 
       return { obstacles, spinners };
@@ -376,18 +391,28 @@ export const MAP_BLOCKS: MapBlock[] = [
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
+      const wallWidth = 25;
+      const sectionWidth = mapWidth / 6;
 
       for (let i = 0; i < 6; i++) {
-        const x = i * (mapWidth / 6) + (mapWidth / 12);
-        const y = startY + 100 + Math.sin(i) * 50;
+        const x = i * sectionWidth + sectionWidth / 2;
+        const y = startY + 120 + Math.sin(i) * 50;
         const height = 80 + Math.cos(i) * 30;
         
-        obstacles.push({ x, y, width: 25, height, type: 'barrier' });
-        
         const wall = new PIXI.Graphics();
-        wall.roundRect(x - 12, y - height/2, 25, height, 12);
+        wall.roundRect(-wallWidth/2, -height/2, wallWidth, height, 12);
         wall.fill(0x1abc9c).stroke({ width: 3, color: 0x16a085 });
+        wall.position.set(x, y);
         app.stage.addChild(wall);
+        
+        obstacles.push({ 
+          x, y, 
+          width: wallWidth, 
+          height, 
+          type: 'barrier',
+          destroyed: false,
+          graphics: wall
+        });
       }
 
       return { obstacles, spinners };
@@ -401,47 +426,34 @@ export const MAP_BLOCKS: MapBlock[] = [
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
+      const spinnerSize = 120;
+      const centerX = mapWidth / 2;
+      const centerY = startY + 300;
+      
+      const spinner = new PIXI.Graphics();
+      spinner.rect(-spinnerSize/2, -8, spinnerSize, 16)
+             .rect(-8, -spinnerSize/2, 16, spinnerSize)
+             .fill(0xFFD700)
+             .stroke({ width: 3, color: 0xFFA500 });
+      spinner.position.set(centerX, centerY);
+      app.stage.addChild(spinner);
 
-      for (let row = 0; row < 3; row++) {
-        for (let col = 0; col < Math.floor(mapWidth / 200); col++) {
-          const x = col * 200 + (row % 2) * 100;
-          const y = startY + 100 + row * 180;
-          
-          obstacles.push({ x, y, width: 80, height: 80, type: 'spinner' });
-
-          const spinner = new PIXI.Graphics();
-          spinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
-          spinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
-          spinner.position.set(x, y);
-          app.stage.addChild(spinner);
-
-          spinners.push({ x, y, rotation: 0, graphics: spinner });
-        }
-      }
-
-      // Add edge spinners
-      for (let row = 0; row < 3; row++) {
-        const y = startY + 100 + row * 180;
-        // Left edge
-        const leftX = 100;
-        obstacles.push({ x: leftX, y, width: 80, height: 80, type: 'spinner' });
-        const leftSpinner = new PIXI.Graphics();
-        leftSpinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
-        leftSpinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
-        leftSpinner.position.set(leftX, y);
-        app.stage.addChild(leftSpinner);
-        spinners.push({ x: leftX, y, rotation: 0, graphics: leftSpinner });
-        
-        // Right edge
-        const rightX = mapWidth - 50;
-        obstacles.push({ x: rightX, y, width: 80, height: 80, type: 'spinner' });
-        const rightSpinner = new PIXI.Graphics();
-        rightSpinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
-        rightSpinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
-        rightSpinner.position.set(rightX, y);
-        app.stage.addChild(rightSpinner);
-        spinners.push({ x: rightX, y, rotation: 0, graphics: rightSpinner });
-      }
+      obstacles.push({ 
+        x: centerX, 
+        y: centerY, 
+        width: spinnerSize, 
+        height: spinnerSize, 
+        type: 'spinner',
+        destroyed: false,
+        graphics: spinner
+      });
+      
+      spinners.push({ 
+        x: centerX, 
+        y: centerY, 
+        rotation: 0, 
+        graphics: spinner 
+      });
 
       return { obstacles, spinners };
     }
