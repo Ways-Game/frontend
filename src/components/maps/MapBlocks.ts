@@ -13,13 +13,13 @@ export const MAP_BLOCKS: MapBlock[] = [
       const brickHeight = 20;
       const horizontalSpacing = 60;
       const verticalSpacing = 90;
+      const leftShift = 40;
 
       for (let row = 0; row < 4; row++) {
-        const bricksPerRow = Math.floor((mapWidth - horizontalSpacing) / (brickWidth + horizontalSpacing));
-        const startX = (mapWidth - (bricksPerRow * (brickWidth + horizontalSpacing) - horizontalSpacing)) / 2;
+        let x = leftShift;
+        let col = 0;
         
-        for (let col = 0; col < bricksPerRow; col++) {
-          const x = startX + col * (brickWidth + horizontalSpacing);
+        while (x + brickWidth/2 <= mapWidth - leftShift) {
           const y = startY + 70 + row * verticalSpacing;
           
           const brick = new PIXI.Graphics();
@@ -33,8 +33,13 @@ export const MAP_BLOCKS: MapBlock[] = [
             height: brickHeight, 
             type: 'brick', 
             destroyed: false, 
-            graphics: brick 
-          });
+            graphics: brick,
+            hitCount: 0,
+            maxHits: 3
+          } as any);
+          
+          x += brickWidth + horizontalSpacing;
+          col++;
         }
       }
 
@@ -52,13 +57,12 @@ export const MAP_BLOCKS: MapBlock[] = [
       const pegRadius = 15;
       const horizontalSpacing = 100;
       const verticalSpacing = 130;
+      const leftShift = 40;
 
       for (let row = 0; row < 4; row++) {
-        const pegsPerRow = Math.floor((mapWidth - horizontalSpacing) / horizontalSpacing);
-        const startX = (mapWidth - (pegsPerRow * horizontalSpacing - horizontalSpacing/2)) / 2;
+        let x = leftShift + (row % 2) * (horizontalSpacing / 2);
         
-        for (let col = 0; col < pegsPerRow; col++) {
-          const x = startX + col * horizontalSpacing + (row % 2) * (horizontalSpacing / 2);
+        while (x + pegRadius <= mapWidth - leftShift) {
           const y = startY + 100 + row * verticalSpacing;
           
           const peg = new PIXI.Graphics();
@@ -74,6 +78,8 @@ export const MAP_BLOCKS: MapBlock[] = [
             destroyed: false,
             graphics: peg
           });
+          
+          x += horizontalSpacing;
         }
       }
 
@@ -91,13 +97,12 @@ export const MAP_BLOCKS: MapBlock[] = [
       const spinnerSize = 80;
       const horizontalSpacing = 220;
       const verticalSpacing = 200;
+      const leftShift = 40;
 
       for (let row = 0; row < 3; row++) {
-        const spinnersPerRow = Math.floor((mapWidth - horizontalSpacing/2) / horizontalSpacing);
-        const startX = (mapWidth - (spinnersPerRow * horizontalSpacing - horizontalSpacing/2)) / 2;
+        let x = leftShift + (row % 2) * (horizontalSpacing / 2);
         
-        for (let col = 0; col < spinnersPerRow; col++) {
-          const x = startX + col * horizontalSpacing + (row % 2) * (horizontalSpacing / 2);
+        while (x + spinnerSize/2 <= mapWidth - leftShift) {
           const y = startY + 120 + row * verticalSpacing;
           
           const spinner = new PIXI.Graphics();
@@ -121,6 +126,8 @@ export const MAP_BLOCKS: MapBlock[] = [
             rotation: 0, 
             graphics: spinner 
           });
+          
+          x += horizontalSpacing;
         }
       }
 
@@ -276,13 +283,12 @@ export const MAP_BLOCKS: MapBlock[] = [
       const circleRadius = 20;
       const horizontalSpacing = 150;
       const verticalSpacing = 160;
+      const leftShift = 40;
 
       for (let row = 0; row < 3; row++) {
-        const circlesPerRow = Math.floor((mapWidth - horizontalSpacing/2) / horizontalSpacing);
-        const startX = (mapWidth - (circlesPerRow * horizontalSpacing - horizontalSpacing/2)) / 2;
+        let x = leftShift + (row % 2) * (horizontalSpacing / 2);
         
-        for (let col = 0; col < circlesPerRow; col++) {
-          const x = startX + col * horizontalSpacing + (row % 2) * (horizontalSpacing / 2);
+        while (x + circleRadius <= mapWidth - leftShift) {
           const y = startY + 100 + row * verticalSpacing;
           
           const circle = new PIXI.Graphics();
@@ -298,6 +304,8 @@ export const MAP_BLOCKS: MapBlock[] = [
             destroyed: false,
             graphics: circle
           });
+          
+          x += horizontalSpacing;
         }
       }
 
@@ -313,10 +321,13 @@ export const MAP_BLOCKS: MapBlock[] = [
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
       const spinnerSize = 100;
-      const horizontalSpacing = mapWidth / 4;
+      const horizontalSpacing = 250;
+      const leftShift = 40;
 
-      for (let i = 0; i < 4; i++) {
-        const x = horizontalSpacing * 0.5 + i * horizontalSpacing;
+      let x = leftShift;
+      let i = 0;
+      
+      while (x + spinnerSize/2 <= mapWidth - leftShift) {
         const y = startY + 150 + (i % 2) * 100;
         
         const spinner = new PIXI.Graphics();
@@ -342,6 +353,9 @@ export const MAP_BLOCKS: MapBlock[] = [
           rotation: 0, 
           graphics: spinner 
         });
+        
+        x += horizontalSpacing;
+        i++;
       }
 
       return { obstacles, spinners };
@@ -392,10 +406,13 @@ export const MAP_BLOCKS: MapBlock[] = [
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
       const wallWidth = 25;
-      const sectionWidth = mapWidth / 6;
+      const horizontalSpacing = 180;
+      const leftShift = 40;
 
-      for (let i = 0; i < 6; i++) {
-        const x = i * sectionWidth + sectionWidth / 2;
+      let x = leftShift;
+      let i = 0;
+      
+      while (x + wallWidth/2 <= mapWidth - leftShift) {
         const y = startY + 120 + Math.sin(i) * 50;
         const height = 80 + Math.cos(i) * 30;
         
@@ -413,6 +430,9 @@ export const MAP_BLOCKS: MapBlock[] = [
           destroyed: false,
           graphics: wall
         });
+        
+        x += horizontalSpacing;
+        i++;
       }
 
       return { obstacles, spinners };

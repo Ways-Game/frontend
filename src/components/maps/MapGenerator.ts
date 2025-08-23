@@ -43,84 +43,76 @@ export const generateMapFromId = (
     currentY += block.height + 150;
   });
 
-  // New layered funnel logic
-  const startY = currentY;
-  const gapWidth = 80;
-  const layers = 10;
-  const layerHeight = 36;
-  const layerGap = 32;
-  const maxHalf = (worldWidth - gapWidth) / 2;
+  // Упрощенная логика воронки
+  const funnelWidthBottom = 120;
+  const funnelHeight = 600;
+  const verticalPassage = 200;
+  const topY = currentY;
+  const bottomY = currentY + funnelHeight;
+  const passageBottomY = bottomY + verticalPassage;
 
-  for (let i = 0; i < layers; i++) {
-    const t = 1 - i / Math.max(1, (layers - 1));
-    const halfWidth = Math.max(0, maxHalf * t);
+  // Визуализация - один графический объект
+  const blueFunnel = new PIXI.Graphics();
+  blueFunnel.beginFill(0x4ecdc4);
 
-    const leftWidth = halfWidth;
-    const rightWidth = halfWidth;
-    const y = startY + 40 + i * layerGap;
+  // Левая сторона воронки
+  blueFunnel.moveTo(-5, topY);
+  blueFunnel.lineTo(worldWidth / 2 - funnelWidthBottom / 2, bottomY);
+  blueFunnel.lineTo(worldWidth / 2 - funnelWidthBottom / 2, passageBottomY);
+  blueFunnel.lineTo(-5, passageBottomY);
+  blueFunnel.closePath();
 
-    if (leftWidth > 2) {
-      const leftXcenter = leftWidth / 2;
-      obstacles.push({
-        x: leftXcenter,
-        y,
-        width: leftWidth,
-        height: layerHeight,
-        type: 'barrier',
-      });
+  // Правая сторона воронки
+  blueFunnel.moveTo(worldWidth + 5, topY);
+  blueFunnel.lineTo(worldWidth / 2 + funnelWidthBottom / 2, bottomY);
+  blueFunnel.lineTo(worldWidth / 2 + funnelWidthBottom / 2, passageBottomY);
+  blueFunnel.lineTo(worldWidth + 5, passageBottomY);
+  blueFunnel.closePath();
 
-      const leftBar = new PIXI.Graphics();
-      leftBar.roundRect(leftXcenter - leftWidth / 2, y - layerHeight / 2, leftWidth, layerHeight, 8);
-      leftBar.fill(0x4FD8D1).stroke({ width: 3, color: 0x2EA8A0 });
-      app.stage.addChild(leftBar);
-      (obstacles[obstacles.length - 1] as any).graphics = leftBar;
-    }
+  blueFunnel.endFill();
+  app.stage.addChild(blueFunnel);
 
-    if (rightWidth > 2) {
-      const rightXcenter = worldWidth - rightWidth / 2;
-      obstacles.push({
-        x: rightXcenter,
-        y,
-        width: rightWidth,
-        height: layerHeight,
-        type: 'barrier',
-      });
+  // Физика - всего 4 больших коллайдера вместо множества мелких
+  obstacles.push(
+    // Левый наклонный барьер
+    {
+      type: 'polygon',
+      vertices: [
+        -5, topY,
+        worldWidth / 2 - funnelWidthBottom / 2, bottomY,
+        worldWidth / 2 - funnelWidthBottom / 2, passageBottomY,
+        -5, passageBottomY
+      ]
+    } as any,
+    // Правый наклонный барьер
+    {
+      type: 'polygon',
+      vertices: [
+        worldWidth + 5, topY,
+        worldWidth / 2 + funnelWidthBottom / 2, bottomY,
+        worldWidth / 2 + funnelWidthBottom / 2, passageBottomY,
+        worldWidth + 5, passageBottomY
+      ]
+    } as any,
+    // Левый вертикальный барьер (дополнительная страховка)
+    {
+      x: worldWidth / 2 - funnelWidthBottom / 2,
+      y: bottomY,
+      width: 10,
+      height: verticalPassage,
+      type: 'barrier'
+    } as any,
+    // Правый вертикальный барьер (дополнительная страховка)
+    {
+      x: worldWidth / 2 + funnelWidthBottom / 2 - 10,
+      y: bottomY,
+      width: 10,
+      height: verticalPassage,
+      type: 'barrier'
+    } as any
+  );
 
-      const rightBar = new PIXI.Graphics();
-      rightBar.roundRect(rightXcenter - rightWidth / 2, y - layerHeight / 2, rightWidth, layerHeight, 8);
-      rightBar.fill(0x4FD8D1).stroke({ width: 3, color: 0x2EA8A0 });
-      app.stage.addChild(rightBar);
-      (obstacles[obstacles.length - 1] as any).graphics = rightBar;
-    }
-  }
-
-  const baseHeight = 20;
-  const baseHalf = Math.max(20, maxHalf * 0.05);
-  const leftBaseWidth = baseHalf;
-  const rightBaseWidth = baseHalf;
-  const baseY = startY + 40 + layers * layerGap;
-
-  const leftBaseX = leftBaseWidth / 2;
-  const rightBaseX = worldWidth - rightBaseWidth / 2;
-
-  const leftBase = new PIXI.Graphics();
-  leftBase.roundRect(leftBaseX - leftBaseWidth / 2, baseY - baseHeight / 2, leftBaseWidth, baseHeight, 6);
-  leftBase.fill(0x4FD8D1).stroke({ width: 3, color: 0x2EA8A0 });
-  app.stage.addChild(leftBase);
-  obstacles.push({ x: leftBaseX, y: baseY, width: leftBaseWidth, height: baseHeight, type: 'barrier', graphics: leftBase } as any);
-
-  const rightBase = new PIXI.Graphics();
-  rightBase.roundRect(rightBaseX - rightBaseWidth / 2, baseY - baseHeight / 2, rightBaseWidth, baseHeight, 6);
-  rightBase.fill(0x4FD8D1).stroke({ width: 3, color: 0x2EA8A0 });
-  app.stage.addChild(rightBase);
-  obstacles.push({ x: rightBaseX, y: baseY, width: rightBaseWidth, height: baseHeight, type: 'barrier', graphics: rightBase } as any);
-
-  const guide = new PIXI.Graphics();
-  guide.rect(worldWidth / 2 - gapWidth / 2 - 2, startY + 20, 4, layers * layerGap + 60).fill(0x0D5460).alpha = 0.15;
-  app.stage.addChild(guide);
-
-  currentY = baseY + baseHeight + 50;
-  const finishY = currentY;
+  const finishY = bottomY + verticalPassage / 2;
   const stripeHeight = 40;
   const cellSize = 20;
 
@@ -138,7 +130,7 @@ export const generateMapFromId = (
   const winY = finishY + stripeHeight;
   const deathY = winY + 200;
 
-  const mapData = { obstacles, spinners, mapWidth: worldWidth, mapHeight: currentY + 100, winY, deathY };
+  const mapData = { obstacles, spinners, mapWidth: worldWidth, mapHeight: bottomY + verticalPassage + 100, winY, deathY };
   (mapData as any).gateBarrier = gateBarrier;
   (mapData as any).screenHeight = worldHeight;
   return mapData;
@@ -200,84 +192,76 @@ export const generateRandomMap = (app: PIXI.Application, mapId: number[] | numbe
     currentY += block.height + 150; // Уменьшено расстояние между блоками
   });
 
-  // New layered funnel logic
-  const startY = currentY;
-  const gapWidth = 80;
-  const layers = 10;
-  const layerHeight = 36;
-  const layerGap = 32;
-  const maxHalf = (mapWidth - gapWidth) / 2;
+  // Упрощенная логика воронки
+  const funnelWidthBottom = 120;
+  const funnelHeight = 600;
+  const verticalPassage = 200;
+  const topY = currentY;
+  const bottomY = currentY + funnelHeight;
+  const passageBottomY = bottomY + verticalPassage;
 
-  for (let i = 0; i < layers; i++) {
-    const t = 1 - i / Math.max(1, (layers - 1));
-    const halfWidth = Math.max(0, maxHalf * t);
+  // Визуализация - один графический объект
+  const blueFunnel = new PIXI.Graphics();
+  blueFunnel.beginFill(0x4ecdc4);
 
-    const leftWidth = halfWidth;
-    const rightWidth = halfWidth;
-    const y = startY + 40 + i * layerGap;
+  // Левая сторона воронки
+  blueFunnel.moveTo(-5, topY);
+  blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, bottomY);
+  blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, passageBottomY);
+  blueFunnel.lineTo(-5, passageBottomY);
+  blueFunnel.closePath();
 
-    if (leftWidth > 2) {
-      const leftXcenter = leftWidth / 2;
-      obstacles.push({
-        x: leftXcenter,
-        y,
-        width: leftWidth,
-        height: layerHeight,
-        type: 'barrier',
-      });
+  // Правая сторона воронки
+  blueFunnel.moveTo(mapWidth + 5, topY);
+  blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, bottomY);
+  blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, passageBottomY);
+  blueFunnel.lineTo(mapWidth + 5, passageBottomY);
+  blueFunnel.closePath();
 
-      const leftBar = new PIXI.Graphics();
-      leftBar.roundRect(leftXcenter - leftWidth / 2, y - layerHeight / 2, leftWidth, layerHeight, 8);
-      leftBar.fill(0x4FD8D1).stroke({ width: 3, color: 0x2EA8A0 });
-      app.stage.addChild(leftBar);
-      (obstacles[obstacles.length - 1] as any).graphics = leftBar;
-    }
+  blueFunnel.endFill();
+  app.stage.addChild(blueFunnel);
 
-    if (rightWidth > 2) {
-      const rightXcenter = mapWidth - rightWidth / 2;
-      obstacles.push({
-        x: rightXcenter,
-        y,
-        width: rightWidth,
-        height: layerHeight,
-        type: 'barrier',
-      });
+  // Физика - всего 4 больших коллайдера вместо множества мелких
+  obstacles.push(
+    // Левый наклонный барьер
+    {
+      type: 'polygon',
+      vertices: [
+        -5, topY,
+        mapWidth / 2 - funnelWidthBottom / 2, bottomY,
+        mapWidth / 2 - funnelWidthBottom / 2, passageBottomY,
+        -5, passageBottomY
+      ]
+    } as any,
+    // Правый наклонный барьер
+    {
+      type: 'polygon',
+      vertices: [
+        mapWidth + 5, topY,
+        mapWidth / 2 + funnelWidthBottom / 2, bottomY,
+        mapWidth / 2 + funnelWidthBottom / 2, passageBottomY,
+        mapWidth + 5, passageBottomY
+      ]
+    } as any,
+    // Левый вертикальный барьер (дополнительная страховка)
+    {
+      x: mapWidth / 2 - funnelWidthBottom / 2,
+      y: bottomY,
+      width: 10,
+      height: verticalPassage,
+      type: 'barrier'
+    } as any,
+    // Правый вертикальный барьер (дополнительная страховка)
+    {
+      x: mapWidth / 2 + funnelWidthBottom / 2 - 10,
+      y: bottomY,
+      width: 10,
+      height: verticalPassage,
+      type: 'barrier'
+    } as any
+  );
 
-      const rightBar = new PIXI.Graphics();
-      rightBar.roundRect(rightXcenter - rightWidth / 2, y - layerHeight / 2, rightWidth, layerHeight, 8);
-      rightBar.fill(0x4FD8D1).stroke({ width: 3, color: 0x2EA8A0 });
-      app.stage.addChild(rightBar);
-      (obstacles[obstacles.length - 1] as any).graphics = rightBar;
-    }
-  }
-
-  const baseHeight = 20;
-  const baseHalf = Math.max(20, maxHalf * 0.05);
-  const leftBaseWidth = baseHalf;
-  const rightBaseWidth = baseHalf;
-  const baseY = startY + 40 + layers * layerGap;
-
-  const leftBaseX = leftBaseWidth / 2;
-  const rightBaseX = mapWidth - rightBaseWidth / 2;
-
-  const leftBase = new PIXI.Graphics();
-  leftBase.roundRect(leftBaseX - leftBaseWidth / 2, baseY - baseHeight / 2, leftBaseWidth, baseHeight, 6);
-  leftBase.fill(0x4FD8D1).stroke({ width: 3, color: 0x2EA8A0 });
-  app.stage.addChild(leftBase);
-  obstacles.push({ x: leftBaseX, y: baseY, width: leftBaseWidth, height: baseHeight, type: 'barrier', graphics: leftBase } as any);
-
-  const rightBase = new PIXI.Graphics();
-  rightBase.roundRect(rightBaseX - rightBaseWidth / 2, baseY - baseHeight / 2, rightBaseWidth, baseHeight, 6);
-  rightBase.fill(0x4FD8D1).stroke({ width: 3, color: 0x2EA8A0 });
-  app.stage.addChild(rightBase);
-  obstacles.push({ x: rightBaseX, y: baseY, width: rightBaseWidth, height: baseHeight, type: 'barrier', graphics: rightBase } as any);
-
-  const guide = new PIXI.Graphics();
-  guide.rect(mapWidth / 2 - gapWidth / 2 - 2, startY + 20, 4, layers * layerGap + 60).fill(0x0D5460).alpha = 0.15;
-  app.stage.addChild(guide);
-
-  currentY = baseY + baseHeight + 50;
-  const finishY = currentY;
+  const finishY = bottomY + verticalPassage / 2;
   const stripeHeight = 40;
   const cellSize = 20;
 
@@ -295,7 +279,7 @@ export const generateRandomMap = (app: PIXI.Application, mapId: number[] | numbe
   const winY = finishY + stripeHeight;
   const deathY = winY + 200;
 
-  const mapData = { obstacles, spinners, mapWidth, mapHeight: currentY + 100, winY, deathY };
+  const mapData = { obstacles, spinners, mapWidth, mapHeight: bottomY + verticalPassage + 100, winY, deathY };
   (mapData as any).gateBarrier = gateBarrier;
   (mapData as any).screenHeight = screenHeight;
   return mapData;

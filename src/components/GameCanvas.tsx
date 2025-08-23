@@ -524,9 +524,20 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
             precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
           ) {
-            obstacle.destroyed = true;
-            if (obstacle.graphics && appRef.current) {
-              appRef.current.stage.removeChild(obstacle.graphics);
+            // Increase hit count
+            (obstacle as any).hitCount = ((obstacle as any).hitCount || 0) + 1;
+            
+            // Set transparency based on hit count
+            if (obstacle.graphics) {
+              obstacle.graphics.alpha = 1 - ((obstacle as any).hitCount / 3) * 0.3;
+            }
+            
+            // Destroy after 3 hits
+            if ((obstacle as any).hitCount >= 3) {
+              obstacle.destroyed = true;
+              if (obstacle.graphics && appRef.current) {
+                appRef.current.stage.removeChild(obstacle.graphics);
+              }
             }
 
             const overlapX = precise.sub(

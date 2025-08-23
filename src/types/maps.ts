@@ -9,6 +9,8 @@ export interface Obstacle {
   rotation?: number;
   destroyed?: boolean;
   graphics?: PIXI.Graphics;
+  hitCount?: number;
+  maxHits?: number;
 }
 
 export interface Spinner {
