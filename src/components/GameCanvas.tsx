@@ -751,6 +751,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       mapId: number[] | number;
       participants: any[];
     }) => {
+      console.log("Starting game with data:", gameData);
       if (!appRef.current) return;
 
       seedRef.current = gameData.seed;
@@ -913,7 +914,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       // --- FAST-FORWARD (apply speedUpTime if provided) ---
       try {
         // speedUpTime is a prop in seconds (passed from parent)
-        console.log(speedUpTime)
+        console.log('gamecanvas speedtime:', speedUpTime)
         if (speedUpTime > 0) {
           const frames = Math.floor(speedUpTime * FIXED_FPS);
           // cap frames to avoid freezing main thread; tune as needed
