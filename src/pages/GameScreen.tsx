@@ -179,6 +179,12 @@ const autoStartPendingRef = useRef<any | null>(null);
         music_title: payload.music_title || state.music_title || ""
       };
       setGameData(nextGameData as any);
+      
+      // Set speedUpTime if passed
+      if (state.speedUpTime) {
+        setSpeedUpTime(state.speedUpTime);
+      }
+      
       if (state.autoStart) {
         autoStartPendingRef.current = nextGameData;
       }

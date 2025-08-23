@@ -212,7 +212,7 @@ export const generateRandomMap = (app: PIXI.Application, mapId: number[] | numbe
   const rightBottomX = mapWidth / 2 + funnelWidthBottom / 2;
   
   // Уменьшаем размеры барьеров и увеличиваем количество сегментов для плавности
-  const segments = 30;
+  const segments = 10;
   let prevLeftX = leftTopX;
   let prevLeftY = topY;
   let prevRightX = rightTopX;
@@ -230,13 +230,13 @@ export const generateRandomMap = (app: PIXI.Application, mapId: number[] | numbe
     prevRightX = xr; prevRightY = y;
   }
 
-  const passageSegments = 15;
+  const passageSegments = 5;
   for (let i = 0; i < passageSegments; i++) {
     const y = bottomY + (verticalPassage / passageSegments) * i;
 
     obstacles.push(
-      { x: leftBottomX, y: y, width: 10, height: 5, type: 'barrier' } as any,
-      { x: rightBottomX, y: y, width: 10, height: 5, type: 'barrier' } as any
+      { x: leftBottomX, y: y, width: 3, height: 2, type: 'barrier' } as any,
+      { x: rightBottomX, y: y, width: 3, height: 2, type: 'barrier' } as any
     );
   }
 

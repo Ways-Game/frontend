@@ -23,21 +23,43 @@ export function PvPScreen() {
   const [activeAction, setActiveAction] = useState<string | null>(null)
   const [selectedGame, setSelectedGame] = useState<GameDetailResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [currentTime, setCurrentTime] = useState(Date.now())
   
   const { games, isConnected } = useGames()
 
-  // Function to calculate elapsed seconds from start_wait_play
+  // Function to get UTC time
+  const getUTCTime = () => {
+    const now = new Date();
+    return Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      now.getUTCHours(),
+      now.getUTCMinutes(),
+      now.getUTCSeconds(),
+      now.getUTCMilliseconds()
+    );
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(getUTCTime())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
   const getElapsedSeconds = (game: GameDetailResponse) => {
     if (!game.start_wait_play) return 0;
-    const startTime = new Date(game.start_wait_play).getTime();
-    const currentTime = Date.now();
-    return Math.floor((currentTime - startTime) / 1000);
+    // Add 'Z' to indicate UTC time
+    const startTime = new Date(game.start_wait_play + 'Z').getTime();
+    const currentUTCTime = getUTCTime();
+    return Math.max(0, Math.floor((currentUTCTime - startTime) / 1000));
   };
 
   // Function to handle LIVE game transition
   const handleLiveGame = (game: GameDetailResponse) => {
     const elapsedSeconds = getElapsedSeconds(game);
-    const speedUpTime = elapsedSeconds > 35 ? elapsedSeconds - 33 : 0;
+    const speedUpTime = Math.max(0, elapsedSeconds);
     
     navigate('/game', { 
       state: {
