@@ -41,6 +41,7 @@ export interface GameDetailResponse {
   start_wait_play?: string;
   music_title ?: string;
   music_content?: string;
+  winner_id?: number;
 }
 
 export interface Player {

@@ -368,9 +368,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           (sum, b) => sum + b.x * 10000 + b.y * 100 + b.dx * 10 + b.dy,
           0
         );
-        console.log(
-          `Sync check at ${physicsTimeRef.current}ms: ${checksum.toFixed(2)}`
-        );
       }
 
       spinnersRef.current.forEach((spinner) => {

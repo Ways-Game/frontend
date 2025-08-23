@@ -71,8 +71,18 @@ export function PvPScreen() {
         if (selectedGame) {
           const updatedGame = games.find(g => g.seed === selectedGame.seed)
           if (updatedGame && updatedGame !== selectedGame) {
-            // If game moved to PLAY status, deselect it
+            // If game moved to PLAY status, check if user is participant and redirect
             if (updatedGame.status === GameState.PLAY) {
+              const isUserParticipant = updatedGame.participants.some((p: any) => {
+                const participantUser = p.user ? p.user : p
+                return participantUser.id === user.id
+              })
+              
+              if (isUserParticipant) {
+                handleLiveGame(updatedGame)
+                return
+              }
+              
               const newSelected = availableGames[0] || null;
               setSelectedGame(newSelected);
             } else {
@@ -80,6 +90,20 @@ export function PvPScreen() {
             }
           }
         }
+        
+        // Check all games for user participation in newly started games
+        games.forEach(game => {
+          if (game.status === GameState.PLAY) {
+            const isUserParticipant = game.participants.some((p: any) => {
+              const participantUser = p.user ? p.user : p
+              return participantUser.id === user.id
+            })
+            
+            if (isUserParticipant && (!selectedGame || selectedGame.seed !== game.seed)) {
+              handleLiveGame(game)
+            }
+          }
+        })
       } catch (error) {
         console.error('Failed to load data:', error)
       } finally {
@@ -121,7 +145,6 @@ export function PvPScreen() {
     if (!selectedGame || !user) return
     
     try {
-      console.log('handleBuyBallz called. selectedGame:', selectedGame, 'user:', user)
       const result = await api.buyBalls(
       
         user.id,

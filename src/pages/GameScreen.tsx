@@ -68,27 +68,26 @@ const autoStartPendingRef = useRef<any | null>(null);
       const containerHeight = window.innerHeight - 80
       const scale = window.innerWidth / 1200 // Исправлено с 1000 на 1200
       const scaledHeight = gameSize.height * scale
-      console.log(scaledHeight, containerHeight)
       setMaxScrollY( 4000)
     }
   }
 
-  // game end handled via handleBallWin when a ball wins
 
   const handleBallWin = async (ballId: string, playerId: string) => {
-    console.log(`Ball ${ballId} (${playerId}) won!`)
     const localUserId = user ? user.id : null
-    console.log(localUserId, playerId)
     const isLocalUserWinner = localUserId !== null && +playerId === localUserId
 
     try {
-      // try to update winner on server if we have game id
       const currentGameData = gameDataRef.current;
-      console.log('currentGameData at win:', currentGameData)
       if (currentGameData && currentGameData.game_id) {
-        console.log('update game winner', currentGameData.game_id, +playerId)
-        // for a bit we turn off this logic 1221
-        //await api.updateGameWinner(currentGameData.game_id, +playerId)
+        try {
+          const gameDetails = await api.getGameById(currentGameData.game_id)
+          if (!gameDetails.winner_id) {
+            await api.updateGameWinner(currentGameData.game_id, +playerId)
+          }
+        } catch (e) {
+          console.warn('Failed to check/update winner:', e)
+        }
       }
 
       // fetch winner profile for display (works for both win and lose)
@@ -193,7 +192,6 @@ const autoStartPendingRef = useRef<any | null>(null);
       // start with the fully-initialized data object we stored
       startGame(pending);
       autoStartPendingRef.current = null;
-      console.log('auto start triggered with', pending);
     }
   }, [gameData]);
 

@@ -33,7 +33,6 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
   }, [onClose])
 
   const isWin = type === "win"
-  console.log("в модалке", isWin)
   
   return (
     <div className="fixed inset-0 bg-black/60 flex flex-col justify-end items-center px-6 pb-10 z-50">

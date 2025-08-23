@@ -1,4 +1,4 @@
-import { Player, GameData, UserProfile } from '@/types';
+import { Player, GameData, UserProfile, GameDetailResponse } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://bot.guarant.network/api';
 
@@ -24,8 +24,8 @@ class ApiService {
 
   // removed getCurrentGame (not present on backend)
   // Use GET /api/game/get_game/{game_id} instead via api.getGameById
-  async getGameById(game_id: number): Promise<GameData > {
-    return this.request<GameData >(`/game/get_game/${game_id}`);
+  async getGameById(game_id: number): Promise<GameDetailResponse > {
+    return this.request<GameDetailResponse >(`/game/get_game/${game_id}`);
   }
 
 
@@ -71,6 +71,7 @@ class ApiService {
    *  404 - game not found
    *  500 - server error
    */
+
   async updateGameWinner(game_id: number, user_id: number): Promise<void> {
     return this.request<void>('/game/update_winner', {
       method: 'PUT',

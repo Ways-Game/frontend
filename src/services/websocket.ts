@@ -85,8 +85,6 @@ class WebSocketService {
     const callbacks = this.listeners.get(eventType)
     if (callbacks) {
       callbacks.forEach(callback => callback(data))
-    } else {
-      console.log('No callbacks found for event:', eventType)
     }
   }
 

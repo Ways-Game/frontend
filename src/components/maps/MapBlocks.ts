@@ -402,24 +402,46 @@ export const MAP_BLOCKS: MapBlock[] = [
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
 
-      // Single large horizontal spinner (thin bar) centered in the block
-      const x = mapWidth / 2;
-      const y = startY + 300;
-      const barWidth = Math.floor(mapWidth * 0.9);
-      const barHeight = 18;
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < Math.floor(mapWidth / 200); col++) {
+          const x = col * 200 + (row % 2) * 100;
+          const y = startY + 100 + row * 180;
+          
+          obstacles.push({ x, y, width: 80, height: 80, type: 'spinner' });
 
-      // Add single obstacle for physics like regular spinners
-      obstacles.push({ x, y, width: barWidth, height: barHeight, type: 'spinner' });
+          const spinner = new PIXI.Graphics();
+          spinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
+          spinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
+          spinner.position.set(x, y);
+          app.stage.addChild(spinner);
 
-      const spinner = new PIXI.Graphics();
-      // Draw a long thin bar centered at (0,0)
-      spinner.rect(-barWidth / 2, -barHeight / 2, barWidth, barHeight);
-      spinner.fill(0xf39c12).stroke({ width: 3, color: 0xe67e22 });
-      spinner.position.set(x, y);
-      app.stage.addChild(spinner);
+          spinners.push({ x, y, rotation: 0, graphics: spinner });
+        }
+      }
 
-      // Add to spinners so game loop will rotate it
-      spinners.push({ x, y, rotation: 0, graphics: spinner });
+      // Add edge spinners
+      for (let row = 0; row < 3; row++) {
+        const y = startY + 100 + row * 180;
+        // Left edge
+        const leftX = 100;
+        obstacles.push({ x: leftX, y, width: 80, height: 80, type: 'spinner' });
+        const leftSpinner = new PIXI.Graphics();
+        leftSpinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
+        leftSpinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
+        leftSpinner.position.set(leftX, y);
+        app.stage.addChild(leftSpinner);
+        spinners.push({ x: leftX, y, rotation: 0, graphics: leftSpinner });
+        
+        // Right edge
+        const rightX = mapWidth - 50;
+        obstacles.push({ x: rightX, y, width: 80, height: 80, type: 'spinner' });
+        const rightSpinner = new PIXI.Graphics();
+        rightSpinner.rect(-40, -8, 80, 16).rect(-8, -40, 16, 80);
+        rightSpinner.fill(0xFFD700).stroke({ width: 3, color: 0xFFA500 });
+        rightSpinner.position.set(rightX, y);
+        app.stage.addChild(rightSpinner);
+        spinners.push({ x: rightX, y, rotation: 0, graphics: rightSpinner });
+      }
 
       return { obstacles, spinners };
     }

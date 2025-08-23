@@ -61,7 +61,6 @@ export const useTelegram = (): UseTelegramReturn => {
     
     try {
       const profile = await api.getUserProfile(user.id)
-      console.log('Loaded user profile:', profile)
       setUser(prev => prev ? {
         ...prev,
         balance: profile.balance,
