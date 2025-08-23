@@ -72,45 +72,53 @@ export const generateMapFromId = (
   blueFunnel.endFill();
   app.stage.addChild(blueFunnel);
 
-  // Физика - всего 4 больших коллайдера вместо множества мелких
-  obstacles.push(
-    // Левый наклонный барьер
-    {
-      type: 'polygon',
-      vertices: [
-        -5, topY,
-        worldWidth / 2 - funnelWidthBottom / 2, bottomY,
-        worldWidth / 2 - funnelWidthBottom / 2, passageBottomY,
-        -5, passageBottomY
-      ]
-    } as any,
-    // Правый наклонный барьер
-    {
-      type: 'polygon',
-      vertices: [
-        worldWidth + 5, topY,
-        worldWidth / 2 + funnelWidthBottom / 2, bottomY,
-        worldWidth / 2 + funnelWidthBottom / 2, passageBottomY,
-        worldWidth + 5, passageBottomY
-      ]
-    } as any,
-    // Левый вертикальный барьер (дополнительная страховка)
-    {
-      x: worldWidth / 2 - funnelWidthBottom / 2,
-      y: bottomY,
-      width: 10,
-      height: verticalPassage,
-      type: 'barrier'
-    } as any,
-    // Правый вертикальный барьер (дополнительная страховка)
-    {
-      x: worldWidth / 2 + funnelWidthBottom / 2 - 10,
-      y: bottomY,
-      width: 10,
-      height: verticalPassage,
-      type: 'barrier'
-    } as any
-  );
+  // ФИЗИКА - всего 4 коллайдера вместо десятков!
+  const leftTopX = -5;
+  const rightTopX = worldWidth + 5;
+  const leftBottomX = worldWidth / 2 - funnelWidthBottom / 2;
+  const rightBottomX = worldWidth / 2 + funnelWidthBottom / 2;
+
+  // 1. Левый наклонный барьер (один большой прямоугольник, повернутый под углом)
+  const leftAngle = Math.atan2(funnelHeight, leftBottomX - leftTopX);
+  const leftLength = Math.sqrt(Math.pow(funnelHeight, 2) + Math.pow(leftBottomX - leftTopX, 2));
+  obstacles.push({
+    x: (leftTopX + leftBottomX) / 2,
+    y: topY + funnelHeight / 2,
+    width: 30,
+    height: leftLength,
+    rotation: leftAngle,
+    type: 'barrier'
+  } as any);
+
+  // 2. Правый наклонный барьер (один большой прямоугольник, повернутый под углом)
+  const rightAngle = Math.atan2(funnelHeight, rightTopX - rightBottomX);
+  const rightLength = Math.sqrt(Math.pow(funnelHeight, 2) + Math.pow(rightTopX - rightBottomX, 2));
+  obstacles.push({
+    x: (rightTopX + rightBottomX) / 2,
+    y: topY + funnelHeight / 2,
+    width: 30,
+    height: rightLength,
+    rotation: -rightAngle, // отрицательный угол для правой стороны
+    type: 'barrier'
+  } as any);
+
+  // 3. Левый вертикальный барьер
+  obstacles.push({
+    x: leftBottomX,
+    y: bottomY + verticalPassage / 2,
+    width: 10,
+    height: verticalPassage,
+    type: 'barrier'
+  } as any);
+
+  // 4. Правый вертикальный барьер
+  obstacles.push({
+    x: rightBottomX - 10, // смещение на ширину барьера
+    y: bottomY + verticalPassage / 2,
+    width: 10,
+    height: verticalPassage,
+    type: 'barrier'
+  } as any);
 
   const finishY = bottomY + verticalPassage / 2;
   const stripeHeight = 40;
@@ -221,45 +229,53 @@ export const generateRandomMap = (app: PIXI.Application, mapId: number[] | numbe
   blueFunnel.endFill();
   app.stage.addChild(blueFunnel);
 
-  // Физика - всего 4 больших коллайдера вместо множества мелких
-  obstacles.push(
-    // Левый наклонный барьер
-    {
-      type: 'polygon',
-      vertices: [
-        -5, topY,
-        mapWidth / 2 - funnelWidthBottom / 2, bottomY,
-        mapWidth / 2 - funnelWidthBottom / 2, passageBottomY,
-        -5, passageBottomY
-      ]
-    } as any,
-    // Правый наклонный барьер
-    {
-      type: 'polygon',
-      vertices: [
-        mapWidth + 5, topY,
-        mapWidth / 2 + funnelWidthBottom / 2, bottomY,
-        mapWidth / 2 + funnelWidthBottom / 2, passageBottomY,
-        mapWidth + 5, passageBottomY
-      ]
-    } as any,
-    // Левый вертикальный барьер (дополнительная страховка)
-    {
-      x: mapWidth / 2 - funnelWidthBottom / 2,
-      y: bottomY,
-      width: 10,
-      height: verticalPassage,
-      type: 'barrier'
-    } as any,
-    // Правый вертикальный барьер (дополнительная страховка)
-    {
-      x: mapWidth / 2 + funnelWidthBottom / 2 - 10,
-      y: bottomY,
-      width: 10,
-      height: verticalPassage,
-      type: 'barrier'
-    } as any
-  );
+  // ФИЗИКА - всего 4 коллайдера вместо десятков!
+  const leftTopX = -5;
+  const rightTopX = mapWidth + 5;
+  const leftBottomX = mapWidth / 2 - funnelWidthBottom / 2;
+  const rightBottomX = mapWidth / 2 + funnelWidthBottom / 2;
+
+  // 1. Левый наклонный барьер (один большой прямоугольник, повернутый под углом)
+  const leftAngle = Math.atan2(funnelHeight, leftBottomX - leftTopX);
+  const leftLength = Math.sqrt(Math.pow(funnelHeight, 2) + Math.pow(leftBottomX - leftTopX, 2));
+  obstacles.push({
+    x: (leftTopX + leftBottomX) / 2,
+    y: topY + funnelHeight / 2,
+    width: 30,
+    height: leftLength,
+    rotation: leftAngle,
+    type: 'barrier'
+  } as any);
+
+  // 2. Правый наклонный барьер (один большой прямоугольник, повернутый под углом)
+  const rightAngle = Math.atan2(funnelHeight, rightTopX - rightBottomX);
+  const rightLength = Math.sqrt(Math.pow(funnelHeight, 2) + Math.pow(rightTopX - rightBottomX, 2));
+  obstacles.push({
+    x: (rightTopX + rightBottomX) / 2,
+    y: topY + funnelHeight / 2,
+    width: 30,
+    height: rightLength,
+    rotation: -rightAngle, // отрицательный угол для правой стороны
+    type: 'barrier'
+  } as any);
+
+  // 3. Левый вертикальный барьер
+  obstacles.push({
+    x: leftBottomX,
+    y: bottomY + verticalPassage / 2,
+    width: 10,
+    height: verticalPassage,
+    type: 'barrier'
+  } as any);
+
+  // 4. Правый вертикальный барьер
+  obstacles.push({
+    x: rightBottomX - 10, // смещение на ширину барьера
+    y: bottomY + verticalPassage / 2,
+    width: 10,
+    height: verticalPassage,
+    type: 'barrier'
+  } as any);
 
   const finishY = bottomY + verticalPassage / 2;
   const stripeHeight = 40;
