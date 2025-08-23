@@ -89,7 +89,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       onGameStart,
       ballImages = [],
       className,
-      speedUpTime,
+      speedUpTime = 0,
       initialCameraMode = "leader",
       scrollY = 0,
       soundEnabled = true,
@@ -919,9 +919,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       // --- FAST-FORWARD (apply speedUpTime if provided) ---
       try {
         // speedUpTime is a prop in seconds (passed from parent)
-        console.log('gamecanvas speedtime:', speedUpTime)
-        if (speedUpTime > 0) {
-          const frames = Math.floor(speedUpTime * FIXED_FPS);
+        const secondsToFastForward = Number(speedUpTime || 0);
+        console.log('gamecanvas speedtime:', secondsToFastForward)
+        if (secondsToFastForward > 0) {
+          const frames = Math.floor(secondsToFastForward * FIXED_FPS);
           // cap frames to avoid freezing main thread; tune as needed
           const MAX_FRAMES = 3000; // ~133s at 60fps — adjust if you like
           const framesToSimulate = Math.min(frames, MAX_FRAMES);
