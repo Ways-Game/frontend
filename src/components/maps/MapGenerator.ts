@@ -44,7 +44,7 @@ export const generateMapFromId = (
   });
 
   // Funnel logic (same as before)
-  const funnelWidthBottom = 80;
+  const funnelWidthBottom = 120;
   const funnelHeight = 600;
   const verticalPassage = 200;
   const topY = currentY;
@@ -176,7 +176,7 @@ export const generateRandomMap = (app: PIXI.Application, mapId: number[] | numbe
   });
 
   // Воронка с сужением от самого верха
-  const funnelWidthBottom = 80;
+  const funnelWidthBottom = 120;
   const funnelHeight = 600;
   const verticalPassage = 200;
 
