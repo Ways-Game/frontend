@@ -134,7 +134,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const { soundEnabledRef, audioContextRef, getAudioContext } =
       useGameSound(soundEnabled);
 
-    // RTTTL parser (unchanged)
+    // RTTTL parser (fixed)
     const parseRTTTL = (rtttl: string) => {
       try {
         if (!rtttl || typeof rtttl !== "string") return [];
@@ -151,7 +151,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const defaultOctave = parseInt(settings.o) || 5;
         const bpm = parseInt(settings.b) || 63;
 
-        const notes = notesStr.split(",").map((noteStr) => {
+        // remove empty tokens (protect against ",," or trailing commas)
+        const rawNotes = notesStr
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+
+        const notes = rawNotes.map((noteStr) => {
           let duration = defaultDuration;
           let noteChar = "";
           let dot = false;
@@ -159,25 +165,32 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           let rest = noteStr.trim();
 
+          // optional leading duration digits
           const durationMatch = rest.match(/^\d+/);
           if (durationMatch) {
             duration = parseInt(durationMatch[0]);
             rest = rest.substring(durationMatch[0].length);
           }
 
+          if (rest.length === 0) {
+            // defensive: treat empty remainder as a rest with default duration
+            return { frequency: 0, duration: (240000 / bpm) * (1 / duration) };
+          }
+
+          // rest[0] exists here
           if (rest[0] === "p") {
             noteChar = "p";
             rest = rest.substring(1);
           } else {
             noteChar = rest[0];
             rest = rest.substring(1);
-            if (rest[0] === "#" || rest[0] === "b") {
+            if (rest.length > 0 && (rest[0] === "#" || rest[0] === "b")) {
               noteChar += rest[0];
               rest = rest.substring(1);
             }
           }
 
-          if (rest[0] === ".") {
+          if (rest.length > 0 && rest[0] === ".") {
             dot = true;
             rest = rest.substring(1);
           }
@@ -210,7 +223,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               bb: 10,
               b: 11,
             };
-            const noteValue = noteMap[noteChar.toLowerCase()];
+
+            const key = (noteChar || "").toLowerCase();
+            const noteValue = noteMap[key];
             if (noteValue === undefined) {
               console.warn(`Unknown note: ${noteChar}`);
             } else {
@@ -894,6 +909,28 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       } catch (e) {
         console.warn("Failed to init melody notes", e);
       }
+
+      // --- FAST-FORWARD (apply speedUpTime if provided) ---
+      try {
+        // speedUpTime is a prop in seconds (passed from parent)
+        const secondsToFastForward = Number(speedUpTime || 0);
+        if (secondsToFastForward > 0) {
+          const frames = Math.floor(secondsToFastForward * FIXED_FPS);
+          // cap frames to avoid freezing main thread; tune as needed
+          const MAX_FRAMES = 8000; // ~133s at 60fps — adjust if you like
+          const framesToSimulate = Math.min(frames, MAX_FRAMES);
+
+          // perform physics updates synchronously
+          for (let i = 0; i < framesToSimulate; i++) {
+            updatePhysics();
+            physicsTimeRef.current += FIXED_DELTA;
+          }
+          console.log(`Fast-forwarded physics by ${framesToSimulate} frames (${(framesToSimulate/FIXED_FPS).toFixed(2)}s)`);
+        }
+      } catch (e) {
+        console.warn("Fast-forward failed:", e);
+      }
+      // --- end fast-forward ---
 
       const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
       (gameLoopRef as any).physicsIntervalId = physicsInterval;
