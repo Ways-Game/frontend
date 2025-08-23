@@ -917,9 +917,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (secondsToFastForward > 0) {
           const frames = Math.floor(secondsToFastForward * FIXED_FPS);
           // cap frames to avoid freezing main thread; tune as needed
-          const MAX_FRAMES = 8000; // ~133s at 60fps — adjust if you like
+          const MAX_FRAMES = 3000; // ~133s at 60fps — adjust if you like
           const framesToSimulate = Math.min(frames, MAX_FRAMES);
-
+          console.log(framesToSimulate)
           // perform physics updates synchronously
           for (let i = 0; i < framesToSimulate; i++) {
             updatePhysics();

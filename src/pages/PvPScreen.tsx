@@ -60,7 +60,7 @@ export function PvPScreen() {
   const handleLiveGame = (game: GameDetailResponse) => {
     const elapsedSeconds = getElapsedSeconds(game);
     const speedUpTime = Math.max(0, elapsedSeconds);
-    
+    console.log(elapsedSeconds)
     navigate('/game', { 
       state: {
         game_id: game.game_id,
