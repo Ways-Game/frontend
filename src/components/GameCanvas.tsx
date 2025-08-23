@@ -745,6 +745,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
+    // Wait for PIXI app to be ready
+    const waitForApp = async () => {
+      while (!appRef.current) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+    };
+
     // Start game (unchanged except kept in same scope)
     const startGame = async (gameData: {
       seed: string;
@@ -752,7 +759,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       participants: any[];
     }) => {
       console.log("Starting game with data:", gameData);
-        console.log('gamecanvas speedtime1:', speedUpTime)
+      console.log('gamecanvas speedtime1:', speedUpTime)
+
+      await waitForApp();
+      console.log("app ready, continue...", appRef.current);
 
       if (!appRef.current) return;
       console.log("Starting game with data2:", gameData);
