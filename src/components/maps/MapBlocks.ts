@@ -729,28 +729,6 @@ export const MAP_BLOCKS: MapBlock[] = [
         i++;
       }
 
-      // Добавляем дополнительный элемент справа, если нужно
-      if (x - horizontalSpacing + wallWidth/2 < mapWidth - wallWidth/2) {
-        x = mapWidth - wallWidth/2;
-        const y = startY + 120 + Math.sin(i) * 50;
-        const height = 80 + Math.cos(i) * 30;
-        
-        const wall = new PIXI.Graphics();
-        wall.roundRect(-wallWidth/2, -height/2, wallWidth, height, 12);
-        wall.fill(0x1abc9c).stroke({ width: 3, color: 0x16a085 });
-        wall.position.set(x, y);
-        app.stage.addChild(wall);
-        
-        obstacles.push({ 
-          x, y, 
-          width: wallWidth, 
-          height, 
-          type: 'barrier',
-          destroyed: false,
-          graphics: wall
-        });
-      }
-
       return { obstacles, spinners };
     }
   },
@@ -784,7 +762,7 @@ export const MAP_BLOCKS: MapBlock[] = [
       const obstacle: Obstacle & { direction: number; startX: number } = {
         x: centerX,
         y: centerY,
-        width: triangleWidth,
+        width: triangleWidth - 50,
         height: triangleHeight,
         type: 'barrier',
         destroyed: false,
