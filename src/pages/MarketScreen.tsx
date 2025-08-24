@@ -27,8 +27,8 @@ export function MarketScreen() {
               <span className="text-neutral-50 text-sm leading-snug">Low to High</span>
             </div>
           </div>
-          <button className="h-8 px-3 py-2 bg-blue-600 rounded-[20px] flex justify-center items-center gap-1.5 overflow-hidden">
-            <div className="w-5 h-5 text-white">🔗</div>
+          <button className="h-8 px-3 py-2 bg-[#007AFF] rounded-[20px] flex items-center gap-1.5">
+            <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
             <span className="text-white text-base font-semibold">Connect</span>
           </button>
         </div>

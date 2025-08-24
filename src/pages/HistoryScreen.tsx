@@ -2,13 +2,14 @@ import React, { useState, useEffect } from "react"
 import { Search, Play } from "lucide-react"
 import { api } from "@/services/api"
 import { useTelegram } from "@/hooks/useTelegram"
-import type { GameDetailResponse } from "@/types/api"
+import type { GameDetailResponse, UserProfile } from "@/types/api"
 
 type FilterType = 'time' | 'luckiest' | 'solo'
 
 export function HistoryScreen() {
   const { user } = useTelegram()
   const [games, setGames] = useState<GameDetailResponse[]>([])
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<FilterType>('time')
@@ -18,10 +19,14 @@ export function HistoryScreen() {
       if (!user?.id) return
       
       try {
-        const history = await api.getUserPvpHistory(user.id)
+        const [history, profile] = await Promise.all([
+          api.getUserPvpHistory(user.id),
+          api.getUserProfile(user.id)
+        ])
         setGames(history)
+        setUserProfile(profile)
       } catch (error) {
-        console.error('Failed to load history:', error)
+        console.error('Failed to load data:', error)
       } finally {
         setLoading(false)
       }
@@ -68,8 +73,8 @@ export function HistoryScreen() {
   }
 
   return (
-    <div className="w-96 h-[746px] bg-black inline-flex flex-col justify-end items-start gap-2.5 overflow-hidden">
-      <div className="self-stretch flex-1 p-2.5 flex flex-col justify-end items-start gap-2.5 overflow-hidden">
+    <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
+      <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5 overflow-hidden">
         {/* Search Input */}
         <div className="self-stretch flex flex-col justify-start items-start">
           <div className="self-stretch h-12 px-4 bg-zinc-800 rounded-xl inline-flex justify-start items-center gap-3 overflow-hidden">
@@ -92,7 +97,7 @@ export function HistoryScreen() {
             onClick={() => setActiveFilter('time')}
             className={`flex-1 h-9 px-3 py-3.5 rounded-lg flex justify-center items-center gap-2.5 overflow-hidden ${
               activeFilter === 'time'
-                ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 shadow-lg'
+                ? 'bg-gradient-to-r from-[#444CE7] via-[#B83EFF] to-[#E58C4C] shadow-lg'
                 : 'bg-zinc-800'
             }`}
           >
@@ -102,7 +107,7 @@ export function HistoryScreen() {
             onClick={() => setActiveFilter('luckiest')}
             className={`flex-1 px-3 py-3 rounded-lg flex justify-center items-center gap-2 overflow-hidden ${
               activeFilter === 'luckiest'
-                ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 shadow-lg'
+                ? 'bg-gradient-to-r from-[#444CE7] via-[#B83EFF] to-[#E58C4C] shadow-lg'
                 : 'bg-zinc-800'
             }`}
           >
@@ -112,7 +117,7 @@ export function HistoryScreen() {
             onClick={() => setActiveFilter('solo')}
             className={`flex-1 px-3 py-3 rounded-lg flex justify-center items-center gap-2 overflow-hidden ${
               activeFilter === 'solo'
-                ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 shadow-lg'
+                ? 'bg-gradient-to-r from-[#444CE7] via-[#B83EFF] to-[#E58C4C] shadow-lg'
                 : 'bg-zinc-800'
             }`}
           >
@@ -189,28 +194,6 @@ export function HistoryScreen() {
               )
             })
           )}
-        </div>
-      </div>
-
-      {/* Bottom Navigation */}
-      <div className="w-96 px-14 py-3 bg-black border-t-2 border-zinc-800 inline-flex justify-center items-center gap-4 overflow-hidden">
-        <div className="flex justify-start items-center gap-4">
-          <div className="w-16 h-14 inline-flex flex-col justify-center items-center gap-2">
-            <div className="w-6 h-6 bg-gray-400 rounded" />
-            <span className="text-gray-400 text-xs font-medium">PvP</span>
-          </div>
-          <div className="w-16 h-14 inline-flex flex-col justify-center items-center gap-2">
-            <div className="w-6 h-6 bg-gray-400 rounded" />
-            <span className="text-gray-400 text-xs font-medium">Market</span>
-          </div>
-          <div className="w-16 h-14 inline-flex flex-col justify-center items-center gap-2">
-            <div className="w-6 h-6 bg-gray-400 rounded" />
-            <span className="text-gray-400 text-xs font-medium">Earn</span>
-          </div>
-          <div className="w-16 h-14 bg-zinc-800 rounded-3xl inline-flex flex-col justify-center items-center gap-2">
-            <div className="w-6 h-6 bg-white rounded" />
-            <span className="text-white text-xs font-bold">History</span>
-          </div>
         </div>
       </div>
     </div>
