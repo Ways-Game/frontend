@@ -233,7 +233,10 @@ export function HistoryScreen() {
               <p className="text-neutral-400 text-sm">No games found</p>
             </div>
           ) : (
+            
             currentGames.map((game) => {
+              console.log(game)
+
               const userBalls = getUserBalls(game)
               const winnerProfile = game.winnerProfile
               
