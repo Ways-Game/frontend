@@ -19,6 +19,7 @@ export function GameScreen() {
   const [gameModal, setGameModal] = useState<"win" | "lose" | null>(null)
   const [gameResult, setGameResult] = useState<{ result: 'win' | 'lose'; prize?: number } | null>(null)
   const [winnerInfo, setWinnerInfo] = useState<{ name?: string; avatar?: string } | null>(null)
+  const [isReplay, setIsReplay] = useState(false)
   // gameData holds meta (prize, total_balls, game_id)
   const [gameStarted, setGameStarted] = useState(false)
   const [showCountdown, setShowCountdown] = useState(false)
@@ -183,6 +184,11 @@ const autoStartPendingRef = useRef<any | null>(null);
       // Set speedUpTime if passed
       if (state.speedUpTime) {
         setSpeedUpTime(state.speedUpTime);
+      }
+      
+      // Set replay mode
+      if (state.isReplay) {
+        setIsReplay(true);
       }
       
       if (state.autoStart) {
@@ -418,6 +424,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           winnerName={winnerInfo?.name}
           winnerAvatar={winnerInfo?.avatar}
           musicTitle={gameData.music_title}
+          isReplay={isReplay}
         />
       )}
     </div>

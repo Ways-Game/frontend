@@ -53,8 +53,8 @@ class ApiService {
     return this.request<UserProfile>(`/profile/me/${id}`);
   }
 
-  async getUserPvpHistory(user_id: number): Promise<GameDetailResponse[]> {
-    return this.request<GameDetailResponse[]>(`/profile/history_pvp/${user_id}`);
+  async getUserPvpHistory(): Promise<GameDetailResponse[]> {
+    return this.request<GameDetailResponse[]>(`/profile/history_pvp`);
   }
 
   async updateUserPhoto(user_id: number, avatar_url: string): Promise<{ success: boolean }> {

@@ -11,9 +11,10 @@ interface GameResultModalProps {
   winnerName?: string
   winnerAvatar?: string
   musicTitle?: string
+  isReplay?: boolean
 }
 
-export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, winnerName, winnerAvatar, musicTitle }: GameResultModalProps) {
+export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, winnerName, winnerAvatar, musicTitle, isReplay }: GameResultModalProps) {
   const [countdown, setCountdown] = useState(20)
   const [shareError, setShareError] = useState<string | null>(null)
   const { user, shareGameStory } = useTelegram()
@@ -33,6 +34,7 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
   }, [onClose])
 
   const isWin = type === "win"
+  const isGolden = isReplay
   
   return (
     <div className="fixed inset-0 bg-black/60 flex flex-col justify-end items-center px-6 pb-10 z-50">
@@ -51,11 +53,11 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
         {/* Main Result Card */}
         <div className="px-3.5 py-4 bg-zinc-900/50 rounded-[20px] backdrop-blur-sm flex flex-col items-center gap-5">
           <div className="text-center text-neutral-50 text-xl leading-snug">
-            {isWin ? "Great! we play again?" : "Better luck next time..."}
+            {isReplay ? "Game Replay" : (isWin ? "Great! we play again?" : "Better luck next time...")}
           </div>
           
           {/* Winner Info */}
-          <div className={`w-full px-2.5 py-2 font-black ${isWin ? 'bg-green-600 text-white' : ' bg-white/5 text-neutral-50'}  rounded-[37px] flex justify-between items-center`}>
+          <div className={`w-full px-2.5 py-2 font-black ${isGolden ? 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-black' : (isWin ? 'bg-green-600 text-white' : ' bg-white/5 text-neutral-50')}  rounded-[37px] flex justify-between items-center`}>
             <div className="flex items-center gap-2.5">
               {winnerAvatar ? (
                 <img src={winnerAvatar} className="w-7 h-7 rounded-full object-cover" alt="winner" />

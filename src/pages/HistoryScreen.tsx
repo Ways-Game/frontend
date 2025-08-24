@@ -1,18 +1,42 @@
 import React, { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Search, Play } from "lucide-react"
 import { api } from "@/services/api"
 import { useTelegram } from "@/hooks/useTelegram"
+import { Pagination } from "@/components/ui/Pagination"
 import type { GameDetailResponse, UserProfile } from "@/types/api"
 
 type FilterType = 'time' | 'luckiest' | 'solo'
 
 export function HistoryScreen() {
+  const navigate = useNavigate()
   const { user } = useTelegram()
   const [games, setGames] = useState<GameDetailResponse[]>([])
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [enhancedGames, setEnhancedGames] = useState<(GameDetailResponse & { winnerProfile?: UserProfile })[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<FilterType>('time')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
+  const handleViewReplay = (game: GameDetailResponse) => {
+    navigate('/game', { 
+      state: {
+        game_id: game.game_id,
+        seed: game.seed,
+        mapId: game.map_id,
+        participants: game.participants,
+        prize: game.total_price,
+        total_balls: game.total_balls,
+        fullGame: game,
+        autoStart: true,
+        isReplay: true,
+        music_content: game.music_content,
+        music_title: game.music_title
+      }
+    })
+  }
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -20,11 +44,29 @@ export function HistoryScreen() {
       
       try {
         const [history, profile] = await Promise.all([
-          api.getUserPvpHistory(user.id),
+          api.getUserPvpHistory(),
           api.getUserProfile(user.id)
         ])
         setGames(history)
         setUserProfile(profile)
+        
+        // Fetch winner profiles for each game
+        const gamesWithProfiles = await Promise.all(
+          history.map(async (game) => {
+            if (game.winner_id) {
+              try {
+                const winnerProfile = await api.getUserProfile(game.winner_id)
+                return { ...game, winnerProfile }
+              } catch (error) {
+                console.error(`Failed to load winner profile for game ${game.game_id}:`, error)
+                return game
+              }
+            }
+            return game
+          })
+        )
+        
+        setEnhancedGames(gamesWithProfiles)
       } catch (error) {
         console.error('Failed to load data:', error)
       } finally {
@@ -34,6 +76,16 @@ export function HistoryScreen() {
 
     loadHistory()
   }, [user?.id])
+
+  // Pagination logic
+  const totalPages = Math.ceil(enhancedGames.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentGames = enhancedGames.slice(startIndex, endIndex)
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -97,9 +149,13 @@ export function HistoryScreen() {
             onClick={() => setActiveFilter('time')}
             className={`flex-1 h-9 px-3 py-3.5 rounded-lg flex justify-center items-center gap-2.5 overflow-hidden ${
               activeFilter === 'time'
-                ? 'bg-gradient-to-r from-[#444CE7] via-[#B83EFF] to-[#E58C4C] shadow-lg'
+                ? ''
                 : 'bg-zinc-800'
             }`}
+            style={activeFilter === 'time' ? {
+              background: 'radial-gradient(458.72% 228.94% at 57.65% 24.39%, #444CE7 0%, #B83EFF 30.5%, #E58C4C 60.5%, #444CE7 93.5%), linear-gradient(116deg, #FFF -56.16%, #0078D2 28.08%, #8E4FF8 80.58%)',
+              boxShadow: '0px 5px 22px 0px rgba(207, 62, 255, 0.34)'
+            } : {}}
           >
             <span className="text-neutral-50 text-sm leading-snug">⌛ By time</span>
           </button>
@@ -107,9 +163,13 @@ export function HistoryScreen() {
             onClick={() => setActiveFilter('luckiest')}
             className={`flex-1 px-3 py-3 rounded-lg flex justify-center items-center gap-2 overflow-hidden ${
               activeFilter === 'luckiest'
-                ? 'bg-gradient-to-r from-[#444CE7] via-[#B83EFF] to-[#E58C4C] shadow-lg'
+                ? ''
                 : 'bg-zinc-800'
             }`}
+            style={activeFilter === 'luckiest' ? {
+              background: 'radial-gradient(458.72% 228.94% at 57.65% 24.39%, #444CE7 0%, #B83EFF 30.5%, #E58C4C 60.5%, #444CE7 93.5%), linear-gradient(116deg, #FFF -56.16%, #0078D2 28.08%, #8E4FF8 80.58%)',
+              boxShadow: '0px 5px 22px 0px rgba(207, 62, 255, 0.34)'
+            } : {}}
           >
             <span className="text-neutral-50 text-sm leading-snug">🍀 Luckiest</span>
           </button>
@@ -117,9 +177,13 @@ export function HistoryScreen() {
             onClick={() => setActiveFilter('solo')}
             className={`flex-1 px-3 py-3 rounded-lg flex justify-center items-center gap-2 overflow-hidden ${
               activeFilter === 'solo'
-                ? 'bg-gradient-to-r from-[#444CE7] via-[#B83EFF] to-[#E58C4C] shadow-lg'
+                ? ''
                 : 'bg-zinc-800'
             }`}
+            style={activeFilter === 'solo' ? {
+              background: 'radial-gradient(458.72% 228.94% at 57.65% 24.39%, #444CE7 0%, #B83EFF 30.5%, #E58C4C 60.5%, #444CE7 93.5%), linear-gradient(116deg, #FFF -56.16%, #0078D2 28.08%, #8E4FF8 80.58%)',
+              boxShadow: '0px 5px 22px 0px rgba(207, 62, 255, 0.34)'
+            } : {}}
           >
             <span className="text-neutral-50 text-sm leading-snug">👤 Solo</span>
           </button>
@@ -127,15 +191,14 @@ export function HistoryScreen() {
 
         {/* Games List */}
         <div className="self-stretch flex-1 flex flex-col justify-start items-start gap-2.5 overflow-y-auto">
-          {games.length === 0 ? (
+          {currentGames.length === 0 ? (
             <div className="self-stretch flex-1 flex items-center justify-center">
               <p className="text-neutral-400 text-sm">No games found</p>
             </div>
           ) : (
-            games.map((game) => {
-              const winner = getWinner(game)
+            currentGames.map((game) => {
               const userBalls = getUserBalls(game)
-              const winnerUser = winner?.user ? winner.user : winner
+              const winnerProfile = game.winnerProfile
               
               return (
                 <div key={game.game_id} className="self-stretch px-3.5 py-4 bg-stone-950 rounded-[20px] backdrop-blur-sm flex flex-col justify-center items-center gap-5 overflow-hidden">
@@ -146,7 +209,7 @@ export function HistoryScreen() {
                     </div>
                     <div className="rounded-[20px] flex justify-center items-center gap-2 overflow-hidden">
                       <span className="text-zinc-500 text-xs leading-snug">
-                        {game.created_at ? formatDate(game.created_at) : 'Unknown'} - {game.music_title || 'No music'}
+                        {game.start_time ? formatDate(game.start_time) : 'Unknown'} - {game.music_title || 'No music'}
                       </span>
                       <Play className="w-4 h-4 text-gray-400" />
                     </div>
@@ -155,9 +218,9 @@ export function HistoryScreen() {
                   {/* Winner Info */}
                   <div className="self-stretch rounded-[37px] inline-flex justify-between items-center overflow-hidden">
                     <div className="flex justify-start items-center gap-2.5">
-                      {winnerUser?.avatar ? (
+                      {winnerProfile?.avatar_url ? (
                         <img 
-                          src={winnerUser.avatar} 
+                          src={winnerProfile.avatar_url} 
                           className="w-7 h-7 rounded-full object-cover" 
                           alt="avatar" 
                         />
@@ -167,7 +230,7 @@ export function HistoryScreen() {
                         </div>
                       )}
                       <span className="text-neutral-50 text-sm leading-snug">
-                        @{winnerUser?.username || `User${winnerUser?.id}`}
+                        @{winnerProfile?.username || `User${game.winner_id}`}
                       </span>
                     </div>
                     <div className="flex justify-start items-center gap-0.5">
@@ -185,7 +248,10 @@ export function HistoryScreen() {
                         <span className="text-neutral-50/40 text-sm leading-snug"> vs {game.total_balls}</span>
                       </div>
                     </div>
-                    <button className="h-8 pl-3 pr-2 py-2 bg-zinc-800 rounded-xl flex justify-center items-center gap-2 overflow-hidden">
+                    <button 
+                      onClick={() => handleViewReplay(game)}
+                      className="h-8 px-4 py-2 bg-zinc-800 rounded-2xl flex justify-center items-center gap-2 overflow-hidden min-w-[120px]"
+                    >
                       <span className="text-white text-base leading-snug">View replay</span>
                       <Play className="w-4 h-4 text-white" />
                     </button>
@@ -195,6 +261,15 @@ export function HistoryScreen() {
             })
           )}
         </div>
+        
+        {/* Pagination */}
+        {enhancedGames.length > itemsPerPage && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        )}
       </div>
     </div>
   )

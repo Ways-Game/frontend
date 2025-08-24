@@ -33,17 +33,23 @@ export function MarketScreen() {
           </button>
         </div>
 
-        {/* Carousel */}
-        <div className="self-stretch pb-5 inline-flex justify-center items-center gap-[5px] overflow-x-auto">
-          {[1, 2, 3].map((item) => (
-            <div key={item} className="w-96 px-5 py-5 relative bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] inline-flex flex-col justify-start items-start gap-5 overflow-hidden flex-shrink-0">
-              <img className="w-32 h-32 absolute right-4 bottom-4 opacity-30" src="https://placehold.co/125x125" alt="" />
-              <div className="self-stretch text-neutral-50 text-3xl font-normal">Claim gifts you bought in Rolls</div>
-              <button className="h-8 px-3 py-2 bg-white rounded-[20px] inline-flex justify-center items-center gap-1.5 overflow-hidden">
-                <span className="text-gray-800 text-base font-semibold">Claim</span>
-              </button>
-            </div>
-          ))}
+        {/* Hero Banner */}
+        <div className="relative flex-1 p-2.5 bg-zinc-900/60 rounded-tl-[20px] rounded-bl-[20px] rounded-br-[20px] flex flex-col gap-5">
+          <div className="absolute inset-0 rounded-tl-[20px] rounded-bl-[20px] rounded-br-[20px] overflow-hidden">
+            <img 
+              src="/src/assets/images/hero-bg.jpg" 
+              alt="Hero background" 
+              className="w-full h-full object-cover opacity-30"
+            />
+          </div>
+          <div className="relative z-10 flex flex-col gap-5 p-5">
+            <h1 className="text-white text-3xl font-bold leading-tight">
+              Claim gifts you bought in Rolls
+            </h1>
+            <button className="h-8 px-3 py-2 bg-white rounded-[20px] inline-flex justify-center items-center gap-1.5 overflow-hidden w-fit">
+              <span className="text-gray-800 text-base font-semibold">Claim</span>
+            </button>
+          </div>
         </div>
 
         {/* Search Input */}
@@ -63,7 +69,7 @@ export function MarketScreen() {
         </div>
 
         {/* Products Grid */}
-        <div className="self-stretch flex-1 relative inline-flex justify-start items-start gap-2.5 flex-wrap content-start overflow-y-auto">
+        <div className="self-stretch flex-1 relative inline-flex justify-center items-start gap-2.5 flex-wrap content-start overflow-y-auto">
           {products.map((product) => (
             <div key={product.id} className="w-28 h-44 p-2.5 bg-stone-950 rounded-xl border border-stone-300 backdrop-blur-sm inline-flex flex-col justify-end items-center gap-2 overflow-hidden">
               <div className="flex flex-col justify-start items-center gap-0.5">
