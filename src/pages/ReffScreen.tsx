@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Chip } from "@/components/ui/ways-chip"
 import { WaysButton } from "@/components/ui/ways-button"
 import { PlayerItem } from "@/components/game/PlayerItem"
-import { Users, UserPlus, X, User, Link } from "lucide-react"
+import { Users, UserPlus, X, User, Link, RefreshCw } from "lucide-react"
 import { useTelegram } from "@/hooks/useTelegram"
 import { api } from "@/services/api"
+import WebApp from '@twa-dev/sdk'
 
 const generateMockWallet = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -24,36 +25,82 @@ export function ReffScreen() {
   const { user, getUserDisplayName, inviteFriends } = useTelegram()
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const fetchUserProfile = async (retries = 3) => {
+  const fetchUserProfile = useCallback(async (retries = 3) => {
     if (!user?.id) return
     
+    setRefreshing(true)
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const profile = await api.getUserProfile(user.id)
         if (profile && profile.id) {
           setUserProfile(profile)
-          setLoading(false)
-          return
+          break
         }
       } catch (error) {
         console.error(`Profile fetch attempt ${attempt} failed:`, error)
-      }
-      
-      if (attempt < retries) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        if (attempt === retries) {
+          WebApp.showAlert("Failed to load data. Please try again later.")
+        }
       }
     }
-    
     setLoading(false)
-  }
+    setRefreshing(false)
+  }, [user?.id])
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchUserProfile, 30000)
+    return () => clearInterval(interval)
+  }, [fetchUserProfile])
 
   useEffect(() => {
     fetchUserProfile()
-  }, [user?.id])
+  }, [fetchUserProfile])
+
+  // Add pull-to-refresh functionality
+  useEffect(() => {
+    let startY = 0
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      if (window.scrollY === 0) {
+        startY = e.touches[0].clientY
+      }
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (window.scrollY === 0 && e.touches[0].clientY > startY + 50) {
+        fetchUserProfile()
+      }
+    }
+
+    window.addEventListener('touchstart', handleTouchStart)
+    window.addEventListener('touchmove', handleTouchMove)
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart)
+      window.removeEventListener('touchmove', handleTouchMove)
+    }
+  }, [fetchUserProfile])
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
+      {/* Refresh indicator */}
+      {refreshing && (
+        <div className="fixed top-0 left-0 right-0 bg-blue-500 text-white text-center py-2 z-50">
+          Updating data...
+        </div>
+      )}
+
+      {/* Manual refresh button */}
+      <button 
+        onClick={() => fetchUserProfile()}
+        className="fixed top-4 right-4 bg-blue-500 p-2 rounded-full z-50"
+      >
+        <RefreshCw className="w-6 h-6 text-white" />
+      </button>
+
       <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5 ">
         {/* Hero Banner */}
         <div 

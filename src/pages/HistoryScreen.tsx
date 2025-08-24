@@ -140,7 +140,7 @@ export function HistoryScreen() {
       const participant = p.user ? p.user : p
       return participant.id === user.id
     })
-    console.log(userParticipant)
+    console.log(userParticipant, user)
     return userParticipant?.balls_count || 0
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import WebApp from '@twa-dev/sdk'
 import { api } from '@/services/api'
 import { ExtendedUser, UseTelegramReturn, UserProfile } from '@/types'
@@ -7,10 +7,11 @@ import { ExtendedUser, UseTelegramReturn, UserProfile } from '@/types'
 export const useTelegram = (): UseTelegramReturn => {
   const [isReady, setIsReady] = useState(false)
   const [user, setUser] = useState<ExtendedUser | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
-  useEffect(() => {
-    const initTelegram = async () => {
-      if (typeof window !== 'undefined') {
+  const initTelegram = useCallback(async () => {
+    if (typeof window !== 'undefined') {
+      try {
         WebApp.ready()
         WebApp.expand()
         WebApp.setHeaderColor('#0C0E12')
@@ -46,15 +47,22 @@ export const useTelegram = (): UseTelegramReturn => {
             })
           } catch (error) {
             console.error('Failed to load user profile:', error)
+            // Try again after 2 seconds
+            setTimeout(() => setRetryCount(prev => prev + 1), 2000)
           }
         }
-        
+      } catch (error) {
+        console.error('Telegram init error:', error)
+        setTimeout(() => setRetryCount(prev => prev + 1), 2000)
+      } finally {
         setIsReady(true)
       }
     }
-    
-    initTelegram()
   }, [])
+
+  useEffect(() => {
+    initTelegram()
+  }, [initTelegram, retryCount])
 
   const loadUserProfile = async (): Promise<void> => {
     if (!user?.id) return
