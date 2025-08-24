@@ -43,8 +43,23 @@ export function HistoryScreen() {
       if (!user?.id) return
       
       try {
+        let historyPromise
+        switch (activeFilter) {
+          case 'time':
+            historyPromise = api.getHistoryAll()
+            break
+          case 'luckiest':
+            historyPromise = api.getHistoryLucky()
+            break
+          case 'solo':
+            historyPromise = api.getHistorySolo()
+            break
+          default:
+            historyPromise = api.getHistoryAll()
+        }
+        
         const [history, profile] = await Promise.all([
-          api.getUserPvpHistory(),
+          historyPromise,
           api.getUserProfile(user.id)
         ])
         setGames(history)
@@ -75,7 +90,7 @@ export function HistoryScreen() {
     }
 
     loadHistory()
-  }, [user?.id])
+  }, [user?.id, activeFilter])
 
   // Pagination logic
   const totalPages = Math.ceil(enhancedGames.length / itemsPerPage)
@@ -86,6 +101,11 @@ export function HistoryScreen() {
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
   }
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [activeFilter])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)

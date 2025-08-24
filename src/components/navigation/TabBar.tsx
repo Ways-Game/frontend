@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState, useEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { Smile, ShoppingBag, Users, Clock } from "lucide-react"
@@ -13,6 +13,24 @@ const tabs = [
 export function TabBar() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
+  
+  useEffect(() => {
+    const initialHeight = window.visualViewport?.height || window.innerHeight
+    
+    const handleViewportChange = () => {
+      const currentHeight = window.visualViewport?.height || window.innerHeight
+      setIsKeyboardOpen(currentHeight < initialHeight * 0.75)
+    }
+    
+    window.visualViewport?.addEventListener('resize', handleViewportChange)
+    window.addEventListener('resize', handleViewportChange)
+    
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleViewportChange)
+      window.removeEventListener('resize', handleViewportChange)
+    }
+  }, [])
   
   const getActiveTab = () => {
     switch (location.pathname) {
@@ -42,8 +60,10 @@ export function TabBar() {
   }
   
   const activeTab = getActiveTab()
+  if (isKeyboardOpen) return null
+  
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-[#00000090] h-[80px] border-border z-50 py-2">
+    <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[600px] bg-[#00000090] h-[80px] border-border z-50 py-2">
       <div className="flex items-center justify-around h-full px-4">
         {tabs.map(({ id, label, icon: Icon }) => (
           <div

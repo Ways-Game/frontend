@@ -22,6 +22,35 @@ const formatWallet = (wallet: string) => {
 
 export function ReffScreen() {
   const { user, getUserDisplayName, inviteFriends } = useTelegram()
+  const [userProfile, setUserProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  const fetchUserProfile = async (retries = 3) => {
+    if (!user?.id) return
+    
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const profile = await api.getUserProfile(user.id)
+        if (profile && profile.id) {
+          setUserProfile(profile)
+          setLoading(false)
+          return
+        }
+      } catch (error) {
+        console.error(`Profile fetch attempt ${attempt} failed:`, error)
+      }
+      
+      if (attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+    }
+    
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchUserProfile()
+  }, [user?.id])
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
@@ -87,15 +116,15 @@ export function ReffScreen() {
             <span className="text-neutral-500 text-xs">invited users</span>
             <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2 w-fit">
               <Users className="w-4 h-4 text-gray-400" />
-              <span className="text-neutral-50 text-sm">{user?.referrals?.length || 0}</span>
+              <span className="text-neutral-50 text-sm">{userProfile?.referrals?.length || 0}</span>
             </div>
           </div>
 
           {/* Referral Users */}
           <div className="flex flex-col gap-2">
-            <span className="text-neutral-500 text-xs">Referral users ({user?.referrals?.length || 0})</span>
+            <span className="text-neutral-500 text-xs">Referral users ({userProfile?.referrals?.length || 0})</span>
             
-            {user?.referrals?.map((referralUser) => (
+            {userProfile?.referrals?.map((referralUser) => (
               <div key={referralUser.id} className="px-2.5 py-2 bg-white/5 rounded-[37px] flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   {referralUser.avatar_url ? (
@@ -114,9 +143,9 @@ export function ReffScreen() {
               </div>
             ))}
 
-            {(!user?.referrals || user.referrals.length === 0) && (
+            {(!userProfile?.referrals || userProfile.referrals.length === 0) && (
               <div className="text-center py-4 text-neutral-500 text-sm">
-                No referrals yet. Invite friends to start earning!
+                {loading ? 'Loading referrals...' : 'No referrals yet. Invite friends to start earning!'}
               </div>
             )}
           </div>

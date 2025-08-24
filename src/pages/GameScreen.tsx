@@ -28,7 +28,10 @@ export function GameScreen() {
   const [cameraMode, setCameraMode] = useState<'leader' | 'swipe'>('leader')
   const [scrollY, setScrollY] = useState(0)
   const [maxScrollY, setMaxScrollY] = useState(0)
-  const [touchStartY, setTouchStartY] = useState(0) 
+  const [touchStartY, setTouchStartY] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartY = useRef(0)
+  const dragStartScrollY = useRef(0) 
  const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0, music_content: "", music_title: "" })
 // ref to keep latest gameData accessible to callbacks
 const gameDataRef = useRef<typeof gameData>(gameData);
@@ -240,16 +243,20 @@ const autoStartPendingRef = useRef<any | null>(null);
     }
   }
 
+  const handleScroll = (newY: number) => {
+    const clampedY = Math.max(0, Math.min(maxScrollY, newY))
+    setScrollY(clampedY)
+    if (gameCanvasRef.current) {
+      gameCanvasRef.current.setScrollY(clampedY)
+    }
+  }
+
   const handleWheel = useCallback((e: WheelEvent) => {
     if (cameraMode === 'swipe') {
       e.preventDefault();
-      const newY = Math.max(0, Math.min(maxScrollY, scrollY + e.deltaY));
-      setScrollY(newY);
-      if (gameCanvasRef.current) {
-        gameCanvasRef.current.setScrollY(newY);
-      }
+      handleScroll(scrollY + e.deltaY);
     }
-  }, [cameraMode, maxScrollY, scrollY]);
+  }, [cameraMode, scrollY, maxScrollY]);
 
   useEffect(() => {
     const element = document.querySelector('.game-container');
@@ -270,11 +277,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       e.preventDefault();
       const touchY = e.touches[0].clientY;
       const deltaY = touchStartY - touchY;
-      const newY = Math.max(0, Math.min(maxScrollY, scrollY + deltaY));
-      setScrollY(newY);
-      if (gameCanvasRef.current) {
-        gameCanvasRef.current.setScrollY(newY);
-      }
+      handleScroll(scrollY + deltaY);
       setTouchStartY(touchY);
     }
   }
@@ -282,6 +285,62 @@ const autoStartPendingRef = useRef<any | null>(null);
   const handleTouchEnd = () => {
     setTouchStartY(0);
   }
+
+  const handleScrollbarMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+    dragStartY.current = e.clientY
+    dragStartScrollY.current = scrollY
+  }
+
+  const handleScrollbarTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation()
+    setIsDragging(true)
+    dragStartY.current = e.touches[0].clientY
+    dragStartScrollY.current = scrollY
+  }
+
+  const handleScrollbarMove = useCallback((clientY: number) => {
+    if (!isDragging) return
+    const track = document.querySelector('.scrollbar-track') as HTMLElement
+    if (!track) return
+    const trackRect = track.getBoundingClientRect()
+    const clickPosition = clientY - trackRect.top
+    const trackHeight = trackRect.height
+    const scrollPercentage = clickPosition / trackHeight
+    const newScrollY = scrollPercentage * maxScrollY
+    handleScroll(newScrollY)
+  }, [isDragging, maxScrollY])
+
+  const handleScrollbarMoveMouse = useCallback((e: MouseEvent) => {
+    e.preventDefault()
+    handleScrollbarMove(e.clientY)
+  }, [handleScrollbarMove])
+
+  const handleScrollbarMoveTouch = useCallback((e: TouchEvent) => {
+    handleScrollbarMove(e.touches[0].clientY)
+  }, [handleScrollbarMove])
+
+  const handleScrollbarEnd = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleScrollbarMoveMouse)
+      document.addEventListener('mouseup', handleScrollbarEnd)
+      document.addEventListener('touchmove', handleScrollbarMoveTouch)
+      document.addEventListener('touchend', handleScrollbarEnd)
+      
+      return () => {
+        document.removeEventListener('mousemove', handleScrollbarMoveMouse)
+        document.removeEventListener('mouseup', handleScrollbarEnd)
+        document.removeEventListener('touchmove', handleScrollbarMoveTouch)
+        document.removeEventListener('touchend', handleScrollbarEnd)
+      }
+    }
+  }, [isDragging, handleScrollbarMoveMouse, handleScrollbarMoveTouch, handleScrollbarEnd])
 
 
   return (
@@ -312,34 +371,19 @@ const autoStartPendingRef = useRef<any | null>(null);
         />
       </div>
       
-      {/* Кнопки прокрутки (только в режиме swipe) */}
+      {/* Скроллбар */}
       {cameraMode === 'swipe' && maxScrollY > 0 && (
-        <>
-          {scrollY > 0 && (
-            <button 
-              onClick={handleScrollUp}
-              className="absolute left-1/2 transform -translate-x-1/2 top-20 z-50 w-12 h-8 bg-gray-800/70 rounded-full flex items-center justify-center backdrop-blur-sm pointer-events-auto"
-            >
-              <ChevronLeft className="w-5 h-5 text-white transform rotate-90" />
-            </button>
-          )}
-          {scrollY < maxScrollY && (
-            <button 
-              onClick={handleScrollDown}
-              className="absolute left-1/2 transform -translate-x-1/2 bottom-32 z-50 w-12 h-8 bg-gray-800/70 rounded-full flex items-center justify-center backdrop-blur-sm pointer-events-auto"
-            >
-              <ChevronRight className="w-5 h-5 text-white transform rotate-90" />
-            </button>
-          )}
-        </>
-      )}
-      
-      {/* Полоса прокрутки (только в режиме swipe) */}
-      {cameraMode === 'swipe' && maxScrollY > 0 && (
-        <div className="absolute right-2 top-20 bottom-32 z-50 w-2 bg-gray-800/50 rounded-full pointer-events-none">
+        <div 
+          className="scrollbar-track absolute right-2 top-20 bottom-32 z-50 w-3 bg-gray-800/30 rounded-full cursor-pointer"
+          onMouseDown={handleScrollbarMouseDown}
+          onTouchStart={handleScrollbarTouchStart}
+        >
           <div 
-            className="w-full bg-yellow-500 rounded-full transition-all duration-300"
-            style={{ height: `${(scrollY / maxScrollY) * 100}%` }}
+            className="scrollbar-thumb absolute w-full bg-yellow-500 rounded-full transition-all duration-200 hover:bg-yellow-400"
+            style={{ 
+              height: `${Math.max(20, (window.innerHeight - 52) / maxScrollY * 100)}%`,
+              top: `${(scrollY / maxScrollY) * 100}%`
+            }}
           />
         </div>
       )}

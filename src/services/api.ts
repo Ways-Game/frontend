@@ -53,8 +53,20 @@ class ApiService {
     return this.request<UserProfile>(`/profile/me/${id}`);
   }
 
-  async getUserPvpHistory(): Promise<GameDetailResponse[]> {
-    return this.request<GameDetailResponse[]>(`/profile/history_pvp`);
+  async getHistoryAll(): Promise<GameDetailResponse[]> {
+    return this.request<GameDetailResponse[]>(`/history/all`);
+  }
+
+  async getHistoryKing(): Promise<GameDetailResponse[]> {
+    return this.request<GameDetailResponse[]>(`/history/king`);
+  }
+
+  async getHistoryLucky(): Promise<GameDetailResponse[]> {
+    return this.request<GameDetailResponse[]>(`/history/lucky`);
+  }
+
+  async getHistorySolo(): Promise<GameDetailResponse[]> {
+    return this.request<GameDetailResponse[]>(`/history/solo`);
   }
 
   async updateUserPhoto(user_id: number, avatar_url: string): Promise<{ success: boolean }> {

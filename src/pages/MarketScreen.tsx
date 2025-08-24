@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { Search, Filter, ArrowUpDown } from "lucide-react"
+import { Search, Filter, ArrowUpDown, X } from "lucide-react"
 
 export function MarketScreen() {
   const [searchQuery, setSearchQuery] = useState('Snoo')
@@ -10,12 +10,12 @@ export function MarketScreen() {
     name: 'Snoop Dogg',
     category: 'Random',
     price: 200,
-    image: 'https://placehold.co/96x96'
+    image: '/src/assets/market_gift.png'
   }))
 
   return (
-    <div className="w-96 h-[746px] bg-black inline-flex flex-col justify-end items-start overflow-hidden">
-      <div className="self-stretch flex-1 px-2.5 pt-2.5 flex flex-col justify-end items-start gap-2.5 overflow-hidden">
+    <div className="min-h-screen bg-black flex flex-col gap-2.5 overflow-hidden pb-20">
+      <div className="flex-1 p-2.5 flex flex-col gap-2.5 overflow-hidden">
         {/* Top Controls */}
         <div className="self-stretch inline-flex justify-between items-start">
           <div className="flex justify-start items-center gap-2">
@@ -34,20 +34,22 @@ export function MarketScreen() {
         </div>
 
         {/* Hero Banner */}
-        <div className="relative flex-1 p-2.5 bg-zinc-900/60 rounded-tl-[20px] rounded-bl-[20px] rounded-br-[20px] flex flex-col gap-5">
-          <div className="absolute inset-0 rounded-tl-[20px] rounded-bl-[20px] rounded-br-[20px] overflow-hidden">
-            <img 
-              src="/src/assets/images/hero-bg.jpg" 
-              alt="Hero background" 
-              className="w-full h-full object-cover opacity-30"
-            />
+        <div 
+          className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden h-[154px]"
+          style={{
+            backgroundImage: 'url(/src/assets/ref_back.png)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center'
+          }}
+        >
+          <div className="text-neutral-50 text-3xl font-bold w-[80%] ">
+            Post videos and earn money
           </div>
-          <div className="relative z-10 flex flex-col gap-5 p-5">
-            <h1 className="text-white text-3xl font-bold leading-tight">
-              Claim gifts you bought in Rolls
-            </h1>
-            <button className="h-8 px-3 py-2 bg-white rounded-[20px] inline-flex justify-center items-center gap-1.5 overflow-hidden w-fit">
-              <span className="text-gray-800 text-base font-semibold">Claim</span>
+          <div className="flex ">
+            <button 
+              className="h-10 px-3 py-2 bg-white rounded-[20px]"
+            >
+              <span className="text-black text-base font-semibold">Earn money</span>
             </button>
           </div>
         </div>
@@ -62,52 +64,35 @@ export function MarketScreen() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 bg-transparent text-white text-base font-normal leading-snug outline-none"
               />
-              <div className="w-0.5 h-6 bg-blue-600 rounded-sm animate-pulse" />
             </div>
-            <Search className="w-6 h-6 text-neutral-400 opacity-50" />
+            {searchQuery ? (
+              <X 
+                className="w-6 h-6 text-neutral-400 opacity-50 cursor-pointer" 
+                onClick={() => setSearchQuery('')}
+              />
+            ) : (
+              <Search className="w-6 h-6 text-neutral-400 opacity-50" />
+            )}
           </div>
         </div>
 
         {/* Products Grid */}
-        <div className="self-stretch flex-1 relative inline-flex justify-center items-start gap-2.5 flex-wrap content-start overflow-y-auto">
+        <div className="self-stretch flex-1 relative inline-flex justify-center items-start gap-[8px] flex-wrap content-start overflow-y-auto">
           {products.map((product) => (
-            <div key={product.id} className="w-28 h-44 p-2.5 bg-stone-950 rounded-xl border border-stone-300 backdrop-blur-sm inline-flex flex-col justify-end items-center gap-2 overflow-hidden">
+            <div key={product.id} className="w-[calc(100%/3-8px)] h-34 p-2.5 bg-stone-950 rounded-xl border border-[#5F5F5F] backdrop-blur-sm inline-flex flex-col justify-end items-center gap-2 overflow-hidden">
               <div className="flex flex-col justify-start items-center gap-0.5">
                 <span className="text-neutral-50 text-xs">{product.name}</span>
                 <span className="text-neutral-50/50 text-[10px]">{product.category}</span>
               </div>
               <img className="self-stretch flex-1 rounded-xl object-cover" src={product.image} alt={product.name} />
-              <div className="self-stretch px-3 py-2 bg-zinc-800 rounded-[20px] inline-flex justify-center items-center gap-2 overflow-hidden">
-                <div className="flex justify-start items-center gap-0.5">
-                  <span className="text-neutral-50 text-sm leading-snug">{product.price}</span>
-                  <div className="w-3.5 h-3.5 bg-amber-300 rounded" />
+              <div className="self-stretch px-[26px] py-[8px] bg-zinc-800 rounded-[20px] inline-flex justify-center items-center gap-2 overflow-hidden">
+                <div className="flex justify-start items-center gap-[4px]">
+                  <span className="text-neutral-50 text-sm leading-snug text-[20px]">{product.price}</span>
+                  <img src="/src/assets/icons/star.svg" className="w-4 h-[18px]" alt="star" />
                 </div>
               </div>
             </div>
           ))}
-          <div className="w-16 h-96 absolute right-0 top-0 bg-gradient-to-l from-black to-transparent pointer-events-none" />
-        </div>
-      </div>
-
-      {/* Bottom Navigation */}
-      <div className="w-96 px-14 py-3 bg-black border-t-2 border-zinc-800 inline-flex justify-center items-center gap-4 overflow-hidden">
-        <div className="flex justify-start items-center gap-4">
-          <div className="w-16 h-14 inline-flex flex-col justify-center items-center gap-2">
-            <div className="w-6 h-6 bg-gray-400 rounded" />
-            <span className="text-gray-400 text-xs font-medium">PvP</span>
-          </div>
-          <div className="w-16 h-14 bg-zinc-800 rounded-3xl inline-flex flex-col justify-center items-center gap-2">
-            <div className="w-6 h-6 bg-white rounded" />
-            <span className="text-white text-xs font-medium">Market</span>
-          </div>
-          <div className="w-16 h-14 inline-flex flex-col justify-center items-center gap-2">
-            <div className="w-6 h-6 bg-gray-400 rounded" />
-            <span className="text-gray-400 text-xs font-medium">Earn</span>
-          </div>
-          <div className="w-16 h-14 inline-flex flex-col justify-center items-center gap-2">
-            <div className="w-6 h-6 bg-gray-400 rounded" />
-            <span className="text-gray-400 text-xs font-bold">History</span>
-          </div>
         </div>
       </div>
     </div>

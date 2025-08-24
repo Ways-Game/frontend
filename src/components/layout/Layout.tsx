@@ -17,7 +17,7 @@ export function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background max-w-[600px] mx-auto">
       <Outlet />
       <TabBar />
     </div>
