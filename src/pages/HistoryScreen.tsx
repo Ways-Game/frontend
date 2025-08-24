@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { Search, Play } from "lucide-react"
 import { api } from "@/services/api"
 import { useTelegram } from "@/hooks/useTelegram"
-import { Pagination } from "@/components/ui/Pagination"
+import { Pagination } from "@/components/ui/pagination"
 import type { GameDetailResponse, UserProfile } from "@/types/api"
 
 type FilterType = 'time' | 'luckiest' | 'solo'
