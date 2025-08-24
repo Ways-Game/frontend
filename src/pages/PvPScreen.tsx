@@ -56,6 +56,11 @@ export function PvPScreen() {
     return Math.max(0, Math.floor((currentUTCTime - startTime) / 1000));
   };
 
+  const getRemainingSeconds = (game: GameDetailResponse) => {
+    const elapsed = getElapsedSeconds(game);
+    return Math.max(0, 30 - elapsed);
+  };
+
   // Function to handle LIVE game transition
   const handleLiveGame = (game: GameDetailResponse) => {
     const elapsedSeconds = getElapsedSeconds(game);
@@ -288,7 +293,7 @@ export function PvPScreen() {
               {selectedGame?.status === GameState.WAIT_PLAY && (
                 <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
                   <Clock className="w-4 h-4 text-gray-400" />
-                  <span className="text-neutral-50 text-sm">{getElapsedSeconds(selectedGame)}s</span>
+                  <span className="text-neutral-50 text-sm">{getRemainingSeconds(selectedGame)}s</span>
                 </div>
               )}
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
@@ -316,46 +321,48 @@ export function PvPScreen() {
           </div>
 
           {/* Players List */}
-          <div className="flex-1 py-6 flex flex-col gap-2">
-            {selectedGame?.participants.length ? (
-              selectedGame.participants.map((participantItem: any, index) => {
-                // Normalize participant shape: some payloads have { user: { id, username, avatar, balls_count } }
-                const participantUser = participantItem.user ? participantItem.user : participantItem
-                const avatar = participantUser.avatar || participantUser.avatar_url
-                const pid = participantUser.id
-                const username = participantUser.username || `User${pid}`
-                const ballsCount = participantItem.balls_count ?? participantUser.balls_count ?? 0
+          <div className="flex-1 py-6 min-h-0">
+            <div className="h-full overflow-y-auto flex flex-col gap-2">
+              {selectedGame?.participants.length ? (
+                selectedGame.participants.map((participantItem: any, index) => {
+                  // Normalize participant shape: some payloads have { user: { id, username, avatar, balls_count } }
+                  const participantUser = participantItem.user ? participantItem.user : participantItem
+                  const avatar = participantUser.avatar || participantUser.avatar_url
+                  const pid = participantUser.id
+                  const username = participantUser.username || `User${pid}`
+                  const ballsCount = participantItem.balls_count ?? participantUser.balls_count ?? 0
 
-                return (
-                  <div key={pid} className={`px-2.5 py-2 rounded-[37px] flex justify-between items-center ${
-                    user.id === participantUser.id ? 'bg-blue-600' : 'bg-white/5'
-                  }`}>
-                    <div className="flex items-center gap-2.5">
-                      {avatar ? (
-                        <img 
-                          src={avatar} 
-                          className="w-7 h-7 rounded-full object-cover" 
-                          alt="avatar" 
-                        />
-                      ) : (
-                        <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-bold text-blue-600">TG</span>
-                        </div>
-                      )}
-                      <span className="text-neutral-50 text-sm">{username}</span>
+                  return (
+                    <div key={pid} className={`px-2.5 py-2 rounded-[37px] flex justify-between items-center flex-shrink-0 ${
+                      user.id === participantUser.id ? 'bg-blue-600' : 'bg-white/5'
+                    }`}>
+                      <div className="flex items-center gap-2.5">
+                        {avatar ? (
+                          <img 
+                            src={avatar} 
+                            className="w-7 h-7 rounded-full object-cover" 
+                            alt="avatar" 
+                          />
+                        ) : (
+                          <div className="w-7 h-7 bg-zinc-300 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-bold text-blue-600">TG</span>
+                          </div>
+                        )}
+                        <span className="text-neutral-50 text-sm">{username}</span>
+                      </div>
+                      <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
+                        <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
+                        <span className="text-neutral-50 text-sm">{ballsCount} ballz</span>
+                      </div>
                     </div>
-                    <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
-                      <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
-                      <span className="text-neutral-50 text-sm">{ballsCount} ballz</span>
-                    </div>
-                  </div>
-                )
-              })
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-neutral-400 text-sm">Waiting for players...</p>
-              </div>
-            )}
+                  )
+                })
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-neutral-400 text-sm">Waiting for players...</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
