@@ -77,9 +77,9 @@ export function MarketScreen() {
         </div>
 
         {/* Products Grid */}
-        <div className="self-stretch flex-1 relative inline-flex justify-center items-start gap-[8px] flex-wrap content-start overflow-y-auto">
+        <div className="self-stretch flex-1 relative inline-flex justify-center items-start gap-2.5 flex-wrap content-start overflow-y-auto">
           {products.map((product) => (
-            <div key={product.id} className="w-[calc(100%/3-8px)] h-34 p-2.5 bg-stone-950 rounded-xl border border-[#5F5F5F] backdrop-blur-sm inline-flex flex-col justify-end items-center gap-2 overflow-hidden">
+            <div key={product.id} style={{width: "calc(100% / 3 - 8px)"}} className=" h-34 p-2.5 bg-stone-950 rounded-xl border border-[#5F5F5F] backdrop-blur-sm inline-flex flex-col justify-end items-center gap-2 overflow-hidden">
               <div className="flex flex-col justify-start items-center gap-0.5">
                 <span className="text-neutral-50 text-xs">{product.name}</span>
                 <span className="text-neutral-50/50 text-[10px]">{product.category}</span>
