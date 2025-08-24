@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Search, Play } from "lucide-react"
+import { Search, Play, X } from "lucide-react"
 import { api } from "@/services/api"
 import { useTelegram } from "@/hooks/useTelegram"
 import { Pagination } from "@/components/ui/pagination"
@@ -92,20 +92,29 @@ export function HistoryScreen() {
     loadHistory()
   }, [user?.id, activeFilter])
 
+  // Search filtering
+  const filteredGames = enhancedGames.filter(game => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    const gameId = game.game_id.toString()
+    const winnerUsername = game.winnerProfile?.username?.toLowerCase() || ''
+    return gameId.includes(query) || winnerUsername.includes(query)
+  })
+
   // Pagination logic
-  const totalPages = Math.ceil(enhancedGames.length / itemsPerPage)
+  const totalPages = Math.ceil(filteredGames.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const currentGames = enhancedGames.slice(startIndex, endIndex)
+  const currentGames = filteredGames.slice(startIndex, endIndex)
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
   }
 
-  // Reset page when filter changes
+  // Reset page when filter or search changes
   useEffect(() => {
     setCurrentPage(1)
-  }, [activeFilter])
+  }, [activeFilter, searchQuery])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -130,6 +139,7 @@ export function HistoryScreen() {
       const participant = p.user ? p.user : p
       return participant.id === user.id
     })
+    console.log(userParticipant)
     return userParticipant?.balls_count || 0
   }
 
@@ -159,7 +169,14 @@ export function HistoryScreen() {
                 className="flex-1 bg-transparent text-neutral-400 text-base font-normal leading-snug outline-none placeholder-neutral-400"
               />
             </div>
-            <Search className="w-6 h-6 text-neutral-400 opacity-50" />
+            {searchQuery ? (
+              <X 
+                className="w-6 h-6 text-neutral-400 opacity-50 cursor-pointer" 
+                onClick={() => setSearchQuery('')}
+              />
+            ) : (
+              <Search className="w-6 h-6 text-neutral-400 opacity-50" />
+            )}
           </div>
         </div>
 
@@ -167,7 +184,7 @@ export function HistoryScreen() {
         <div className="self-stretch inline-flex justify-start items-start gap-2.5">
           <button
             onClick={() => setActiveFilter('time')}
-            className={`flex-1 h-9 px-3 py-3.5 rounded-lg flex justify-center items-center gap-2.5 overflow-hidden ${
+            className={`flex-1 px-3 py-3 rounded-lg flex justify-center items-center gap-2 overflow-hidden ${
               activeFilter === 'time'
                 ? ''
                 : 'bg-zinc-800'
@@ -283,7 +300,7 @@ export function HistoryScreen() {
         </div>
         
         {/* Pagination */}
-        {enhancedGames.length > itemsPerPage && (
+        {filteredGames.length > itemsPerPage && (
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
