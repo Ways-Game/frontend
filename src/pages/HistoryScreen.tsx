@@ -136,11 +136,9 @@ export function HistoryScreen() {
 
   const getUserBalls = (game: GameDetailResponse) => {
     const userParticipant = game.participants.find(p => {
-      console.log(p, p.balls_count)
       const participant = p.user ? p.user : p
-      return participant.id === user.id
+      return participant.id === getWinner(game).id
     })
-    console.log(userParticipant, user)
     return userParticipant?.balls_count || 0
   }
 
