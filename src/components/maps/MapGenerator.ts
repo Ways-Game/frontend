@@ -43,7 +43,7 @@ export const generateMapFromId = (
     currentY += block.height + 150;
   });
 
-  // Упрощенная логика воронки
+  // ИДЕАЛЬНАЯ ФИЗИКА ВОРОНКИ С ТОЧНЫМ СООТВЕТСТВИЕМ ФОРМЕ
   const funnelWidthBottom = 120;
   const funnelHeight = 600;
   const verticalPassage = 200;
@@ -51,74 +51,137 @@ export const generateMapFromId = (
   const bottomY = currentY + funnelHeight;
   const passageBottomY = bottomY + verticalPassage;
 
-  // Визуализация - один графический объект
+  // Визуализация (оставляем как было)
   const blueFunnel = new PIXI.Graphics();
   blueFunnel.beginFill(0x4ecdc4);
-
-  // Левая сторона воронки
   blueFunnel.moveTo(-5, topY);
   blueFunnel.lineTo(worldWidth / 2 - funnelWidthBottom / 2, bottomY);
   blueFunnel.lineTo(worldWidth / 2 - funnelWidthBottom / 2, passageBottomY);
   blueFunnel.lineTo(-5, passageBottomY);
   blueFunnel.closePath();
-
-  // Правая сторона воронки
   blueFunnel.moveTo(worldWidth + 5, topY);
   blueFunnel.lineTo(worldWidth / 2 + funnelWidthBottom / 2, bottomY);
   blueFunnel.lineTo(worldWidth / 2 + funnelWidthBottom / 2, passageBottomY);
   blueFunnel.lineTo(worldWidth + 5, passageBottomY);
   blueFunnel.closePath();
-
   blueFunnel.endFill();
   app.stage.addChild(blueFunnel);
 
-  // ФИЗИКА - всего 4 коллайдера вместо десятков!
-  const leftTopX = -5;
-  const rightTopX = worldWidth + 5;
+  // ФИЗИКА - ТОЧНОЕ СООТВЕТСТВИЕ ФОРМЕ ВОРОНКИ
   const leftBottomX = worldWidth / 2 - funnelWidthBottom / 2;
   const rightBottomX = worldWidth / 2 + funnelWidthBottom / 2;
 
-  // 1. Левый наклонный барьер (один большой прямоугольник, повернутый под углом)
-  const leftAngle = Math.atan2(funnelHeight, leftBottomX - leftTopX);
-  const leftLength = Math.sqrt(Math.pow(funnelHeight, 2) + Math.pow(leftBottomX - leftTopX, 2));
-  obstacles.push({
-    x: (leftTopX + leftBottomX) / 2,
-    y: topY + funnelHeight / 2,
-    width: 30,
-    height: leftLength,
-    rotation: leftAngle,
-    type: 'barrier'
-  } as any);
+  // Вычисляем шаг для создания мелких прямоугольников (оптимальный баланс точности и производительности)
+  const segmentHeight = 8; // Высота каждого сегмента
+  const segmentWidth = 8;  // Ширина каждого сегмента
 
-  // 2. Правый наклонный барьер (один большой прямоугольник, повернутый под углом)
-  const rightAngle = Math.atan2(funnelHeight, rightTopX - rightBottomX);
-  const rightLength = Math.sqrt(Math.pow(funnelHeight, 2) + Math.pow(rightTopX - rightBottomX, 2));
-  obstacles.push({
-    x: (rightTopX + rightBottomX) / 2,
-    y: topY + funnelHeight / 2,
-    width: 30,
-    height: rightLength,
-    rotation: -rightAngle, // отрицательный угол для правой стороны
-    type: 'barrier'
-  } as any);
+  // ЛЕВАЯ СТОРОНА ВОРОНКИ
+  for (let y = topY; y < bottomY; y += segmentHeight) {
+    const progress = (y - topY) / funnelHeight;
+    const currentX = -5 + (leftBottomX + 5) * progress;
+    
+    // Создаем сегменты для левой стороны
+    for (let x = Math.max(-5, currentX - segmentWidth); x < currentX; x += segmentWidth) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+  }
 
-  // 3. Левый вертикальный барьер
-  obstacles.push({
-    x: leftBottomX,
-    y: bottomY + verticalPassage / 2,
-    width: 10,
-    height: verticalPassage,
-    type: 'barrier'
-  } as any);
+  // ПРАВАЯ СТОРОНА ВОРОНКИ
+  for (let y = topY; y < bottomY; y += segmentHeight) {
+    const progress = (y - topY) / funnelHeight;
+    const currentX = worldWidth + 5 - (worldWidth + 5 - rightBottomX) * progress;
+    
+    // Создаем сегменты для правой стороны
+    for (let x = currentX; x < Math.min(worldWidth + 5, currentX + segmentWidth); x += segmentWidth) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+  }
 
-  // 4. Правый вертикальный барьер
-  obstacles.push({
-    x: rightBottomX - 10, // смещение на ширину барьера
-    y: bottomY + verticalPassage / 2,
-    width: 10,
-    height: verticalPassage,
-    type: 'barrier'
-  } as any);
+  // ВЕРТИКАЛЬНЫЕ ЧАСТИ
+  for (let y = bottomY; y < passageBottomY; y += segmentHeight) {
+    // Левая вертикальная часть
+    for (let x = leftBottomX - segmentWidth; x < leftBottomX; x += segmentWidth) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+    
+    // Правая вертикальная часть
+    for (let x = rightBottomX; x < rightBottomX + segmentWidth; x += segmentWidth) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+  }
+
+  // ДОПОЛНИТЕЛЬНОЕ УПЛОТНЕНИЕ В КРИТИЧЕСКИХ МЕСТАХ
+  // Верхние углы
+  for (let x = -5; x < -5 + segmentWidth * 3; x += segmentWidth) {
+    for (let y = topY; y < topY + segmentHeight * 3; y += segmentHeight) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+  }
+
+  for (let x = worldWidth + 5 - segmentWidth * 3; x < worldWidth + 5; x += segmentWidth) {
+    for (let y = topY; y < topY + segmentHeight * 3; y += segmentHeight) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+  }
+
+  // Нижние углы (переход от наклона к вертикали)
+  for (let y = bottomY - segmentHeight * 3; y < bottomY + segmentHeight * 3; y += segmentHeight) {
+    for (let x = leftBottomX - segmentWidth * 3; x < leftBottomX + segmentWidth; x += segmentWidth) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+    
+    for (let x = rightBottomX - segmentWidth; x < rightBottomX + segmentWidth * 3; x += segmentWidth) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+  }
 
   const finishY = bottomY + verticalPassage / 2;
   const stripeHeight = 40;
@@ -138,165 +201,9 @@ export const generateMapFromId = (
   const winY = finishY + stripeHeight;
   const deathY = winY + 200;
 
-  const mapData = { obstacles, spinners, mapWidth: worldWidth, mapHeight: bottomY + verticalPassage + 100, winY, deathY };
+  const mapData = { obstacles, spinners, worldWidth: worldWidth, mapHeight: currentY + 100, winY, deathY };
   (mapData as any).gateBarrier = gateBarrier;
   (mapData as any).screenHeight = worldHeight;
   return mapData;
 };
 
-export const generateRandomMap = (app: PIXI.Application, mapId: number[] | number, seed: string) => {
-  const mapWidth = 1200;
-  const obstacles: Obstacle[] = [];
-  const spinners: Spinner[] = [];
-
-  // Create RNG from seed
-  let h = 1779033703 ^ seed.length;
-  for (let i = 0; i < seed.length; i++) {
-    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
-    h = (h << 13) | (h >>> 19);
-  }
-  const rng = () => {
-    h = Math.imul(h ^ (h >>> 16), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    h ^= h >>> 16;
-    return (h >>> 0) / 4294967296;
-  };
-
-  // Clear stage
-  app.stage.removeChildren();
-
-  // Убрали боковые стенки
-
-  // Стартовая секция на всю высоту экрана
-  const screenHeight = typeof window !== 'undefined' ? window.innerHeight - 80 : 800;
-  const startSection = new PIXI.Graphics();
-  startSection.rect(0, 0, mapWidth, screenHeight).fill(0x2c3e50);
-  app.stage.addChild(startSection);
-  
-  // Простая линия-барьер
-  const gateBarrier = { x: mapWidth / 2, y: screenHeight, width: mapWidth, height: 20, type: 'barrier' as const };
-  obstacles.push(gateBarrier);
-
-  // Generate blocks by indices from mapId array
-  let currentY = screenHeight + 100;
-  const selectedBlocks: typeof MAP_BLOCKS[0][] = [];
-  
-  // Use mapId as array of block indices
-  const blockIndices = Array.isArray(mapId) ? mapId : [3, 4, 1, 2, 1, 7, 11, 6, 9, 10, 5, 0];
-  
-  // Select blocks by indices
-  blockIndices.forEach(blockIndex => {
-    if (blockIndex < MAP_BLOCKS.length) {
-      selectedBlocks.push(MAP_BLOCKS[blockIndex]);
-    }
-  });
-
-  // Create the selected blocks with larger spacing
-  selectedBlocks.forEach(block => {
-    const { obstacles: blockObstacles, spinners: blockSpinners } = block.createBlock(app, currentY, mapWidth);
-    obstacles.push(...blockObstacles);
-    spinners.push(...blockSpinners);
-    
-    currentY += block.height + 150; // Уменьшено расстояние между блоками
-  });
-
-  // Упрощенная логика воронки
-  const funnelWidthBottom = 120;
-  const funnelHeight = 600;
-  const verticalPassage = 200;
-  const topY = currentY;
-  const bottomY = currentY + funnelHeight;
-  const passageBottomY = bottomY + verticalPassage;
-
-  // Визуализация - один графический объект
-  const blueFunnel = new PIXI.Graphics();
-  blueFunnel.beginFill(0x4ecdc4);
-
-  // Левая сторона воронки
-  blueFunnel.moveTo(-5, topY);
-  blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, bottomY);
-  blueFunnel.lineTo(mapWidth / 2 - funnelWidthBottom / 2, passageBottomY);
-  blueFunnel.lineTo(-5, passageBottomY);
-  blueFunnel.closePath();
-
-  // Правая сторона воронки
-  blueFunnel.moveTo(mapWidth + 5, topY);
-  blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, bottomY);
-  blueFunnel.lineTo(mapWidth / 2 + funnelWidthBottom / 2, passageBottomY);
-  blueFunnel.lineTo(mapWidth + 5, passageBottomY);
-  blueFunnel.closePath();
-
-  blueFunnel.endFill();
-  app.stage.addChild(blueFunnel);
-
-  // ФИЗИКА - всего 4 коллайдера вместо десятков!
-  const leftTopX = -5;
-  const rightTopX = mapWidth + 5;
-  const leftBottomX = mapWidth / 2 - funnelWidthBottom / 2;
-  const rightBottomX = mapWidth / 2 + funnelWidthBottom / 2;
-
-  // 1. Левый наклонный барьер (один большой прямоугольник, повернутый под углом)
-  const leftAngle = Math.atan2(funnelHeight, leftBottomX - leftTopX);
-  const leftLength = Math.sqrt(Math.pow(funnelHeight, 2) + Math.pow(leftBottomX - leftTopX, 2));
-  obstacles.push({
-    x: (leftTopX + leftBottomX) / 2,
-    y: topY + funnelHeight / 2,
-    width: 30,
-    height: leftLength,
-    rotation: leftAngle,
-    type: 'barrier'
-  } as any);
-
-  // 2. Правый наклонный барьер (один большой прямоугольник, повернутый под углом)
-  const rightAngle = Math.atan2(funnelHeight, rightTopX - rightBottomX);
-  const rightLength = Math.sqrt(Math.pow(funnelHeight, 2) + Math.pow(rightTopX - rightBottomX, 2));
-  obstacles.push({
-    x: (rightTopX + rightBottomX) / 2,
-    y: topY + funnelHeight / 2,
-    width: 30,
-    height: rightLength,
-    rotation: -rightAngle, // отрицательный угол для правой стороны
-    type: 'barrier'
-  } as any);
-
-  // 3. Левый вертикальный барьер
-  obstacles.push({
-    x: leftBottomX,
-    y: bottomY + verticalPassage / 2,
-    width: 10,
-    height: verticalPassage,
-    type: 'barrier'
-  } as any);
-
-  // 4. Правый вертикальный барьер
-  obstacles.push({
-    x: rightBottomX - 10, // смещение на ширину барьера
-    y: bottomY + verticalPassage / 2,
-    width: 10,
-    height: verticalPassage,
-    type: 'barrier'
-  } as any);
-
-  const finishY = bottomY + verticalPassage / 2;
-  const stripeHeight = 40;
-  const cellSize = 20;
-
-  const finishLine = new PIXI.Graphics();
-  for (let x = 0; x < mapWidth; x += cellSize) {
-    for (let y = 0; y < stripeHeight; y += cellSize) {
-      const isBlack = ((x / cellSize) + (y / cellSize)) % 2 === 0;
-      finishLine.beginFill(isBlack ? 0x000000 : 0xffffff, 0.8);
-      finishLine.drawRect(x, finishY + y, cellSize, cellSize);
-      finishLine.endFill();
-    }
-  }
-  app.stage.addChild(finishLine);
-
-  const winY = finishY + stripeHeight;
-  const deathY = winY + 200;
-
-  const mapData = { obstacles, spinners, mapWidth, mapHeight: bottomY + verticalPassage + 100, winY, deathY };
-  (mapData as any).gateBarrier = gateBarrier;
-  (mapData as any).screenHeight = screenHeight;
-  return mapData;
-};

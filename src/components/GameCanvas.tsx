@@ -17,6 +17,17 @@ const FIXED_DELTA = 1000 / FIXED_FPS;
 const WORLD_WIDTH = 1200;
 const WORLD_HEIGHT = 2500;
 
+// Anti-stuck system constants
+const MIN_BOUNCE_VELOCITY = 3.0;
+const STUCK_THRESHOLD = 60;
+const STUCK_BOUNCE_FORCE = 8.0;
+
+interface BallState {
+  stuckFrames: number;
+  lastPositions: { x: number; y: number }[];
+  isStuck: boolean;
+}
+
 // deterministic helpers (kept as before)
 const precise = {
   add: (a: number, b: number) => a + b,
@@ -34,9 +45,10 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 class DeterministicRandom {
   private seed: number;
   constructor(seed: string) {
-    this.seed = this.hashString(seed);
+    this.seed = this.hashString(seed || "default_seed");
   }
   private hashString(str: string): number {
+    if (!str || typeof str !== 'string') str = "default_seed";
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       hash = Math.imul(hash, 31) + str.charCodeAt(i);
@@ -133,6 +145,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     const { soundEnabledRef, audioContextRef, getAudioContext } =
       useGameSound(soundEnabled);
+
+    // Anti-stuck system
+    const ballStatesRef = useRef<Map<string, BallState>>(new Map());
 
     // RTTTL parser (fixed)
     const parseRTTTL = (rtttl: string) => {
@@ -392,6 +407,60 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       ballsRef.current.forEach((ball) => {
         if (ball.finished) return;
 
+        // Инициализируем состояние мяча если нужно
+        if (!ballStatesRef.current.has(ball.id)) {
+          ballStatesRef.current.set(ball.id, {
+            stuckFrames: 0,
+            lastPositions: [],
+            isStuck: false
+          });
+        }
+        
+        const ballState = ballStatesRef.current.get(ball.id)!;
+        
+        // Сохраняем текущую позицию
+        ballState.lastPositions.push({ x: ball.x, y: ball.y });
+        
+        // Ограничиваем историю позиций
+        if (ballState.lastPositions.length > 10) {
+          ballState.lastPositions.shift();
+        }
+        
+        // Проверяем, не застрял ли мяч
+        if (ballState.lastPositions.length >= 5) {
+          const first = ballState.lastPositions[0];
+          const last = ballState.lastPositions[ballState.lastPositions.length - 1];
+          const distance = Math.sqrt(
+            Math.pow(last.x - first.x, 2) + Math.pow(last.y - first.y, 2)
+          );
+          
+          if (distance < 5) {
+            ballState.stuckFrames++;
+            
+            if (ballState.stuckFrames > STUCK_THRESHOLD && !ballState.isStuck) {
+              console.log(`Ball ${ball.id} is stuck, forcing bounce`);
+              ballState.isStuck = true;
+              
+              // Принудительный отскок
+              ball.dy = -STUCK_BOUNCE_FORCE;
+              ball.dx = (randomRef.current!.next() - 0.5) * 4;
+              
+              // Сбрасываем состояние застревания
+              setTimeout(() => {
+                if (ballStatesRef.current.has(ball.id)) {
+                  const state = ballStatesRef.current.get(ball.id)!;
+                  state.stuckFrames = 0;
+                  state.isStuck = false;
+                  state.lastPositions = [];
+                }
+              }, 1000);
+            }
+          } else {
+            ballState.stuckFrames = 0;
+            ballState.isStuck = false;
+          }
+        }
+
         ball.dy = precise.add(ball.dy, 0.08);
         ball.dx = precise.mul(ball.dx, 0.9999800039998667);
         ball.dy = precise.mul(ball.dy, 0.9999800039998667);
@@ -401,18 +470,30 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const halfW = obs.width / 2;
           const halfH = obs.height / 2;
 
+          const minSurfaceSpeed = 0.5;
+          const surfaceFriction = 0.995;
+
           ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
           ball.dy = 0;
-          ball.dx = precise.mul(ball.dx, 0.997);
 
-          if (precise.abs(ball.dx) < 0.03) ball.dx = 0;
-          ball.x = precise.add(ball.x, ball.dx);
-
-          const noise = randomRef.current!.next();
-          if (precise.abs(ball.dx) < 0.1) {
-            const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.2);
-            ball.dx = precise.add(ball.dx, noiseValue);
+          // Применяем трение с учетом минимальной скорости
+          if (precise.abs(ball.dx) > minSurfaceSpeed) {
+            ball.dx = precise.mul(ball.dx, surfaceFriction);
+          } else {
+            // Если скорость ниже минимальной, устанавливаем минимальную скорость
+            if (ball.dx === 0) {
+              ball.dx = randomRef.current!.next() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
+            } else {
+              ball.dx = ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed;
+            }
           }
+
+          // Добавляем небольшой случайный импульс для предотвращения застревания
+          const noise = randomRef.current!.next();
+          const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
+          ball.dx = precise.add(ball.dx, noiseValue);
+
+          ball.x = precise.add(ball.x, ball.dx);
 
           if (
             obs.destroyed ||
@@ -495,23 +576,59 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               precise.abs(precise.sub(ball.y, obstacle.y))
             );
 
+            // Проверяем, является ли это частью воронки (маленькие сегменты)
+            const isFunnelSegment = obstacle.width <= 8 && obstacle.height <= 8;
+            
             if (overlapX < overlapY) {
+              // Боковое столкновение
               if (ball.x < obstacle.x) {
                 ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
               } else {
                 ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
               }
-              ball.dx = precise.mul(ball.dx, -0.78);
+              
+              if (isFunnelSegment) {
+                // Для воронки: направляем к центру
+                const centerX = WORLD_WIDTH / 2;
+                const directionToCenter = ball.x < centerX ? 1 : -1;
+                ball.dx = precise.mul(precise.abs(ball.dx), directionToCenter * 0.82);
+              } else {
+                ball.dx = precise.mul(ball.dx, -0.82);
+              }
+              ball.bounceCount++;
             } else {
               if (ball.y < obstacle.y) {
+                // Столкновение с верхней частью барьера
                 ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
-                (ball as any).onSurface = true;
-                (ball as any).surfaceObstacle = obstacle;
-                ball.dy = 0;
-                ball.dx = precise.mul(ball.dx, 0.82);
+                
+                if (isFunnelSegment) {
+                  // Для воронки: отскок с направлением к центру
+                  const centerX = WORLD_WIDTH / 2;
+                  const directionToCenter = ball.x < centerX ? 1 : -1;
+                  ball.dy = precise.mul(ball.dy, -0.88);
+                  ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 0.5));
+                  ball.bounceCount++;
+                } else {
+                  // Обычная логика для больших барьеров
+                  const verticalImpact = precise.abs(ball.dy);
+                  const shouldStick = 
+                    verticalImpact < 1.0 &&
+                    ball.bounceCount >= 2; 
+                    
+                  if (shouldStick) {
+                    (ball as any).onSurface = true;
+                    (ball as any).surfaceObstacle = obstacle;
+                    ball.dy = 0;
+                  } else {
+                    ball.dy = precise.mul(ball.dy, -0.78);
+                    ball.bounceCount++;
+                  }
+                }
               } else {
+                // Столкновение с нижней частью барьера
                 ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
                 ball.dy = precise.mul(ball.dy, -0.78);
+                ball.bounceCount++;
               }
             }
             playMelodyNote();
@@ -834,7 +951,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       const newBalls: Ball[] = [];
       let ballIndex = 0;
 
-      for (const rawParticipant of gameData.participants) {
+      for (const rawParticipant of gameData.participants || []) {
         const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
         const ballsCount = Number(
           rawParticipant.balls_count ?? user.balls_count ?? 0

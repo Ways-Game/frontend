@@ -11,7 +11,7 @@ export function TimerChip({ seconds, className }: TimerChipProps) {
   return (
     <div className={cn("chip chip-gray flex items-center gap-1.5", className)}>
       <Clock className="w-3 h-3" />
-      <span className="caption">{seconds}s</span>
+      <span className="caption">{Math.max(0, seconds)}s</span>
     </div>
   )
 }
