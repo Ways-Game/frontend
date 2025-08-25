@@ -184,23 +184,14 @@ export const generateMapFromId = (
   }
 
   // Добавляем толстую физическую полоску в конце вертикального прохода
-  const barrierThickness = 20;
+  const barrierThickness = 100;
   const barrierY = passageBottomY - barrierThickness;
   
-  // Левая часть барьера
+  // Одна полоска закрывающая весь проход
   obstacles.push({
-    x: leftBottomX - segmentWidth,
-    y: barrierY,
-    width: segmentWidth * 2,
-    height: barrierThickness,
-    type: 'barrier'
-  });
-  
-  // Правая часть барьера
-  obstacles.push({
-    x: rightBottomX - segmentWidth,
-    y: barrierY,
-    width: segmentWidth * 2,
+    x: worldWidth / 2,
+    y: barrierY + barrierThickness / 2,
+    width: funnelWidthBottom,
     height: barrierThickness,
     type: 'barrier'
   });
@@ -208,8 +199,7 @@ export const generateMapFromId = (
   // Визуализация барьера
   const barrierGraphics = new PIXI.Graphics();
   barrierGraphics.beginFill(0x4ecdc4);
-  barrierGraphics.drawRect(leftBottomX - segmentWidth, barrierY, segmentWidth * 2, barrierThickness);
-  barrierGraphics.drawRect(rightBottomX - segmentWidth, barrierY, segmentWidth * 2, barrierThickness);
+  barrierGraphics.drawRect(leftBottomX, barrierY, funnelWidthBottom, barrierThickness);
   barrierGraphics.endFill();
   app.stage.addChild(barrierGraphics);
 

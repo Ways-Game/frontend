@@ -406,7 +406,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       {isReplay && (
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 z-30 bg-zinc-800/80 backdrop-blur-sm rounded-[20px] px-3 py-2 flex items-center gap-2"
+          className="absolute top-16 right-4 z-30 bg-zinc-800/80 backdrop-blur-sm rounded-[20px] px-3 py-2 flex items-center gap-2"
         >
           <span className="text-white text-sm">Back</span>
           <div className="w-5 h-5 bg-neutral-600 rounded-full flex items-center justify-center">
