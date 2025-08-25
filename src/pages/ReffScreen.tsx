@@ -145,7 +145,7 @@ export function ReffScreen() {
 
             <div className="flex items-center gap-2">
               {/* Balance Display */}
-              <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-1.5">
+              <div className="h-8 px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-1.5">
                 <img src="/src/assets/icons/star.svg" className="w-4 h-4" alt="star" />
                 <span className="text-white text-sm font-semibold">{userProfile?.balance || 0}</span>
               </div>

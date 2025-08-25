@@ -124,7 +124,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const gameLoopRef = useRef<number | null>(null);
 
     const [gameState, setGameState] = useState<
-      "waiting" | "countdown" | "playing" | "finished"
+      "waiting" | "playing" | "finished"
     >("waiting");
     const [actualWinners, setActualWinners] = useState<string[]>([]);
     const actualWinnersRef = useRef<string[]>([]);
@@ -133,21 +133,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     );
     const cameraModeRef = useRef<"leader" | "swipe">(initialCameraMode);
     const scrollYRef = useRef<number>(scrollY);
-
-    // Barrier and tornado system refs
-    const barrierSystemRef = useRef<{
-      leftPanel?: PIXI.Graphics;
-      rightPanel?: PIXI.Graphics;
-      leftObstacle?: Obstacle;
-      rightObstacle?: Obstacle;
-      isOpening?: boolean;
-      openProgress?: number;
-      barrierY?: number;
-      panelWidth?: number;
-      doorWidth?: number;
-    }>({});
-    const tornadoTimeRef = useRef(0);
-    const countdownStartTimeRef = useRef(0);
+    
+    // Tornado effect state
+    const tornadoActiveRef = useRef<boolean>(true);
+    const gateBarrierOpenRef = useRef<boolean>(false);
 
     // Audio refs and melody state
     const oscillatorRef = useRef<OscillatorNode | null>(null);
@@ -415,116 +404,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         );
       }
 
-      // Update barrier opening animation
-      if (barrierSystemRef.current.isOpening && barrierSystemRef.current.openProgress !== undefined) {
-        barrierSystemRef.current.openProgress += 0.02; // Smooth opening speed
-        
-        if (barrierSystemRef.current.openProgress >= 1.0) {
-          barrierSystemRef.current.openProgress = 1.0;
-          barrierSystemRef.current.isOpening = false;
-          
-          // Remove barrier obstacles when fully open
-          if (barrierSystemRef.current.leftObstacle) {
-            const leftIndex = obstaclesRef.current.indexOf(barrierSystemRef.current.leftObstacle);
-            if (leftIndex > -1) obstaclesRef.current.splice(leftIndex, 1);
-          }
-          if (barrierSystemRef.current.rightObstacle) {
-            const rightIndex = obstaclesRef.current.indexOf(barrierSystemRef.current.rightObstacle);
-            if (rightIndex > -1) obstaclesRef.current.splice(rightIndex, 1);
-          }
-        }
-        
-        // Update visual door panels position
-        const progress = barrierSystemRef.current.openProgress;
-        const panelWidth = barrierSystemRef.current.panelWidth || 0;
-        
-        if (barrierSystemRef.current.leftPanel) {
-          barrierSystemRef.current.leftPanel.x = -panelWidth * progress;
-        }
-        if (barrierSystemRef.current.rightPanel) {
-          barrierSystemRef.current.rightPanel.x = panelWidth * progress;
-        }
-        
-        // Update collision obstacles position during opening
-        if (barrierSystemRef.current.leftObstacle && progress < 1.0) {
-          barrierSystemRef.current.leftObstacle.x = (panelWidth / 2) - (panelWidth * progress);
-          barrierSystemRef.current.leftObstacle.width = panelWidth * (1 - progress);
-        }
-        if (barrierSystemRef.current.rightObstacle && progress < 1.0) {
-          barrierSystemRef.current.rightObstacle.x = WORLD_WIDTH - (panelWidth / 2) + (panelWidth * progress);
-          barrierSystemRef.current.rightObstacle.width = panelWidth * (1 - progress);
-        }
-      }
-
       spinnersRef.current.forEach((spinner) => {
         spinner.rotation = precise.add(spinner.rotation, 0.08);
       });
 
       ballsRef.current.forEach((ball) => {
         if (ball.finished) return;
-
-        // Apply tornado/vortex effect during countdown
-        if (gameState === "countdown" && barrierSystemRef.current.barrierY) {
-          const barrierY = barrierSystemRef.current.barrierY;
-          const tornadoAreaTop = 100; // Start tornado effect from top of screen
-          
-          // Only apply tornado effect to balls above the barrier
-          if (ball.y >= tornadoAreaTop && ball.y <= barrierY) {
-            tornadoTimeRef.current += FIXED_DELTA;
-            
-            // Vortex center at bottom of tornado area, just above barrier
-            const vortexCenterX = WORLD_WIDTH / 2;
-            const vortexCenterY = barrierY - 50; // Position vortex just above barrier
-            
-            // Calculate distance from vortex center
-            const dx = ball.x - vortexCenterX;
-            const dy = ball.y - vortexCenterY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance > 10) { // Avoid division by zero at center
-              // Vortex strength decreases with distance
-              const vortexStrength = Math.max(0, 1.0 - distance / 400);
-              
-              // Tangential force (creates circular motion)
-              const tangentX = -dy / distance;
-              const tangentY = dx / distance;
-              
-              // Radial force (pulls toward center)
-              const radialX = -dx / distance;
-              const radialY = -dy / distance;
-              
-              // Apply vortex forces
-              const tangentForce = vortexStrength * 2.5;
-              const radialForce = vortexStrength * 0.8;
-              
-              ball.dx += tangentX * tangentForce + radialX * radialForce;
-              ball.dy += tangentY * tangentForce + radialY * radialForce;
-              
-              // Add some vertical oscillation for more dynamic movement
-              const oscillation = Math.sin(tornadoTimeRef.current * 0.01 + ball.x * 0.01) * 0.3;
-              ball.dy += oscillation * vortexStrength;
-            }
-            
-            // Prevent balls from going too high or escaping tornado area
-            if (ball.y < tornadoAreaTop) {
-              ball.y = tornadoAreaTop;
-              ball.dy = Math.abs(ball.dy) * 0.5; // Bounce down gently
-            }
-            
-            // Keep balls within horizontal bounds of tornado area
-            const tornadoWidth = 400;
-            const tornadoLeft = vortexCenterX - tornadoWidth / 2;
-            const tornadoRight = vortexCenterX + tornadoWidth / 2;
-            
-            if (ball.x < tornadoLeft) {
-              ball.x = tornadoLeft;
-              ball.dx = Math.abs(ball.dx) * 0.7;
-            } else if (ball.x > tornadoRight) {
-              ball.x = tornadoRight;
-              ball.dx = -Math.abs(ball.dx) * 0.7;
-            }
-          }
-        }
 
         // Инициализируем состояние мяча если нужно
         if (!ballStatesRef.current.has(ball.id)) {
@@ -536,6 +421,44 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
         
         const ballState = ballStatesRef.current.get(ball.id)!;
+        
+        // Применяем эффект торнадо если активен
+        if (tornadoActiveRef.current && !gateBarrierOpenRef.current) {
+          const centerX = WORLD_WIDTH / 2;
+          const centerY = WORLD_HEIGHT / 2;
+          const dx = ball.x - centerX;
+          const dy = ball.y - centerY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance > 0) {
+            // Создаем спиральное движение с ограничениями
+            const angle = Math.atan2(dy, dx);
+            
+            // Уменьшаем силы торнадо для предотвращения накопления в углах
+            const tornadoStrength = Math.min(0.2, 0.5 / (distance * 0.001 + 1)); // Уменьшается с расстоянием
+            const spiralForce = Math.min(0.15, 0.3 / (distance * 0.001 + 1));
+            
+            // Тангенциальная сила (вращение) - только если не слишком близко к границам
+            const marginFromEdge = Math.min(ball.x, WORLD_WIDTH - ball.x, ball.y, WORLD_HEIGHT - ball.y);
+            if (marginFromEdge > 50) { // Только если не близко к краям
+              ball.dx += Math.cos(angle + Math.PI / 2) * tornadoStrength;
+              ball.dy += Math.sin(angle + Math.PI / 2) * tornadoStrength;
+            }
+            
+            // Радиальная сила (к центру) - более мягкая
+            ball.dx -= (dx / distance) * spiralForce;
+            ball.dy -= (dy / distance) * spiralForce;
+            
+            // Ограничиваем максимальную скорость для предотвращения прорыва границ
+            const maxVelocity = 8.0;
+            const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+            if (currentSpeed > maxVelocity) {
+              const scale = maxVelocity / currentSpeed;
+              ball.dx *= scale;
+              ball.dy *= scale;
+            }
+          }
+        }
         
         // Сохраняем текущую позицию
         ballState.lastPositions.push({ x: ball.x, y: ball.y });
@@ -560,9 +483,24 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               console.log(`Ball ${ball.id} is stuck, forcing bounce`);
               ballState.isStuck = true;
               
-              // Принудительный отскок
-              ball.dy = -STUCK_BOUNCE_FORCE;
-              ball.dx = (randomRef.current!.next() - 0.5) * 4;
+              // Улучшенный принудительный отскок с учетом позиции
+              const centerX = WORLD_WIDTH / 2;
+              const centerY = WORLD_HEIGHT / 2;
+              
+              // Определяем направление от угла к центру
+              const toCenterX = centerX - ball.x;
+              const toCenterY = centerY - ball.y;
+              const toCenterDistance = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
+              
+              if (toCenterDistance > 0) {
+                // Направляем мяч к центру с достаточной силой
+                ball.dx = (toCenterX / toCenterDistance) * STUCK_BOUNCE_FORCE * 0.7;
+                ball.dy = (toCenterY / toCenterDistance) * STUCK_BOUNCE_FORCE * 0.7 - 2; // Добавляем вертикальный импульс
+              } else {
+                // Fallback: случайное направление
+                ball.dy = -STUCK_BOUNCE_FORCE;
+                ball.dx = (randomRef.current!.next() - 0.5) * 4;
+              }
               
               // Сбрасываем состояние застревания
               setTimeout(() => {
@@ -577,6 +515,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           } else {
             ballState.stuckFrames = 0;
             ballState.isStuck = false;
+          }
+        }
+        
+        // Дополнительная проверка на застревание в углах
+        const cornerMargin = 100;
+        const isInCorner = (ball.x < cornerMargin || ball.x > WORLD_WIDTH - cornerMargin) &&
+                          (ball.y < cornerMargin || ball.y > WORLD_HEIGHT - cornerMargin);
+        
+        if (isInCorner && Math.abs(ball.dx) < 1 && Math.abs(ball.dy) < 1) {
+          // Мяч застрял в углу, даем ему импульс к центру
+          const centerX = WORLD_WIDTH / 2;
+          const centerY = WORLD_HEIGHT / 2;
+          const toCenterX = centerX - ball.x;
+          const toCenterY = centerY - ball.y;
+          const toCenterDistance = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
+          
+          if (toCenterDistance > 0) {
+            ball.dx += (toCenterX / toCenterDistance) * 2;
+            ball.dy += (toCenterY / toCenterDistance) * 2;
           }
         }
 
@@ -697,23 +654,79 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
             // Проверяем, является ли это частью воронки (маленькие сегменты)
             const isFunnelSegment = obstacle.width <= 8 && obstacle.height <= 8;
+            // Проверяем, является ли это финишной полоской (широкий барьер в воронке)
+            const isFinishLine = obstacle.width >= WORLD_WIDTH * 0.8 && obstacle.height <= 50;
             
-            if (overlapX < overlapY) {
-              // Боковое столкновение
-              if (ball.x < obstacle.x) {
-                ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
+            // Для предотвращения прорыва границ - более агрессивное позиционирование
+            let safetyMargin = 24;
+            if (isFunnelSegment) safetyMargin = 26;
+            if (isFinishLine) safetyMargin = 28; // Еще больший отступ для финишной полоски
+            
+            // Для финишной полоски - усиленная коллизия
+            if (isFinishLine) {
+              // Более агрессивное разделение мячей от барьера
+              const separationForce = Math.max(2.0, overlapY * 0.5);
+              
+              if (overlapX < overlapY) {
+                // Боковое столкновение с финишной полоской
+                if (ball.x < obstacle.x) {
+                  ball.x = precise.sub(precise.sub(obstacle.x, halfW), safetyMargin);
+                } else {
+                  ball.x = precise.add(precise.add(obstacle.x, halfW), safetyMargin);
+                }
+                ball.dx = precise.mul(ball.dx, -0.7); // Сильное гашение скорости
+                ball.bounceCount++;
               } else {
-                ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
+                if (ball.y < obstacle.y) {
+                  // Столкновение с верхней частью финишной полоски - критично!
+                  ball.y = precise.sub(precise.sub(obstacle.y, halfH), safetyMargin);
+                  
+                  // Принудительное отталкивание вверх для предотвращения проникновения
+                  if (ball.dy > -1.0) {
+                    ball.dy = -Math.max(2.0, separationForce);
+                  } else {
+                    ball.dy = precise.mul(ball.dy, -0.9); // Сильный отскок
+                  }
+                  
+                  // Ограничиваем горизонтальную скорость для стабильности
+                  if (precise.abs(ball.dx) > 3.0) {
+                    ball.dx = precise.mul(ball.dx, 0.7);
+                  }
+                  
+                  ball.bounceCount++;
+                } else {
+                  // Столкновение с нижней частью финишной полоски
+                  ball.y = precise.add(precise.add(obstacle.y, halfH), safetyMargin);
+                  ball.dy = precise.mul(ball.dy, -0.8);
+                  ball.bounceCount++;
+                }
+              }
+            } else if (overlapX < overlapY) {
+              // Боковое столкновение (обычная логика)
+              if (ball.x < obstacle.x) {
+                ball.x = precise.sub(precise.sub(obstacle.x, halfW), safetyMargin);
+              } else {
+                ball.x = precise.add(precise.add(obstacle.x, halfW), safetyMargin);
               }
               
               if (isFunnelSegment) {
-                // Для воронки: направляем к центру с меньшим отскоком
+                // Для воронки: более мягкое направление к центру
                 const centerX = WORLD_WIDTH / 2;
                 const directionToCenter = ball.x < centerX ? 1 : -1;
-                // Уменьшаем отскок и усиливаем направление к центру
-                ball.dx = precise.mul(precise.abs(ball.dx), directionToCenter * 0.4);
-                // Добавляем дополнительную силу к центру
-                ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 1.2));
+                
+                // Ограничиваем скорость отскока для предотвращения накопления энергии
+                const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+                const maxBounceSpeed = 4.0;
+                
+                if (currentSpeed > maxBounceSpeed) {
+                  const scale = maxBounceSpeed / currentSpeed;
+                  ball.dx *= scale;
+                  ball.dy *= scale;
+                }
+                
+                // Более мягкое направление к центру
+                ball.dx = precise.mul(ball.dx, -0.6); // Уменьшенный отскок
+                ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 0.8)); // Меньшая сила к центру
               } else {
                 ball.dx = precise.mul(ball.dx, -0.82);
               }
@@ -721,23 +734,34 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             } else {
               if (ball.y < obstacle.y) {
                 // Столкновение с верхней частью барьера
-                ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+                ball.y = precise.sub(precise.sub(obstacle.y, halfH), safetyMargin);
                 
                 if (isFunnelSegment) {
-                  // Для воронки: слабый отскок с сильным направлением к центру
+                  // Для воронки: предотвращаем накопление скорости
                   const centerX = WORLD_WIDTH / 2;
                   const directionToCenter = ball.x < centerX ? 1 : -1;
-                  // Значительно уменьшаем вертикальный отскок
-                  ball.dy = precise.mul(ball.dy, -0.3);
-                  // Усиливаем горизонтальное движение к центру
-                  ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 1.5));
+                  
+                  // Ограничиваем общую скорость
+                  const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+                  const maxBounceSpeed = 4.0;
+                  
+                  if (currentSpeed > maxBounceSpeed) {
+                    const scale = maxBounceSpeed / currentSpeed;
+                    ball.dx *= scale;
+                    ball.dy *= scale;
+                  }
+                  
+                  // Более мягкий вертикальный отскок
+                  ball.dy = precise.mul(ball.dy, -0.4);
+                  // Более мягкое горизонтальное движение к центру
+                  ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 0.6));
                   ball.bounceCount++;
                 } else {
                   // Обычная логика для больших барьеров
                   const verticalImpact = precise.abs(ball.dy);
-                  const shouldStick = 
+                  const shouldStick =
                     verticalImpact < 1.0 &&
-                    ball.bounceCount >= 2; 
+                    ball.bounceCount >= 2;
                     
                   if (shouldStick) {
                     (ball as any).onSurface = true;
@@ -750,7 +774,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 }
               } else {
                 // Столкновение с нижней частью барьера
-                ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
+                ball.y = precise.add(precise.add(obstacle.y, halfH), safetyMargin);
                 ball.dy = precise.mul(ball.dy, -0.78);
                 ball.bounceCount++;
               }
@@ -842,7 +866,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      // ball-ball collisions (unchanged)
+      // Enhanced ball-ball collisions with pressure resistance
       ballsRef.current.forEach((otherBall) => {
         if (otherBall === ball || otherBall.finished) return;
 
@@ -861,15 +885,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const overlap = precise.sub(48, distance);
           const halfOverlap = precise.mul(overlap, 0.5);
 
-          ball.x = precise.add(ball.x, precise.mul(normalX, halfOverlap));
-          ball.y = precise.add(ball.y, precise.mul(normalY, halfOverlap));
+          // Более агрессивное разделение мячей для предотвращения проникновения
+          const separationMultiplier = Math.max(1.0, overlap * 0.1); // Увеличиваем силу разделения при большом перекрытии
+          const adjustedHalfOverlap = precise.mul(halfOverlap, separationMultiplier);
+
+          ball.x = precise.add(ball.x, precise.mul(normalX, adjustedHalfOverlap));
+          ball.y = precise.add(ball.y, precise.mul(normalY, adjustedHalfOverlap));
           otherBall.x = precise.sub(
             otherBall.x,
-            precise.mul(normalX, halfOverlap)
+            precise.mul(normalX, adjustedHalfOverlap)
           );
           otherBall.y = precise.sub(
             otherBall.y,
-            precise.mul(normalY, halfOverlap)
+            precise.mul(normalY, adjustedHalfOverlap)
           );
 
           const relVelX = precise.sub(ball.dx, otherBall.dx);
@@ -881,7 +909,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           if (relSpeed > 0) return;
 
-          const impulse = precise.mul(relSpeed, 0.86);
+          // Уменьшаем импульс для более стабильного поведения при скоплении мячей
+          const impulse = precise.mul(relSpeed, 0.75); // Уменьшено с 0.86 до 0.75
           const halfImpulse = precise.mul(impulse, 0.5);
 
           ball.dx = precise.sub(ball.dx, precise.mul(normalX, halfImpulse));
@@ -895,21 +924,53 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             precise.mul(normalY, halfImpulse)
           );
 
+          // Ограничиваем скорости после столкновения для предотвращения накопления энергии
+          const maxPostCollisionSpeed = 6.0;
+          
+          const ballSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+          if (ballSpeed > maxPostCollisionSpeed) {
+            const scale = maxPostCollisionSpeed / ballSpeed;
+            ball.dx *= scale;
+            ball.dy *= scale;
+          }
+          
+          const otherBallSpeed = Math.sqrt(otherBall.dx * otherBall.dx + otherBall.dy * otherBall.dy);
+          if (otherBallSpeed > maxPostCollisionSpeed) {
+            const scale = maxPostCollisionSpeed / otherBallSpeed;
+            otherBall.dx *= scale;
+            otherBall.dy *= scale;
+          }
+
           playMelodyNote();
         }
       });
 
-      if (ball.x < 24) {
-        ball.x = 24;
+      // Улучшенная проверка границ мира с дополнительным отступом
+      const worldMargin = 26; // Увеличенный отступ для предотвращения прорыва
+      
+      if (ball.x < worldMargin) {
+        ball.x = worldMargin;
         ball.dx = precise.mul(precise.abs(ball.dx), 0.82);
+        
+        // Дополнительное ограничение скорости при столкновении с границей
+        const maxBoundarySpeed = 6.0;
+        if (precise.abs(ball.dx) > maxBoundarySpeed) {
+          ball.dx = ball.dx > 0 ? maxBoundarySpeed : -maxBoundarySpeed;
+        }
       }
-      if (ball.x > 1176) {
-        ball.x = 1176;
+      if (ball.x > WORLD_WIDTH - worldMargin) {
+        ball.x = WORLD_WIDTH - worldMargin;
         ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), 0.82);
+        
+        // Дополнительное ограничение скорости при столкновении с границей
+        const maxBoundarySpeed = 6.0;
+        if (precise.abs(ball.dx) > maxBoundarySpeed) {
+          ball.dx = ball.dx > 0 ? maxBoundarySpeed : -maxBoundarySpeed;
+        }
       }
 
       if (mapDataRef.current) {
-        const { winY } = mapDataRef.current;
+        const { winY, deathY } = mapDataRef.current;
 
         if (ball.y > winY) {
           if (actualWinnersRef.current.length === 0) {
@@ -918,6 +979,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             ball.finished = true;
             onBallWin?.(ball.id, ball.playerId);
             setGameState("finished");
+          }
+        }
+
+        if (ball.y > deathY && ball.y < deathY + 30) {
+          ball.finished = true;
+          if (appRef.current) {
+            appRef.current.stage.removeChild(ball.graphics);
           }
         }
       }
@@ -1148,31 +1216,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       ballsRef.current = newBalls;
 
-      // Initialize barrier system from map data
-      const leftBarrierObstacle = (mapDataRef.current as any)?.leftBarrierObstacle;
-      const rightBarrierObstacle = (mapDataRef.current as any)?.rightBarrierObstacle;
-      const barrierY = (mapDataRef.current as any)?.barrierY;
-      const panelWidth = (mapDataRef.current as any)?.panelWidth;
-      const doorWidth = (mapDataRef.current as any)?.doorWidth;
-      
-      if (leftBarrierObstacle && rightBarrierObstacle) {
-        barrierSystemRef.current = {
-          leftPanel: leftBarrierObstacle.graphics,
-          rightPanel: rightBarrierObstacle.graphics,
-          leftObstacle: leftBarrierObstacle,
-          rightObstacle: rightBarrierObstacle,
-          isOpening: false,
-          openProgress: 0,
-          barrierY,
-          panelWidth,
-          doorWidth
-        };
-      }
+      // Инициализируем состояние торнадо и барьера
+      tornadoActiveRef.current = true;
+      gateBarrierOpenRef.current = false;
 
+      // НЕ удаляем gateBarrier сразу - он будет удален после таймера
       console.log('gamecanvas speedtime1:', speedUpTime)
 
-      // Start in countdown state to show balls with tornado effect
-      setGameState("countdown");
+      setGameState("playing");
       onGameStart?.();
       console.log('gamecanvas speedtime2:', speedUpTime)
 
@@ -1264,6 +1315,61 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
+    // Функция для открытия барьера с анимацией
+    const openGateBarrier = () => {
+      gateBarrierOpenRef.current = true;
+      tornadoActiveRef.current = false;
+      
+      const gateBarrier = (mapDataRef.current as any)?.gateBarrier;
+      if (gateBarrier && gateBarrier.graphics) {
+        // Анимация открытия с центра
+        const graphics = gateBarrier.graphics;
+        const originalWidth = WORLD_WIDTH;
+        let currentWidth = originalWidth;
+        
+        const animateOpen = () => {
+          currentWidth -= 20; // Скорость открытия
+          if (currentWidth <= 0) {
+            // Полностью убираем барьер
+            if (appRef.current) {
+              appRef.current.stage.removeChild(graphics);
+            }
+            // Убираем барьер из препятствий
+            const index = obstaclesRef.current.indexOf(gateBarrier);
+            if (index > -1) {
+              obstaclesRef.current.splice(index, 1);
+            }
+            return;
+          }
+          
+          // Перерисовываем барьер с новой шириной (открытие с центра)
+          graphics.clear();
+          const leftWidth = (originalWidth - currentWidth) / 2;
+          const rightStart = leftWidth + currentWidth;
+          
+          // Левая часть
+          if (leftWidth > 0) {
+            graphics.rect(0, gateBarrier.y - 30, leftWidth, 60).fill(0x8B4513);
+            graphics.rect(0, gateBarrier.y - 25, leftWidth, 50).fill(0xA0522D);
+          }
+          
+          // Правая часть
+          if (rightStart < originalWidth) {
+            graphics.rect(rightStart, gateBarrier.y - 30, originalWidth - rightStart, 60).fill(0x8B4513);
+            graphics.rect(rightStart, gateBarrier.y - 25, originalWidth - rightStart, 50).fill(0xA0522D);
+          }
+          
+          requestAnimationFrame(animateOpen);
+        };
+        
+        animateOpen();
+      }
+    };
+
+    const setTornadoEffect = (active: boolean) => {
+      tornadoActiveRef.current = active;
+    };
+
     useImperativeHandle(ref, () => ({
       startGame,
       resetGame,
@@ -1282,18 +1388,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         width: mapDataRef.current?.mapWidth || 1200,
         height: mapDataRef.current?.mapHeight || 2500,
       }),
-      startCountdown: () => {
-        setGameState("countdown");
-        countdownStartTimeRef.current = Date.now();
-        tornadoTimeRef.current = 0;
-      },
-      openBarriers: () => {
-        if (barrierSystemRef.current.leftObstacle && barrierSystemRef.current.rightObstacle) {
-          barrierSystemRef.current.isOpening = true;
-          barrierSystemRef.current.openProgress = 0;
-          setGameState("playing");
-        }
-      },
+      openGateBarrier,
+      setTornadoEffect,
       destroyCanvas: () => {
         if ((gameLoopRef as any).physicsIntervalId) {
           clearInterval((gameLoopRef as any).physicsIntervalId);
