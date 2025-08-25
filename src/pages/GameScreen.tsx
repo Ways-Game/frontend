@@ -406,7 +406,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       {isReplay && (
         <button
           onClick={handleClose}
-          className="absolute top-4 left-4 z-30 bg-zinc-800/80 backdrop-blur-sm rounded-[20px] px-3 py-2 flex items-center gap-2"
+          className="absolute top-4 right-4 z-30 bg-zinc-800/80 backdrop-blur-sm rounded-[20px] px-3 py-2 flex items-center gap-2"
         >
           <span className="text-white text-sm">Back</span>
           <div className="w-5 h-5 bg-neutral-600 rounded-full flex items-center justify-center">
@@ -417,7 +417,7 @@ const autoStartPendingRef = useRef<any | null>(null);
 
       {/* Top Status Bar */}
       <div className="absolute top-0 left-0 right-0 z-20">
-        <div className={`flex items-center justify-between px-3 py-2.5 ${isReplay ? 'pl-20' : ''}`}>
+        <div className="flex items-center justify-between px-3 py-2.5">
           <Chip variant="prize">
             <span className="text-base font-semibold">Prize: <img src="/src/assets/icons/star.svg" className="w-5 h-5 inline mx-1" alt="star" /> 110</span>
           </Chip>

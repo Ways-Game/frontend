@@ -46,7 +46,7 @@ export const generateMapFromId = (
   // ИДЕАЛЬНАЯ ФИЗИКА ВОРОНКИ С ТОЧНЫМ СООТВЕТСТВИЕМ ФОРМЕ
   const funnelWidthBottom = 120;
   const funnelHeight = 600;
-  const verticalPassage = 200;
+  const verticalPassage = 400;
   const topY = currentY;
   const bottomY = currentY + funnelHeight;
   const passageBottomY = bottomY + verticalPassage;
@@ -182,6 +182,36 @@ export const generateMapFromId = (
       });
     }
   }
+
+  // Добавляем толстую физическую полоску в конце вертикального прохода
+  const barrierThickness = 20;
+  const barrierY = passageBottomY - barrierThickness;
+  
+  // Левая часть барьера
+  obstacles.push({
+    x: leftBottomX - segmentWidth,
+    y: barrierY,
+    width: segmentWidth * 2,
+    height: barrierThickness,
+    type: 'barrier'
+  });
+  
+  // Правая часть барьера
+  obstacles.push({
+    x: rightBottomX - segmentWidth,
+    y: barrierY,
+    width: segmentWidth * 2,
+    height: barrierThickness,
+    type: 'barrier'
+  });
+  
+  // Визуализация барьера
+  const barrierGraphics = new PIXI.Graphics();
+  barrierGraphics.beginFill(0x4ecdc4);
+  barrierGraphics.drawRect(leftBottomX - segmentWidth, barrierY, segmentWidth * 2, barrierThickness);
+  barrierGraphics.drawRect(rightBottomX - segmentWidth, barrierY, segmentWidth * 2, barrierThickness);
+  barrierGraphics.endFill();
+  app.stage.addChild(barrierGraphics);
 
   const finishY = bottomY + verticalPassage / 2;
   const stripeHeight = 40;
