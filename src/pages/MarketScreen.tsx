@@ -1,9 +1,28 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Search, Filter, ArrowUpDown, X } from "lucide-react"
+import { useTelegram } from "@/hooks/useTelegram"
+import { api } from "@/services/api"
+import type { UserProfile } from "@/types/api"
 
 export function MarketScreen() {
+  const { user } = useTelegram()
   const [searchQuery, setSearchQuery] = useState('Snoo')
   const [sortOrder, setSortOrder] = useState('Low to High')
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return
+      try {
+        const profile = await api.getUserProfile(user.id)
+        setUserProfile(profile)
+      } catch (error) {
+        console.error('Failed to fetch user profile:', error)
+      }
+    }
+    
+    fetchUserProfile()
+  }, [user?.id])
 
   const products = Array(10).fill(null).map((_, i) => ({
     id: i + 1,
@@ -27,10 +46,18 @@ export function MarketScreen() {
               <span className="text-neutral-50 text-sm leading-snug">Low to High</span>
             </div>
           </div>
-          <button className="h-8 px-3 py-2 bg-[#007AFF] rounded-[20px] flex items-center gap-1.5">
-            <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
-            <span className="text-white text-base font-semibold">Connect</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Balance Display */}
+            <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-1.5">
+              <img src="/src/assets/icons/star.svg" className="w-4 h-4" alt="star" />
+              <span className="text-white text-sm font-semibold">{userProfile?.balance || 0}</span>
+            </div>
+            
+            <button className="h-8 px-3 py-2 bg-[#007AFF] rounded-[20px] flex items-center gap-1.5">
+              <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
+              <span className="text-white text-base font-semibold">Connect</span>
+            </button>
+          </div>
         </div>
 
         {/* Hero Banner */}

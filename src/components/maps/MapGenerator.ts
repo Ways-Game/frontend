@@ -3,8 +3,8 @@ import { MAP_BLOCKS } from "./MapBlocks";
 import { Obstacle, Spinner, MapData } from "@/types/maps";
 
 export const generateMapFromId = (
-  app: PIXI.Application, 
-  mapId: number[] | number, 
+  app: PIXI.Application,
+  mapId: number[] | number,
   options: { seed: string; worldWidth: number; worldHeight: number; random: any }
 ) => {
   const { worldWidth, worldHeight } = options;
@@ -19,8 +19,47 @@ export const generateMapFromId = (
   startSection.rect(0, 0, worldWidth, screenHeight).fill(0x2c3e50);
   app.stage.addChild(startSection);
   
-  const gateBarrier = { x: worldWidth / 2, y: screenHeight, width: worldWidth, height: 20, type: 'barrier' as const };
-  obstacles.push(gateBarrier);
+  // Create barrier system with sliding door panels
+  const barrierY = screenHeight - 60; // Position barrier 60px from bottom of initial area
+  const barrierHeight = 40; // Thick barrier strip
+  const doorWidth = worldWidth * 0.6; // Door opening width (60% of screen width)
+  const panelWidth = (worldWidth - doorWidth) / 2; // Width of each door panel
+  
+  // Create visual barrier strip
+  const barrierStrip = new PIXI.Graphics();
+  barrierStrip.rect(0, barrierY, worldWidth, barrierHeight).fill(0x8B4513); // Brown color for barrier
+  app.stage.addChild(barrierStrip);
+  
+  // Create left door panel
+  const leftDoorPanel = new PIXI.Graphics();
+  leftDoorPanel.rect(0, barrierY, panelWidth, barrierHeight).fill(0x654321); // Darker brown for doors
+  app.stage.addChild(leftDoorPanel);
+  
+  // Create right door panel
+  const rightDoorPanel = new PIXI.Graphics();
+  rightDoorPanel.rect(worldWidth - panelWidth, barrierY, panelWidth, barrierHeight).fill(0x654321);
+  app.stage.addChild(rightDoorPanel);
+  
+  // Create barrier obstacles for collision detection
+  const leftBarrierObstacle = {
+    x: panelWidth / 2,
+    y: barrierY + barrierHeight / 2,
+    width: panelWidth,
+    height: barrierHeight,
+    type: 'barrier' as const,
+    graphics: leftDoorPanel
+  };
+  
+  const rightBarrierObstacle = {
+    x: worldWidth - panelWidth / 2,
+    y: barrierY + barrierHeight / 2,
+    width: panelWidth,
+    height: barrierHeight,
+    type: 'barrier' as const,
+    graphics: rightDoorPanel
+  };
+  
+  obstacles.push(leftBarrierObstacle, rightBarrierObstacle);
 
   // Generate map from mapId
   let currentY = screenHeight + 100;
@@ -46,7 +85,7 @@ export const generateMapFromId = (
   // ИДЕАЛЬНАЯ ФИЗИКА ВОРОНКИ С ТОЧНЫМ СООТВЕТСТВИЕМ ФОРМЕ
   const funnelWidthBottom = 120;
   const funnelHeight = 600;
-  const verticalPassage = 200;
+  const verticalPassage = 400; // Увеличена высота вертикального прохода
   const topY = currentY;
   const bottomY = currentY + funnelHeight;
   const passageBottomY = bottomY + verticalPassage;
@@ -71,9 +110,9 @@ export const generateMapFromId = (
   const leftBottomX = worldWidth / 2 - funnelWidthBottom / 2;
   const rightBottomX = worldWidth / 2 + funnelWidthBottom / 2;
 
-  // Вычисляем шаг для создания мелких прямоугольников (оптимальный баланс точности и производительности)
-  const segmentHeight = 8; // Высота каждого сегмента
-  const segmentWidth = 8;  // Ширина каждого сегмента
+  // Уменьшаем размер сегментов для более плотного покрытия и предотвращения просачивания
+  const segmentHeight = 4; // Уменьшенная высота каждого сегмента
+  const segmentWidth = 4;  // Уменьшенная ширина каждого сегмента
 
   // ЛЕВАЯ СТОРОНА ВОРОНКИ
   for (let y = topY; y < bottomY; y += segmentHeight) {
@@ -135,9 +174,9 @@ export const generateMapFromId = (
   }
 
   // ДОПОЛНИТЕЛЬНОЕ УПЛОТНЕНИЕ В КРИТИЧЕСКИХ МЕСТАХ
-  // Верхние углы
-  for (let x = -5; x < -5 + segmentWidth * 3; x += segmentWidth) {
-    for (let y = topY; y < topY + segmentHeight * 3; y += segmentHeight) {
+  // Верхние углы - увеличиваем плотность
+  for (let x = -5; x < -5 + segmentWidth * 5; x += segmentWidth) {
+    for (let y = topY; y < topY + segmentHeight * 5; y += segmentHeight) {
       obstacles.push({
         x: x,
         y: y,
@@ -148,8 +187,8 @@ export const generateMapFromId = (
     }
   }
 
-  for (let x = worldWidth + 5 - segmentWidth * 3; x < worldWidth + 5; x += segmentWidth) {
-    for (let y = topY; y < topY + segmentHeight * 3; y += segmentHeight) {
+  for (let x = worldWidth + 5 - segmentWidth * 5; x < worldWidth + 5; x += segmentWidth) {
+    for (let y = topY; y < topY + segmentHeight * 5; y += segmentHeight) {
       obstacles.push({
         x: x,
         y: y,
@@ -160,9 +199,9 @@ export const generateMapFromId = (
     }
   }
 
-  // Нижние углы (переход от наклона к вертикали)
-  for (let y = bottomY - segmentHeight * 3; y < bottomY + segmentHeight * 3; y += segmentHeight) {
-    for (let x = leftBottomX - segmentWidth * 3; x < leftBottomX + segmentWidth; x += segmentWidth) {
+  // Нижние углы (переход от наклона к вертикали) - увеличиваем плотность
+  for (let y = bottomY - segmentHeight * 5; y < bottomY + segmentHeight * 5; y += segmentHeight) {
+    for (let x = leftBottomX - segmentWidth * 5; x < leftBottomX + segmentWidth * 2; x += segmentWidth) {
       obstacles.push({
         x: x,
         y: y,
@@ -172,7 +211,7 @@ export const generateMapFromId = (
       });
     }
     
-    for (let x = rightBottomX - segmentWidth; x < rightBottomX + segmentWidth * 3; x += segmentWidth) {
+    for (let x = rightBottomX - segmentWidth * 2; x < rightBottomX + segmentWidth * 5; x += segmentWidth) {
       obstacles.push({
         x: x,
         y: y,
@@ -183,7 +222,33 @@ export const generateMapFromId = (
     }
   }
 
-  const finishY = bottomY + verticalPassage / 2;
+  // Добавляем дополнительные барьеры в самом низу воронки для предотвращения просачивания
+  for (let y = passageBottomY - segmentHeight * 2; y < passageBottomY; y += segmentHeight) {
+    // Левая стенка
+    for (let x = leftBottomX - segmentWidth * 3; x < leftBottomX; x += segmentWidth) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+    
+    // Правая стенка
+    for (let x = rightBottomX; x < rightBottomX + segmentWidth * 3; x += segmentWidth) {
+      obstacles.push({
+        x: x,
+        y: y,
+        width: segmentWidth,
+        height: segmentHeight,
+        type: 'barrier'
+      });
+    }
+  }
+
+  // Перемещаем полоску в самый низ воронки
+  const finishY = passageBottomY - 40; // Размещаем полоску в самом низу воронки
   const stripeHeight = 40;
   const cellSize = 20;
 
@@ -199,10 +264,14 @@ export const generateMapFromId = (
   app.stage.addChild(finishLine);
 
   const winY = finishY + stripeHeight;
-  const deathY = winY + 200;
 
-  const mapData = { obstacles, spinners, worldWidth: worldWidth, mapHeight: currentY + 100, winY, deathY };
-  (mapData as any).gateBarrier = gateBarrier;
+  const mapData = { obstacles, spinners, worldWidth: worldWidth, mapHeight: currentY + 100, winY };
+  (mapData as any).leftBarrierObstacle = leftBarrierObstacle;
+  (mapData as any).rightBarrierObstacle = rightBarrierObstacle;
+  (mapData as any).barrierY = barrierY;
+  (mapData as any).barrierHeight = barrierHeight;
+  (mapData as any).panelWidth = panelWidth;
+  (mapData as any).doorWidth = doorWidth;
   (mapData as any).screenHeight = worldHeight;
   return mapData;
 };

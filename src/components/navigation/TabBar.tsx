@@ -33,6 +33,11 @@ export function TabBar() {
   }, [])
   
   const getActiveTab = () => {
+    // Check if we're in game replay mode
+    if (location.pathname === '/game' && location.state && (location.state as any).isReplay) {
+      return 'history'
+    }
+    
     switch (location.pathname) {
       case '/': return 'pvp'
       case '/market': return 'market'

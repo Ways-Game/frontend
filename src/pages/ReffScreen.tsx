@@ -97,14 +97,6 @@ export function ReffScreen() {
         </div>
       )}
 
-      {/* Manual refresh button */}
-      <button
-        onClick={() => fetchUserProfile()}
-        className="fixed top-4 right-4 bg-blue-500 p-2 rounded-full z-50"
-      >
-        <RefreshCw className="w-6 h-6 text-white" />
-      </button>
-
       <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5 ">
         {/* Hero Banner */}
         <div
@@ -151,21 +143,29 @@ export function ReffScreen() {
               </span>
             </div>
 
-            <div className="px-1.5 py-2 bg-[#4378FF20] rounded-[20px] flex items-center gap-1.5 h-8">
-              <img
-                src="/src/assets/icons/ref.svg"
-                className="w-5 h-5"
-                alt="ref"
-              />
-              <span className="text-blue-400 text-base font-semibold">
-                {formatWallet(user?.wallet_address || generateMockWallet())}
-              </span>
-              <button
-                onClick={inviteFriends}
-                className="w-5 h-5 bg-[#4378FF20] rounded-full flex items-center justify-center hover:bg-[#4378FF40] transition-colors"
-              >
-                <X className="w-3 h-3 text-blue-400" />
-              </button>
+            <div className="flex items-center gap-2">
+              {/* Balance Display */}
+              <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-1.5">
+                <img src="/src/assets/icons/star.svg" className="w-4 h-4" alt="star" />
+                <span className="text-white text-sm font-semibold">{userProfile?.balance || 0}</span>
+              </div>
+              
+              <div className="px-1.5 py-2 bg-[#4378FF20] rounded-[20px] flex items-center gap-1.5 h-8">
+                <img
+                  src="/src/assets/icons/ref.svg"
+                  className="w-5 h-5"
+                  alt="ref"
+                />
+                <span className="text-blue-400 text-base font-semibold">
+                  {formatWallet(user?.wallet_address || generateMockWallet())}
+                </span>
+                <button
+                  onClick={inviteFriends}
+                  className="w-5 h-5 bg-[#4378FF20] rounded-full flex items-center justify-center hover:bg-[#4378FF40] transition-colors"
+                >
+                  <X className="w-3 h-3 text-blue-400" />
+                </button>
+              </div>
             </div>
           </div>
 

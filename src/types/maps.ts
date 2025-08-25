@@ -32,7 +32,7 @@ export interface MapData {
   mapWidth: number;
   mapHeight: number;
   winY: number;
-  deathY: number;
+  deathY?: number;
   screenHeight: number;
 }
 

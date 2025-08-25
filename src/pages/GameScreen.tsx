@@ -49,7 +49,8 @@ const autoStartPendingRef = useRef<any | null>(null);
       gameCanvasRef.current?.destroyCanvas?.();
     } catch (e) {}
     // small delay to ensure canvas cleanup runs before navigation
-    setTimeout(() => navigate('/'), 50);
+    // If it's a replay, go back to history, otherwise go to main page
+    setTimeout(() => navigate(isReplay ? '/history' : '/'), 50);
   }
 
   const handlePlayAgain = () => {
@@ -139,10 +140,17 @@ const autoStartPendingRef = useRef<any | null>(null);
     
     const currentRoundGameData = dataFromState || gameData;
 
+    // Always start the game immediately to show balls and tornado effect
+    handleGameStart();
+    gameCanvasRef.current?.startGame(currentRoundGameData);
+
     if (speedUpTime >= countdownDuration) {
-      handleGameStart();
-      gameCanvasRef.current?.startGame(currentRoundGameData);
+      // Skip countdown, open barriers immediately
+      setTimeout(() => {
+        gameCanvasRef.current?.openBarriers();
+      }, 100);
     } else {
+      // Show countdown overlay while balls are in tornado mode
       setShowCountdown(true);
       
       const remainingCountdown = countdownDuration - speedUpTime - 1;
@@ -157,7 +165,8 @@ const autoStartPendingRef = useRef<any | null>(null);
           setCountdownText("LET'S GO!");
           setTimeout(() => {
             setShowCountdown(false);
-            gameCanvasRef.current?.startGame(currentRoundGameData);
+            // Open barriers to allow balls into main game area
+            gameCanvasRef.current?.openBarriers();
           }, 1000);
         }
       };
@@ -350,9 +359,8 @@ const autoStartPendingRef = useRef<any | null>(null);
       onTouchEnd={handleTouchEnd}
     >
       {/* Game Canvas - Full Screen */}
-      <div 
+      <div
         className="game-container absolute inset-0 w-full h-full overflow-hidden"
-        style={{ display: showCountdown ? 'none' : 'block' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}

@@ -38,12 +38,12 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
   
   return (
     <div className="fixed inset-0 bg-black/60 flex flex-col justify-end items-center px-6 pb-10 z-50">
-      {/* Close Button */}
-      <button 
+      {/* Close/Back Button */}
+      <button
         onClick={onClose}
         className="absolute top-4 right-4 bg-zinc-800 rounded-[20px] px-3 py-2 flex items-center gap-2"
       >
-        <span className="text-white text-base">Close</span>
+        <span className="text-white text-base">{isReplay ? "Back" : "Close"}</span>
         <div className="w-6 h-6 bg-neutral-600 rounded-full flex items-center justify-center">
           <X className="w-4 h-4 text-white" />
         </div>

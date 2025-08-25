@@ -85,6 +85,10 @@
   body {
     @apply bg-background text-foreground font-inter;
     font-feature-settings: "tnum";
+    /* Disable swipe-to-close functionality to prevent interference with game swipe logic */
+    overscroll-behavior: none;
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
   }
   
   h1 {
@@ -241,4 +245,18 @@
   .border-accent-yellow {
     border-color: hsl(var(--accent-yellow));
   }
+}
+
+/* Prevent swipe-to-close and other unwanted touch behaviors */
+html, body {
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Specifically for game screen to prevent any swipe interference */
+.game-container {
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
