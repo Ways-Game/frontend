@@ -8,7 +8,7 @@ export interface UserProfile {
   wallet_address?: string;
   referrals?: UserProfile[];
   count_story_current_day?: number;
-  referrers_id?: number[];
+  earn_money?: number;
 }
 
 export interface ParticipantData {

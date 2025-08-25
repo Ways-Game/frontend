@@ -184,7 +184,7 @@ export function ReffScreen() {
                   <span className="text-neutral-50 text-sm">{referralUser.username ? `@${referralUser.username}` : `User ${referralUser.id}`}</span>
                 </div>
                 <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-0.5">
-                  <span className="text-neutral-50 text-sm">{referralUser.balls_count || 0}</span>
+                  <span className="text-neutral-50 text-sm">{referralUser.earn_money || 0}</span>
                   <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
                 </div>
               </div>
