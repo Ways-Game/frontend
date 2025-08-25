@@ -13,7 +13,12 @@ export const useTelegram = (): UseTelegramReturn => {
     if (typeof window !== 'undefined') {
       try {
         WebApp.ready()
-        WebApp.expand()
+        
+        // Try to expand the web app if the method exists
+        if (typeof WebApp.expand === 'function') {
+          WebApp.expand()
+        }
+        
         WebApp.setHeaderColor('#0C0E12')
         WebApp.setBackgroundColor('#0C0E12')
         
