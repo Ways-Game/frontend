@@ -20,7 +20,7 @@ export const generateMapFromId = (
   app.stage.addChild(startSection);
   
   // Create barrier system with sliding door panels
-  const barrierY = screenHeight - 60; // Position barrier 60px from bottom of initial area
+  const barrierY = screenHeight; // Position barrier at bottom of gray field
   const barrierHeight = 40; // Thick barrier strip
   const doorWidth = worldWidth * 0.6; // Door opening width (60% of screen width)
   const panelWidth = (worldWidth - doorWidth) / 2; // Width of each door panel
@@ -247,8 +247,8 @@ export const generateMapFromId = (
     }
   }
 
-  // Перемещаем полоску в самый низ воронки
-  const finishY = passageBottomY - 40; // Размещаем полоску в самом низу воронки
+  // Перемещаем полоску ниже в воронке
+  const finishY = passageBottomY + 50; // Размещаем полоску ниже воронки
   const stripeHeight = 40;
   const cellSize = 20;
 

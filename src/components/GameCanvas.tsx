@@ -1275,7 +1275,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    // Функция для открытия барьера с анимацией
+    // Открытие барьера и отключение торнадо
     const openGateBarrier = () => {
       gateBarrierOpenRef.current = true;
       tornadoActiveRef.current = false;
