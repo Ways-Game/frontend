@@ -14,7 +14,6 @@ export const useTelegram = (): UseTelegramReturn => {
       try {
         WebApp.ready()
         
-        // Try to expand the web app if the method exists
         if (typeof WebApp.expand === 'function') {
           WebApp.expand()
         }

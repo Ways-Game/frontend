@@ -3,7 +3,7 @@ import App from './App.tsx'
 import './index.css'
 
 // Expand Telegram WebView on mobile
-if ((window as any).Telegram && (window as any).Telegram.WebView) {
+if ((window as any).Telegram && (window as any).Telegram.WebView && typeof (window as any).Telegram.expand === 'function') {
   (window as any).Telegram.WebView.expand();
 }
 
