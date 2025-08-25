@@ -660,48 +660,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             // Для предотвращения прорыва границ - более агрессивное позиционирование
             let safetyMargin = 24;
             if (isFunnelSegment) safetyMargin = 26;
-            if (isFinishLine) safetyMargin = 28; // Еще больший отступ для финишной полоски
             
-            // Для финишной полоски - усиленная коллизия
-            if (isFinishLine) {
-              // Более агрессивное разделение мячей от барьера
-              const separationForce = Math.max(2.0, overlapY * 0.5);
-              
-              if (overlapX < overlapY) {
-                // Боковое столкновение с финишной полоской
-                if (ball.x < obstacle.x) {
-                  ball.x = precise.sub(precise.sub(obstacle.x, halfW), safetyMargin);
-                } else {
-                  ball.x = precise.add(precise.add(obstacle.x, halfW), safetyMargin);
-                }
-                ball.dx = precise.mul(ball.dx, -0.7); // Сильное гашение скорости
-                ball.bounceCount++;
-              } else {
-                if (ball.y < obstacle.y) {
-                  // Столкновение с верхней частью финишной полоски - критично!
-                  ball.y = precise.sub(precise.sub(obstacle.y, halfH), safetyMargin);
-                  
-                  // Принудительное отталкивание вверх для предотвращения проникновения
-                  if (ball.dy > -1.0) {
-                    ball.dy = -Math.max(2.0, separationForce);
-                  } else {
-                    ball.dy = precise.mul(ball.dy, -0.9); // Сильный отскок
-                  }
-                  
-                  // Ограничиваем горизонтальную скорость для стабильности
-                  if (precise.abs(ball.dx) > 3.0) {
-                    ball.dx = precise.mul(ball.dx, 0.7);
-                  }
-                  
-                  ball.bounceCount++;
-                } else {
-                  // Столкновение с нижней частью финишной полоски
-                  ball.y = precise.add(precise.add(obstacle.y, halfH), safetyMargin);
-                  ball.dy = precise.mul(ball.dy, -0.8);
-                  ball.bounceCount++;
-                }
-              }
-            } else if (overlapX < overlapY) {
+             if (overlapX < overlapY) {
               // Боковое столкновение (обычная логика)
               if (ball.x < obstacle.x) {
                 ball.x = precise.sub(precise.sub(obstacle.x, halfW), safetyMargin);
