@@ -28,5 +28,6 @@ export interface GameCanvasRef {
   destroyCanvas?: () => void;
   // New methods for barrier system
   startCountdown?: () => void;
-  openBarriers?: () => void;
+  openGateBarrier?: () => void;
+  setTornadoEffect?: (active: boolean) => void;
 }

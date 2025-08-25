@@ -147,7 +147,7 @@ const autoStartPendingRef = useRef<any | null>(null);
     if (speedUpTime >= countdownDuration) {
       // Skip countdown, open barriers immediately
       setTimeout(() => {
-        gameCanvasRef.current?.openBarriers();
+        gameCanvasRef.current?.openGateBarrier();
       }, 100);
     } else {
       // Show countdown overlay while balls are in tornado mode
@@ -166,7 +166,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           setTimeout(() => {
             setShowCountdown(false);
             // Open barriers to allow balls into main game area
-            gameCanvasRef.current?.openBarriers();
+            gameCanvasRef.current?.openGateBarrier();
           }, 1000);
         }
       };
