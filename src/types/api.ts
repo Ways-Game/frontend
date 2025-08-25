@@ -9,6 +9,7 @@ export interface UserProfile {
   referrals?: UserProfile[];
   count_story_current_day?: number;
   earn_money?: number;
+  total_amount?: number;
 }
 
 export interface ParticipantData {
