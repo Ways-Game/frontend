@@ -49,7 +49,6 @@ const autoStartPendingRef = useRef<any | null>(null);
       gameCanvasRef.current?.destroyCanvas?.();
     } catch (e) {}
     // small delay to ensure canvas cleanup runs before navigation
-    // If it's a replay, go back to history, otherwise go to main page
     setTimeout(() => navigate(isReplay ? '/history' : '/'), 50);
   }
 
@@ -73,7 +72,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       const containerHeight = window.innerHeight - 80
       const scale = window.innerWidth / 1200 // Исправлено с 1000 на 1200
       const scaledHeight = gameSize.height * scale
-      setMaxScrollY( 4100)
+      setMaxScrollY( 4000)
     }
   }
 
@@ -140,17 +139,10 @@ const autoStartPendingRef = useRef<any | null>(null);
     
     const currentRoundGameData = dataFromState || gameData;
 
-    // Always start the game immediately to show balls and tornado effect
-    handleGameStart();
-    gameCanvasRef.current?.startGame(currentRoundGameData);
-
     if (speedUpTime >= countdownDuration) {
-      // Skip countdown, open barriers immediately
-      setTimeout(() => {
-        gameCanvasRef.current?.openGateBarrier();
-      }, 100);
+      handleGameStart();
+      gameCanvasRef.current?.startGame(currentRoundGameData);
     } else {
-      // Show countdown overlay while balls are in tornado mode
       setShowCountdown(true);
       
       const remainingCountdown = countdownDuration - speedUpTime - 1;
@@ -165,8 +157,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           setCountdownText("LET'S GO!");
           setTimeout(() => {
             setShowCountdown(false);
-            // Open barriers to allow balls into main game area
-            gameCanvasRef.current?.openGateBarrier();
+            gameCanvasRef.current?.startGame(currentRoundGameData);
           }, 1000);
         }
       };
@@ -229,10 +220,27 @@ const autoStartPendingRef = useRef<any | null>(null);
 
       
       if (newMode === 'swipe') {
-        setMaxScrollY( 4100)
+        setMaxScrollY( 4000)
       }
     }
   } 
+  
+
+  const handleScrollUp = () => {
+    const newY = Math.max(0, scrollY - 200)
+    setScrollY(newY)
+    if (gameCanvasRef.current) {
+      gameCanvasRef.current.setScrollY(newY)
+    }
+  }
+
+  const handleScrollDown = () => {
+    const newY = Math.min(maxScrollY, scrollY + 200)
+    setScrollY(newY)
+    if (gameCanvasRef.current) {
+      gameCanvasRef.current.setScrollY(newY)
+    }
+  }
 
   const handleScroll = (newY: number) => {
     const clampedY = Math.max(0, Math.min(maxScrollY, newY))
@@ -342,8 +350,9 @@ const autoStartPendingRef = useRef<any | null>(null);
       onTouchEnd={handleTouchEnd}
     >
       {/* Game Canvas - Full Screen */}
-      <div
+      <div 
         className="game-container absolute inset-0 w-full h-full overflow-hidden"
+        style={{ display: showCountdown ? 'none' : 'block' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -393,9 +402,22 @@ const autoStartPendingRef = useRef<any | null>(null);
         </div>
       )}
 
+      {/* Permanent Back Button for Replay */}
+      {isReplay && (
+        <button
+          onClick={handleClose}
+          className="absolute top-4 left-4 z-30 bg-zinc-800/80 backdrop-blur-sm rounded-[20px] px-3 py-2 flex items-center gap-2"
+        >
+          <span className="text-white text-sm">Back</span>
+          <div className="w-5 h-5 bg-neutral-600 rounded-full flex items-center justify-center">
+            <X className="w-3 h-3 text-white" />
+          </div>
+        </button>
+      )}
+
       {/* Top Status Bar */}
       <div className="absolute top-0 left-0 right-0 z-20">
-        <div className="flex items-center justify-between px-3 py-2.5">
+        <div className={`flex items-center justify-between px-3 py-2.5 ${isReplay ? 'pl-20' : ''}`}>
           <Chip variant="prize">
             <span className="text-base font-semibold">Prize: <img src="/src/assets/icons/star.svg" className="w-5 h-5 inline mx-1" alt="star" /> 110</span>
           </Chip>

@@ -90,16 +90,18 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-5">
-          <button 
-            onClick={onPlayAgain}
-            className="w-full h-12 px-3 py-3.5 rounded-2xl text-white text-base font-semibold"
-            style={{
-              background: 'radial-gradient(458.72% 228.94% at 57.65% 24.39%, #444CE7 0%, #B83EFF 30.5%, #E58C4C 60.5%, #444CE7 93.5%), linear-gradient(116deg, #FFF -56.16%, #0078D2 28.08%, #8E4FF8 80.58%)',
-              boxShadow: '0px 5px 22px 0px rgba(207, 62, 255, 0.34)'
-            }}
-          >
-            Play again
-          </button>
+          {!isReplay && (
+            <button 
+              onClick={onPlayAgain}
+              className="w-full h-12 px-3 py-3.5 rounded-2xl text-white text-base font-semibold"
+              style={{
+                background: 'radial-gradient(458.72% 228.94% at 57.65% 24.39%, #444CE7 0%, #B83EFF 30.5%, #E58C4C 60.5%, #444CE7 93.5%), linear-gradient(116deg, #FFF -56.16%, #0078D2 28.08%, #8E4FF8 80.58%)',
+                boxShadow: '0px 5px 22px 0px rgba(207, 62, 255, 0.34)'
+              }}
+            >
+              Play again
+            </button>
+          )}
           
           <button 
             onClick={async () => {

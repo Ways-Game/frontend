@@ -20,14 +20,10 @@ export interface Ball {
 export interface GameCanvasRef {
   startGame: (gameData: { seed: string; mapId: number[] | number; participants: any[]; }) => Promise<void>;
   resetGame: () => void;
-  gameState: 'waiting' | 'countdown' | 'playing' | 'finished';
+  gameState: 'waiting' | 'playing' | 'finished';
   setCameraMode: (mode: 'leader' | 'swipe') => void;
   setScrollY: (y: number) => void;
   getGameSize: () => { width: number; height: number };
   // Destroys PIXI app and clears canvas immediately
   destroyCanvas?: () => void;
-  // New methods for barrier system
-  startCountdown?: () => void;
-  openGateBarrier?: () => void;
-  setTornadoEffect?: (active: boolean) => void;
 }
