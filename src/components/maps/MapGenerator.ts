@@ -248,7 +248,7 @@ export const generateMapFromId = (
   }
 
   // Перемещаем полоску ниже в воронке
-  const finishY = passageBottomY + 50; // Размещаем полоску ниже воронки
+  const finishY = topY + funnelHeight / 2; // Размещаем полоску ниже воронки
   const stripeHeight = 40;
   const cellSize = 20;
 
@@ -262,6 +262,11 @@ export const generateMapFromId = (
     }
   }
   app.stage.addChild(finishLine);
+
+  // Закрывающая полоска внизу воронки
+  const closingBarrier = new PIXI.Graphics();
+  closingBarrier.rect(worldWidth / 2 - funnelWidthBottom / 2, passageBottomY, funnelWidthBottom, 20).fill(0x4ecdc4);
+  app.stage.addChild(closingBarrier);
 
   const winY = finishY + stripeHeight;
 

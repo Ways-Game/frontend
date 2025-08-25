@@ -73,7 +73,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       const containerHeight = window.innerHeight - 80
       const scale = window.innerWidth / 1200 // Исправлено с 1000 на 1200
       const scaledHeight = gameSize.height * scale
-      setMaxScrollY( 4000)
+      setMaxScrollY( 4100)
     }
   }
 
@@ -229,27 +229,10 @@ const autoStartPendingRef = useRef<any | null>(null);
 
       
       if (newMode === 'swipe') {
-        setMaxScrollY( 4000)
+        setMaxScrollY( 4100)
       }
     }
   } 
-  
-
-  const handleScrollUp = () => {
-    const newY = Math.max(0, scrollY - 200)
-    setScrollY(newY)
-    if (gameCanvasRef.current) {
-      gameCanvasRef.current.setScrollY(newY)
-    }
-  }
-
-  const handleScrollDown = () => {
-    const newY = Math.min(maxScrollY, scrollY + 200)
-    setScrollY(newY)
-    if (gameCanvasRef.current) {
-      gameCanvasRef.current.setScrollY(newY)
-    }
-  }
 
   const handleScroll = (newY: number) => {
     const clampedY = Math.max(0, Math.min(maxScrollY, newY))
