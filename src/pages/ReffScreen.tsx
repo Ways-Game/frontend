@@ -171,13 +171,13 @@ export function ReffScreen() {
 
           {/* Title */}
           <div className="text-neutral-50 text-3xl font-bold">
-            invite refferals to earn 10% of their market buys
+            Invite refferals to earn 10% of their market buys
           </div>
 
           {/* Invited Users */}
-          <div className="flex  justify-between w-[50%]">
+          <div className="flex  align-center gap-5">
             <div className="flex flex-col gap-2">
-              <span className="text-neutral-500 text-xs">invited users</span>
+              <span className="text-neutral-500 text-xs">Invited users</span>
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2 w-fit">
                 <Users className="w-4 h-4 text-gray-400" />
                 <span className="text-neutral-50 text-sm">
