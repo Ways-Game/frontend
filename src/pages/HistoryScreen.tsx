@@ -105,7 +105,7 @@ export function HistoryScreen() {
   const totalPages = Math.ceil(filteredGames.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const currentGames = filteredGames.slice(startIndex, endIndex)
+  const currentGames = filteredGames.reverse().slice(startIndex, endIndex)
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page)

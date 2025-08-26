@@ -26,6 +26,7 @@ interface BallState {
   stuckFrames: number;
   lastPositions: { x: number; y: number }[];
   isStuck: boolean;
+  stuckRecoveryCountdown: number;
 }
 
 // deterministic helpers (kept as before)
@@ -412,11 +413,22 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ballStatesRef.current.set(ball.id, {
             stuckFrames: 0,
             lastPositions: [],
-            isStuck: false
+            isStuck: false,
+            stuckRecoveryCountdown: 0
           });
         }
         
         const ballState = ballStatesRef.current.get(ball.id)!;
+        
+        // Обрабатываем восстановление после застревания
+        if (ballState.stuckRecoveryCountdown > 0) {
+          ballState.stuckRecoveryCountdown--;
+          if (ballState.stuckRecoveryCountdown === 0) {
+            ballState.stuckFrames = 0;
+            ballState.isStuck = false;
+            ballState.lastPositions = [];
+          }
+        }
         
         // Сохраняем текущую позицию
         ballState.lastPositions.push({ x: ball.x, y: ball.y });
@@ -430,30 +442,22 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (ballState.lastPositions.length >= 5) {
           const first = ballState.lastPositions[0];
           const last = ballState.lastPositions[ballState.lastPositions.length - 1];
-          const distance = Math.sqrt(
-            Math.pow(last.x - first.x, 2) + Math.pow(last.y - first.y, 2)
+          const dx = precise.sub(last.x, first.x);
+          const dy = precise.sub(last.y, first.y);
+          const distance = precise.sqrt(
+            precise.add(precise.mul(dx, dx), precise.mul(dy, dy))
           );
           
           if (distance < 5) {
             ballState.stuckFrames++;
             
             if (ballState.stuckFrames > STUCK_THRESHOLD && !ballState.isStuck) {
-              console.log(`Ball ${ball.id} is stuck, forcing bounce`);
               ballState.isStuck = true;
+              ballState.stuckRecoveryCountdown = 60; // 60 кадров = 1 секунда при 60 FPS
               
               // Принудительный отскок
               ball.dy = -STUCK_BOUNCE_FORCE;
-              ball.dx = (randomRef.current!.next() - 0.5) * 4;
-              
-              // Сбрасываем состояние застревания
-              setTimeout(() => {
-                if (ballStatesRef.current.has(ball.id)) {
-                  const state = ballStatesRef.current.get(ball.id)!;
-                  state.stuckFrames = 0;
-                  state.isStuck = false;
-                  state.lastPositions = [];
-                }
-              }, 1000);
+              ball.dx = precise.mul(precise.sub(randomRef.current!.next(), 0.5), 4);
             }
           } else {
             ballState.stuckFrames = 0;
