@@ -107,7 +107,6 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
             onClick={async () => {
               try {
                 await shareGameStory(type === "win")
-                onShare()
               } catch (error: any) {
                 if (error.message?.includes('maximum number of stories')) {
                   setShareError('Достигнуто максимальное количество историй в день')

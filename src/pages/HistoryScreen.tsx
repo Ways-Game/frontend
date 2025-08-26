@@ -101,11 +101,16 @@ export function HistoryScreen() {
     return gameId.includes(query) || winnerUsername.includes(query)
   })
 
+  // Sort games by time when time filter is active
+  const sortedGames = activeFilter === 'time' 
+    ? [...filteredGames].sort((a, b) => new Date(b.start_time || '').getTime() - new Date(a.start_time || '').getTime())
+    : filteredGames
+
   // Pagination logic
-  const totalPages = Math.ceil(filteredGames.length / itemsPerPage)
+  const totalPages = Math.ceil(sortedGames.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const currentGames = filteredGames.reverse().slice(startIndex, endIndex)
+  const currentGames = sortedGames.slice(startIndex, endIndex)
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
