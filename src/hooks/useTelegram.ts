@@ -114,7 +114,7 @@ export const useTelegram = (): UseTelegramReturn => {
     try { 
       // Открываем нативный редактор историй Telegram
       WebApp.shareToStory('/src/assets/share_back.png', {
-        text: isWinner ? '🎉 I won in Ways Ball Game!' : '🎮 Playing Ways Ball Game!',
+        text: isWinner ? '🎉 I won in Ways Ball Game! ' : '🎮 Playing Ways Ball Game!',
         widget_link: {
           url: user.start_link || 'https://t.me/ballsbotdevbackendbot',
           name: 'Play Ways Ball'
