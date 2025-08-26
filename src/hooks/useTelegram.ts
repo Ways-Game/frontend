@@ -111,9 +111,18 @@ export const useTelegram = (): UseTelegramReturn => {
   const shareGameStory = async (isWinner: boolean): Promise<void> => {
     if (!user?.id) return
     
-    try {
+    try { 
+      // Открываем нативный редактор историй Telegram
+      WebApp.shareToStory('/src/assets/share_back.png', {
+        text: isWinner ? '🎉 I won in Ways Ball Game!' : '🎮 Playing Ways Ball Game!',
+        widget_link: {
+          url: user.start_link || 'https://t.me/ballsbotdevbackendbot',
+          name: 'Play Ways Ball'
+        }
+      })
+      
+      // Вызываем наш API после публикации истории
       await api.shareGameStory(user.id, isWinner)
-      // Обновляем профиль после успешной отправки истории
       await loadUserProfile()
     } catch (error: any) {
       console.error('Failed to share game story:', error)
