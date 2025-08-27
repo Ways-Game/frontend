@@ -14,15 +14,12 @@ import RTTTL from "@/assets/Theme - Batman.txt?raw";
 // Constants
 const FIXED_FPS = 60;
 const FIXED_DELTA = 1000 / FIXED_FPS;
-// Определяем множитель рендера в зависимости от типа устройства
-const RENDER_MULTIPLIER = 
-  typeof window !== 'undefined' && 
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
-    ? 5 // Удваиваем частоту рендера на мобильных устройствах
-    : 1; // На ПК оставляем как есть
 const WORLD_WIDTH = 1200;
 const WORLD_HEIGHT = 2500;
-
+const isMobile = 
+  typeof window !== 'undefined' && 
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+  
 // Anti-stuck system constants
 const MIN_BOUNCE_VELOCITY = 3.0;
 const STUCK_THRESHOLD = 60;
@@ -389,6 +386,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     // Deterministic physics loop / render functions (mostly unchanged)
     const gameLoop = () => {
       updatePhysics();
+      if (isMobile){
+        updatePhysics();
+      }
       physicsTimeRef.current += FIXED_DELTA;
     };
 
@@ -1364,8 +1364,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           antialias: false,
         });
 
-        // Устанавливаем частоту рендера в зависимости от типа устройства
-        PIXI.Ticker.shared.maxFPS = FIXED_FPS * RENDER_MULTIPLIER;
+        PIXI.Ticker.shared.maxFPS = FIXED_FPS;
         PIXI.Ticker.shared.minFPS = FIXED_FPS;
 
         if (canvasRef.current && pixiApp.canvas) {

@@ -733,7 +733,7 @@ export const MAP_BLOCKS: MapBlock[] = [
     }
   },
 
-  { 
+{ 
   id: "moving_triangle", 
   name: "Движущийся треугольник", 
   height: 500,
@@ -741,14 +741,15 @@ export const MAP_BLOCKS: MapBlock[] = [
     const obstacles: Obstacle[] = [];
     const spinners: Spinner[] = [];
 
-    const triangleWidth = 400;
-    const triangleHeight = 400;
+    // Уменьшаем размеры треугольника
+    const triangleWidth = 300; // уменьшено с 400
+    const triangleHeight = 300; // уменьшено с 400
     const centerX = mapWidth / 2;
-    const centerY = startY + 250;
+    // Смещаем треугольник ниже по вертикали
+    const centerY = startY + 300; // увеличено с 250
     const amplitude = 300;
     const speed = 2;
 
-    // Создаем графику для треугольника
     const triangle = new PIXI.Graphics();
     triangle.beginFill(0xFF6B6B);
     triangle.moveTo(0, -triangleHeight/2);
@@ -758,14 +759,12 @@ export const MAP_BLOCKS: MapBlock[] = [
     triangle.position.set(centerX, centerY);
     app.stage.addChild(triangle);
 
-    // Определяем вершины треугольника в локальных координатах
     const vertices = [
       new PIXI.Point(0, -triangleHeight/2),
       new PIXI.Point(triangleWidth/2, triangleHeight/2),
       new PIXI.Point(-triangleWidth/2, triangleHeight/2)
     ];
 
-    // Создаем полигональный obstacle
     const obstacle: Obstacle & { 
       direction: number; 
       startX: number;
@@ -783,7 +782,6 @@ export const MAP_BLOCKS: MapBlock[] = [
       startX: centerX,
       vertices: vertices,
       updateBounds: function() {
-        // Обновляем мировые координаты вершин при движении
         const globalPos = this.graphics!.position;
         this.vertices.forEach(vertex => {
           const global = this.graphics!.toGlobal(vertex);
@@ -793,14 +791,12 @@ export const MAP_BLOCKS: MapBlock[] = [
       }
     };
 
-    // Инициализируем границы
     obstacle.updateBounds();
 
     const updateTrianglePosition = () => {
       obstacle.x += obstacle.direction * speed;
       triangle.position.x = obstacle.x;
       
-      // Обновляем мировые координаты вершин
       obstacle.updateBounds();
 
       if (obstacle.x > obstacle.startX + amplitude) {
@@ -818,4 +814,5 @@ export const MAP_BLOCKS: MapBlock[] = [
     return { obstacles, spinners };
   }
 }
+
 ];

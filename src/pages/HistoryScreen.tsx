@@ -252,10 +252,10 @@ export function HistoryScreen() {
                       <span className="text-zinc-500 text-xs leading-snug">GAME #{game.game_id}</span>
                     </div>
                     <div className="rounded-[20px] flex justify-center items-center gap-2 overflow-hidden">
-                      <span className="text-zinc-500 text-xs leading-snug">
+                      <span className="text-zinc-500 text-xs leading-snug truncate max-w-[200px]">
                         {game.start_time ? formatDate(game.start_time) : 'Unknown'} - {game.music_title || 'No music'}
                       </span>
-                      <Play className="w-4 h-4 text-gray-400" />
+                      <Play className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     </div>
                   </div>
 

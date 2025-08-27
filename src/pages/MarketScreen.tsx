@@ -43,7 +43,6 @@ export function MarketScreen() {
             </div>
             <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex justify-center items-center gap-2 overflow-hidden">
               <ArrowUpDown className="w-4 h-4 text-neutral-500 rotate-90" />
-              <span className="text-neutral-50 text-sm leading-snug">Low to High</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
