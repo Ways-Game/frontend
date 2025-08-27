@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:18-alpine AS build-stage
 
 WORKDIR /app
 
@@ -9,22 +9,16 @@ RUN npm install --legacy-peer-deps
 COPY . .
 
 RUN npm run build
+RUN cp -r src/assets dist/
 
-# Production stage
 FROM node:18-alpine AS production
 
 WORKDIR /app
 
-# Копируем только необходимые файлы
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/package*.json ./
+COPY --from=build-stage /app/dist ./dist
 
-# Устанавливаем только production-зависимости
-RUN npm install --only=production --legacy-peer-deps
-
-# Устанавливаем serve для статического хостинга
 RUN npm install -g serve
 
-EXPOSE 3000
+EXPOSE 8080
 
-CMD ["serve", "-s", "build", "-l", "3000", "--no-clipboard"]
+CMD ["serve", "-s", "dist", "-l", "8080"]
