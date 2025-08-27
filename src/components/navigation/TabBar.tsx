@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { Smile, ShoppingBag, Users, Clock } from "lucide-react"
@@ -51,8 +51,8 @@ export function TabBar() {
     }
   }
   
-  // Effect to update highlight position
-  useEffect(() => {
+  // Function to update highlight position
+  const updateHighlightPosition = useCallback(() => {
     const activeTab = getActiveTab()
     const activeIndex = tabs.findIndex(tab => tab.id === activeTab)
     
@@ -72,6 +72,24 @@ export function TabBar() {
       prevActiveTab.current = activeTab
     }
   }, [location.pathname, location.state])
+
+  // Effect to update highlight position on route change
+  useEffect(() => {
+    updateHighlightPosition()
+  }, [updateHighlightPosition])
+
+  // Effect to handle container resize (scrollbar appearance/disappearance)
+  useEffect(() => {
+    if (!containerRef.current) return
+    
+    const resizeObserver = new ResizeObserver(() => {
+      updateHighlightPosition()
+    })
+    
+    resizeObserver.observe(containerRef.current)
+    
+    return () => resizeObserver.disconnect()
+  }, [])
   
   const handleTabChange = (tab: string) => {
     switch (tab) {

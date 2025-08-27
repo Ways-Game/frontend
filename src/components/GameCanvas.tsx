@@ -18,7 +18,7 @@ const FIXED_DELTA = 1000 / FIXED_FPS;
 const RENDER_MULTIPLIER = 
   typeof window !== 'undefined' && 
   /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
-    ? 2 // Удваиваем частоту рендера на мобильных устройствах
+    ? 5 // Удваиваем частоту рендера на мобильных устройствах
     : 1; // На ПК оставляем как есть
 const WORLD_WIDTH = 1200;
 const WORLD_HEIGHT = 2500;
