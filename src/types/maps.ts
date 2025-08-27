@@ -5,7 +5,7 @@ export interface Obstacle {
   y: number;
   width: number;
   height: number;
-  type: 'peg' | 'brick' | 'spinner' | 'barrier';
+  type: 'peg' | 'brick' | 'spinner' | 'barrier' | 'polygon';
   rotation?: number;
   destroyed?: boolean;
   graphics?: PIXI.Graphics;

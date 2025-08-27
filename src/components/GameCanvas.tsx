@@ -719,6 +719,41 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
             playMelodyNote();
           }
+        } else if (obstacle.type === "polygon") {
+          // Простая проверка коллизии с полигоном через bounding box
+          const halfW = precise.div(obstacle.width, 2);
+          const halfH = precise.div(obstacle.height, 2);
+
+          if (
+            precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+            precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+          ) {
+            const overlapX = precise.sub(
+              halfW + 24,
+              precise.abs(precise.sub(ball.x, obstacle.x))
+            );
+            const overlapY = precise.sub(
+              halfH + 24,
+              precise.abs(precise.sub(ball.y, obstacle.y))
+            );
+
+            if (overlapX < overlapY) {
+              if (ball.x < obstacle.x) {
+                ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
+              } else {
+                ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
+              }
+              ball.dx = precise.mul(ball.dx, -0.82);
+            } else {
+              if (ball.y < obstacle.y) {
+                ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+              } else {
+                ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
+              }
+              ball.dy = precise.mul(ball.dy, -0.82);
+            }
+            playMelodyNote();
+          }
         }
       });
 

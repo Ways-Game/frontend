@@ -42,9 +42,6 @@ export function ReffScreen() {
           }
         } catch (error) {
           console.error(`Profile fetch attempt ${attempt} failed:`, error);
-          if (attempt === retries) {
-            WebApp.showAlert("Failed to load data. Please try again later.");
-          }
         }
       }
       setLoading(false);
@@ -90,12 +87,6 @@ export function ReffScreen() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
-      {/* Refresh indicator */}
-      {refreshing && (
-        <div className="fixed top-0 left-0 right-0 bg-blue-500 text-white text-center py-2 z-50">
-          Updating data...
-        </div>
-      )}
 
       <div className="flex-1 p-2.5 flex flex-col justify-end gap-2.5 ">
         {/* Hero Banner */}

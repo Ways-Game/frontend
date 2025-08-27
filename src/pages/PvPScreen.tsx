@@ -58,7 +58,7 @@ export function PvPScreen() {
 
   const getRemainingSeconds = (game: GameDetailResponse) => {
     const elapsed = getElapsedSeconds(game);
-    return Math.max(0, 30 - elapsed);
+    return Math.max(0, 15 - elapsed);
   };
 
   // Function to handle LIVE game transition
@@ -248,7 +248,7 @@ export function PvPScreen() {
                       <div 
                         className="absolute inset-0 bg-white/20 transition-all duration-1000 ease-out"
                         style={{
-                          width: `${Math.min(100, (getElapsedSeconds(game) / 30) * 100)}%`,
+                          width: `${Math.min(100, (getElapsedSeconds(game) / 15) * 100)}%`,
                         }}
                       />
                     )}

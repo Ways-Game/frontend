@@ -430,7 +430,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           </div>
           
           <div className="flex items-center gap-2">
-            <span className="caption text-text-secondary bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-3 py-2">GAME #23245</span>
+            <span className="caption text-text-secondary bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-3 py-2">GAME #{gameData?.game_id}</span>
           </div>
         </div>
       </div>

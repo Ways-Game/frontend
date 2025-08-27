@@ -733,65 +733,89 @@ export const MAP_BLOCKS: MapBlock[] = [
     }
   },
 
-  {
-    id: "moving_triangle",
-    name: "Движущийся треугольник",
-    height: 500, // Увеличиваем высоту для большего треугольника
-    createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
-      const obstacles: Obstacle[] = [];
-      const spinners: Spinner[] = [];
+  { 
+  id: "moving_triangle", 
+  name: "Движущийся треугольник", 
+  height: 500,
+  createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
+    const obstacles: Obstacle[] = [];
+    const spinners: Spinner[] = [];
+
+    const triangleWidth = 400;
+    const triangleHeight = 400;
+    const centerX = mapWidth / 2;
+    const centerY = startY + 250;
+    const amplitude = 300;
+    const speed = 2;
+
+    // Создаем графику для треугольника
+    const triangle = new PIXI.Graphics();
+    triangle.beginFill(0xFF6B6B);
+    triangle.moveTo(0, -triangleHeight/2);
+    triangle.lineTo(triangleWidth/2, triangleHeight/2);
+    triangle.lineTo(-triangleWidth/2, triangleHeight/2);
+    triangle.endFill();
+    triangle.position.set(centerX, centerY);
+    app.stage.addChild(triangle);
+
+    // Определяем вершины треугольника в локальных координатах
+    const vertices = [
+      new PIXI.Point(0, -triangleHeight/2),
+      new PIXI.Point(triangleWidth/2, triangleHeight/2),
+      new PIXI.Point(-triangleWidth/2, triangleHeight/2)
+    ];
+
+    // Создаем полигональный obstacle
+    const obstacle: Obstacle & { 
+      direction: number; 
+      startX: number;
+      vertices: PIXI.Point[];
+      updateBounds: () => void;
+    } = {
+      x: centerX,
+      y: centerY,
+      width: triangleWidth,
+      height: triangleHeight,
+      type: 'polygon',
+      destroyed: false,
+      graphics: triangle,
+      direction: 1,
+      startX: centerX,
+      vertices: vertices,
+      updateBounds: function() {
+        // Обновляем мировые координаты вершин при движении
+        const globalPos = this.graphics!.position;
+        this.vertices.forEach(vertex => {
+          const global = this.graphics!.toGlobal(vertex);
+          vertex.x = global.x - globalPos.x;
+          vertex.y = global.y - globalPos.y;
+        });
+      }
+    };
+
+    // Инициализируем границы
+    obstacle.updateBounds();
+
+    const updateTrianglePosition = () => {
+      obstacle.x += obstacle.direction * speed;
+      triangle.position.x = obstacle.x;
       
-      // Увеличиваем треугольник в два раза
-      const triangleWidth = 400;
-      const triangleHeight = 400;
-      const centerX = mapWidth / 2;
-      const centerY = startY + 250; // Смещаем вниз из-за увеличенного размера
-      const amplitude = 300;
-      const speed = 2;
+      // Обновляем мировые координаты вершин
+      obstacle.updateBounds();
 
-      const triangle = new PIXI.Graphics();
-      triangle.beginFill(0xFF6B6B);
-      triangle.moveTo(0, -triangleHeight/2);
-      triangle.lineTo(triangleWidth/2, triangleHeight/2);
-      triangle.lineTo(-triangleWidth/2, triangleHeight/2);
-      triangle.endFill();
-      triangle.position.set(centerX, centerY);
-      app.stage.addChild(triangle);
+      if (obstacle.x > obstacle.startX + amplitude) {
+        obstacle.direction = -1;
+      } else if (obstacle.x < obstacle.startX - amplitude) {
+        obstacle.direction = 1;
+      }
 
-      // Создаем obstacle для столкновений
-      const obstacle: Obstacle & { direction: number; startX: number } = {
-        x: centerX,
-        y: centerY,
-        width: triangleWidth - 50,
-        height: triangleHeight,
-        type: 'barrier',
-        destroyed: false,
-        graphics: triangle,
-        direction: 1,
-        startX: centerX
-      };
+      requestAnimationFrame(updateTrianglePosition);
+    };
 
-      // Функция для обновления позиции треугольника
-      const updateTrianglePosition = () => {
-        obstacle.x += obstacle.direction * speed;
-        triangle.position.x = obstacle.x;
-        
-        // Меняем направление при достижении границ
-        if (obstacle.x > obstacle.startX + amplitude) {
-          obstacle.direction = -1;
-        } else if (obstacle.x < obstacle.startX - amplitude) {
-          obstacle.direction = 1;
-        }
-        
-        // Запускаем следующий кадр анимации
-        requestAnimationFrame(updateTrianglePosition);
-      };
-      
-      // Запускаем анимацию
-      updateTrianglePosition();
+    updateTrianglePosition();
+    obstacles.push(obstacle);
 
-      obstacles.push(obstacle);
-      return { obstacles, spinners };
-    }
+    return { obstacles, spinners };
   }
+}
 ];
