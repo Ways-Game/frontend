@@ -167,28 +167,6 @@ export const MAP_BLOCKS: MapBlock[] = [
         x += spacing;
       }
 
-      // Добавляем дополнительный элемент справа, если нужно
-      if (x - spacing + wallWidth/2 < mapWidth - wallWidth/2) {
-        const lastX = x - spacing;
-        const availableWidth = mapWidth - (lastX + wallWidth/2) - (spacing - wallWidth);
-        const adjustedWidth = Math.min(wallWidth, availableWidth);
-        x = lastX + wallWidth/2 + (spacing - wallWidth)/2 + adjustedWidth/2;
-        
-        const graphics = new PIXI.Graphics();
-        graphics.roundRect(x - adjustedWidth/2, y - wallHeight/2, adjustedWidth, wallHeight, 5);
-        graphics.fill(0x9B59B6).stroke({ width: 2, color: 0x7B4397 });
-        app.stage.addChild(graphics);
-        
-        obstacles.push({ 
-          x, y, 
-          width: adjustedWidth, 
-          height: wallHeight, 
-          type: 'barrier',
-          destroyed: false,
-          graphics
-        });
-      }
-
       // Row 2 - horizontal walls offset
       x = leftShift + wallWidth/2 + spacing/2;
       y = startY + 300;
@@ -207,28 +185,6 @@ export const MAP_BLOCKS: MapBlock[] = [
           graphics
         });
         x += spacing;
-      }
-
-      // Добавляем дополнительный элемент справа, если нужно
-      if (x - spacing + wallWidth/2 < mapWidth - wallWidth/2) {
-        const lastX = x - spacing;
-        const availableWidth = mapWidth - (lastX + wallWidth/2) - (spacing - wallWidth);
-        const adjustedWidth = Math.min(wallWidth, availableWidth);
-        x = lastX + wallWidth/2 + (spacing - wallWidth)/2 + adjustedWidth/2;
-        
-        const graphics = new PIXI.Graphics();
-        graphics.roundRect(x - adjustedWidth/2, y - wallHeight/2, adjustedWidth, wallHeight, 5);
-        graphics.fill(0x9B59B6).stroke({ width: 2, color: 0x7B4397 });
-        app.stage.addChild(graphics);
-        
-        obstacles.push({ 
-          x, y, 
-          width: adjustedWidth, 
-          height: wallHeight, 
-          type: 'barrier',
-          destroyed: false,
-          graphics
-        });
       }
 
       return { obstacles, spinners };
@@ -267,28 +223,6 @@ export const MAP_BLOCKS: MapBlock[] = [
         x += spacing;
       }
 
-      // Добавляем дополнительный элемент справа, если нужно
-      if (x - spacing + barrierWidth/2 < mapWidth - barrierWidth/2) {
-        const lastX = x - spacing;
-        const availableWidth = mapWidth - (lastX + barrierWidth/2) - (spacing - barrierWidth);
-        const adjustedWidth = Math.min(barrierWidth, availableWidth);
-        x = lastX + barrierWidth/2 + (spacing - barrierWidth)/2 + adjustedWidth/2;
-        
-        const graphics = new PIXI.Graphics();
-        graphics.roundRect(x - adjustedWidth/2, y - barrierHeight/2, adjustedWidth, barrierHeight, 5);
-        graphics.fill(0x666666).stroke({ width: 3, color: 0x444444 });
-        app.stage.addChild(graphics);
-        
-        obstacles.push({ 
-          x, y, 
-          width: adjustedWidth, 
-          height: barrierHeight, 
-          type: 'barrier',
-          destroyed: false,
-          graphics
-        });
-      }
-
       // Row 2 - offset
       x = leftShift + barrierWidth/2 + spacing/2;
       y = startY + 350;
@@ -307,28 +241,6 @@ export const MAP_BLOCKS: MapBlock[] = [
           graphics
         });
         x += spacing;
-      }
-
-      // Добавляем дополнительный элемент справа, если нужно
-      if (x - spacing + barrierWidth/2 < mapWidth - barrierWidth/2) {
-        const lastX = x - spacing;
-        const availableWidth = mapWidth - (lastX + barrierWidth/2) - (spacing - barrierWidth);
-        const adjustedWidth = Math.min(barrierWidth, availableWidth);
-        x = lastX + barrierWidth/2 + (spacing - barrierWidth)/2 + adjustedWidth/2;
-        
-        const graphics = new PIXI.Graphics();
-        graphics.roundRect(x - adjustedWidth/2, y - barrierHeight/2, adjustedWidth, barrierHeight, 5);
-        graphics.fill(0x666666).stroke({ width: 3, color: 0x444444 });
-        app.stage.addChild(graphics);
-        
-        obstacles.push({ 
-          x, y, 
-          width: adjustedWidth, 
-          height: barrierHeight, 
-          type: 'barrier',
-          destroyed: false,
-          graphics
-        });
       }
 
       return { obstacles, spinners };
@@ -370,29 +282,6 @@ export const MAP_BLOCKS: MapBlock[] = [
         i++;
       }
 
-      // Добавляем дополнительный элемент справа, если нужно
-      if (x - spacing + barWidth/2 < mapWidth - barWidth/2) {
-        const lastX = x - spacing;
-        const availableWidth = mapWidth - (lastX + barWidth/2) - (spacing - barWidth);
-        const adjustedWidth = Math.min(barWidth, availableWidth);
-        x = lastX + barWidth/2 + (spacing - barWidth)/2 + adjustedWidth/2;
-        
-        const bar = new PIXI.Graphics();
-        bar.rect(-adjustedWidth / 2, -barHeight / 2, adjustedWidth, barHeight).fill(0x3498db);
-        bar.position.set(x, y);
-        bar.rotation = -0.3;
-        app.stage.addChild(bar);
-        
-        obstacles.push({ 
-          x, y, 
-          width: adjustedWidth, 
-          height: barHeight, 
-          type: 'barrier',
-          destroyed: false,
-          graphics: bar
-        });
-      }
-
       // Row 2 - right rotation, offset
       x = leftShift + barWidth/2 + spacing/2;
       y = startY + 350;
@@ -412,29 +301,6 @@ export const MAP_BLOCKS: MapBlock[] = [
           graphics: bar
         });
         x += spacing;
-      }
-
-      // Добавляем дополнительный элемент справа, если нужно
-      if (x - spacing + barWidth/2 < mapWidth - barWidth/2) {
-        const lastX = x - spacing;
-        const availableWidth = mapWidth - (lastX + barWidth/2) - (spacing - barWidth);
-        const adjustedWidth = Math.min(barWidth, availableWidth);
-        x = lastX + barWidth/2 + (spacing - barWidth)/2 + adjustedWidth/2;
-        
-        const bar = new PIXI.Graphics();
-        bar.rect(-adjustedWidth / 2, -barHeight / 2, adjustedWidth, barHeight).fill(0x3498db);
-        bar.position.set(x, y);
-        bar.rotation = 0.3;
-        app.stage.addChild(bar);
-        
-        obstacles.push({ 
-          x, y, 
-          width: adjustedWidth, 
-          height: barHeight, 
-          type: 'barrier',
-          destroyed: false,
-          graphics: bar
-        });
       }
 
       return { obstacles, spinners };
@@ -473,27 +339,6 @@ export const MAP_BLOCKS: MapBlock[] = [
           });
           x += spacing;
         }
-
-        // Добавляем дополнительный элемент справа, если нужно
-        if (x - spacing + barWidth/2 < mapWidth - barWidth/2) {
-          const lastX = x - spacing;
-          const availableWidth = mapWidth - (lastX + barWidth/2) - (spacing - barWidth);
-          const adjustedWidth = Math.min(barWidth, availableWidth);
-          x = lastX + barWidth/2 + (spacing - barWidth)/2 + adjustedWidth/2;
-          
-          const bar = new PIXI.Graphics();
-          bar.roundRect(x - adjustedWidth/2, y - barHeight/2, adjustedWidth, barHeight, 5).fill(0xe74c3c);
-          app.stage.addChild(bar);
-          
-          obstacles.push({ 
-            x, y, 
-            width: adjustedWidth, 
-            height: barHeight, 
-            type: 'barrier',
-            destroyed: false,
-            graphics: bar
-          });
-        }
       }
 
       return { obstacles, spinners };
@@ -503,7 +348,7 @@ export const MAP_BLOCKS: MapBlock[] = [
   {
     id: "circles",
     name: "Круги",
-    height: 450, // Увеличиваем высоту для дополнительного ряда
+    height: 450,
     createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
       const obstacles: Obstacle[] = [];
       const spinners: Spinner[] = [];
@@ -512,7 +357,6 @@ export const MAP_BLOCKS: MapBlock[] = [
       const verticalSpacing = 160;
       const leftShift = 40;
 
-      // Первый ряд
       for (let row = 0; row < 3; row++) {
         let x = leftShift + (row % 2) * (horizontalSpacing / 2);
         
@@ -536,7 +380,6 @@ export const MAP_BLOCKS: MapBlock[] = [
           x += horizontalSpacing;
         }
       }
-
 
       return { obstacles, spinners };
     }
@@ -623,28 +466,6 @@ export const MAP_BLOCKS: MapBlock[] = [
         x += spacing;
       }
 
-      // Добавляем дополнительный элемент справа, если нужно
-      if (x - spacing + barWidth/2 < mapWidth - barWidth/2) {
-        const lastX = x - spacing;
-        const availableWidth = mapWidth - (lastX + barWidth/2) - (spacing - barWidth);
-        const adjustedWidth = Math.min(barWidth, availableWidth);
-        x = lastX + barWidth/2 + (spacing - barWidth)/2 + adjustedWidth/2;
-        
-        const bar = new PIXI.Graphics();
-        bar.roundRect(x - adjustedWidth/2, y - barHeight/2, adjustedWidth, barHeight, 8);
-        bar.fill(0x8e44ad).stroke({ width: 2, color: 0x663399 });
-        app.stage.addChild(bar);
-        
-        obstacles.push({ 
-          x, y, 
-          width: adjustedWidth, 
-          height: barHeight, 
-          type: 'barrier',
-          destroyed: false,
-          graphics: bar
-        });
-      }
-
       // Row 2 - smaller bars, offset
       const smallBarWidth = 150;
       x = leftShift + smallBarWidth/2 + spacing/3;
@@ -664,28 +485,6 @@ export const MAP_BLOCKS: MapBlock[] = [
           graphics: bar
         });
         x += spacing;
-      }
-
-      // Добавляем дополнительный элемент справа, если нужно
-      if (x - spacing + smallBarWidth/2 < mapWidth - smallBarWidth/2) {
-        const lastX = x - spacing;
-        const availableWidth = mapWidth - (lastX + smallBarWidth/2) - (spacing - smallBarWidth);
-        const adjustedWidth = Math.min(smallBarWidth, availableWidth);
-        x = lastX + smallBarWidth/2 + (spacing - smallBarWidth)/2 + adjustedWidth/2;
-        
-        const bar = new PIXI.Graphics();
-        bar.roundRect(x - adjustedWidth/2, y - barHeight/2, adjustedWidth, barHeight, 8);
-        bar.fill(0x8e44ad).stroke({ width: 2, color: 0x663399 });
-        app.stage.addChild(bar);
-        
-        obstacles.push({ 
-          x, y, 
-          width: adjustedWidth, 
-          height: barHeight, 
-          type: 'barrier',
-          destroyed: false,
-          graphics: bar
-        });
       }
 
       return { obstacles, spinners };
@@ -734,37 +533,37 @@ export const MAP_BLOCKS: MapBlock[] = [
   },
 
 { 
-  id: "moving_triangle", 
-  name: "Движущийся треугольник", 
+  id: "moving_square", 
+  name: "Движущийся квадрат", 
   height: 500,
   createBlock: (app: PIXI.Application, startY: number, mapWidth: number) => {
     const obstacles: Obstacle[] = [];
     const spinners: Spinner[] = [];
 
-    // Уменьшаем размеры треугольника
-    const triangleWidth = 300; // уменьшено с 400
-    const triangleHeight = 300; // уменьшено с 400
+    const squareSize = 300; // Размер квадрата
     const centerX = mapWidth / 2;
-    // Смещаем треугольник ниже по вертикали
-    const centerY = startY + 300; // увеличено с 250
+    const centerY = startY + 250;
     const amplitude = 300;
     const speed = 2;
 
-    const triangle = new PIXI.Graphics();
-    triangle.beginFill(0xFF6B6B);
-    triangle.moveTo(0, -triangleHeight/2);
-    triangle.lineTo(triangleWidth/2, triangleHeight/2);
-    triangle.lineTo(-triangleWidth/2, triangleHeight/2);
-    triangle.endFill();
-    triangle.position.set(centerX, centerY);
-    app.stage.addChild(triangle);
+    // Создаем графику для квадрата
+    const square = new PIXI.Graphics();
+    square.beginFill(0xFF6B6B);
+    square.drawRect(-squareSize/2, -squareSize/2, squareSize, squareSize);
+    square.endFill();
+    square.position.set(centerX, centerY);
+    app.stage.addChild(square);
 
+    // Определяем вершины квадрата в локальных координатах
+    const halfSize = squareSize / 2;
     const vertices = [
-      new PIXI.Point(0, -triangleHeight/2),
-      new PIXI.Point(triangleWidth/2, triangleHeight/2),
-      new PIXI.Point(-triangleWidth/2, triangleHeight/2)
+      new PIXI.Point(-halfSize, -halfSize),
+      new PIXI.Point(halfSize, -halfSize),
+      new PIXI.Point(halfSize, halfSize),
+      new PIXI.Point(-halfSize, halfSize)
     ];
 
+    // Создаем полигональный obstacle
     const obstacle: Obstacle & { 
       direction: number; 
       startX: number;
@@ -773,15 +572,16 @@ export const MAP_BLOCKS: MapBlock[] = [
     } = {
       x: centerX,
       y: centerY,
-      width: triangleWidth,
-      height: triangleHeight,
+      width: squareSize,
+      height: squareSize,
       type: 'polygon',
       destroyed: false,
-      graphics: triangle,
+      graphics: square,
       direction: 1,
       startX: centerX,
       vertices: vertices,
       updateBounds: function() {
+        // Обновляем мировые координаты вершин при движении
         const globalPos = this.graphics!.position;
         this.vertices.forEach(vertex => {
           const global = this.graphics!.toGlobal(vertex);
@@ -791,12 +591,14 @@ export const MAP_BLOCKS: MapBlock[] = [
       }
     };
 
+    // Инициализируем границы
     obstacle.updateBounds();
 
-    const updateTrianglePosition = () => {
+    const updateSquarePosition = () => {
       obstacle.x += obstacle.direction * speed;
-      triangle.position.x = obstacle.x;
+      square.position.x = obstacle.x;
       
+      // Обновляем мировые координаты вершин
       obstacle.updateBounds();
 
       if (obstacle.x > obstacle.startX + amplitude) {
@@ -805,10 +607,10 @@ export const MAP_BLOCKS: MapBlock[] = [
         obstacle.direction = 1;
       }
 
-      requestAnimationFrame(updateTrianglePosition);
+      requestAnimationFrame(updateSquarePosition);
     };
 
-    updateTrianglePosition();
+    updateSquarePosition();
     obstacles.push(obstacle);
 
     return { obstacles, spinners };

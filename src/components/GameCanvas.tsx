@@ -386,9 +386,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     // Deterministic physics loop / render functions (mostly unchanged)
     const gameLoop = () => {
       updatePhysics();
-      if (isMobile){
-        updatePhysics();
-      }
+
       physicsTimeRef.current += FIXED_DELTA;
     };
 
