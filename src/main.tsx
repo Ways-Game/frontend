@@ -4,7 +4,8 @@ import './index.css'
 import './styles/animations.css'
 
 // Expand Telegram WebView on mobile
-if ((window as any).Telegram && (window as any).Telegram.WebView && typeof (window as any).Telegram.expand === 'function') {
+console.log("Expanding Telegram WebView", (window as any).Telegram.WebView);
+if ((window as any).Telegram && (window as any).Telegram.WebView && typeof (window as any).Telegram.WebView.expand === 'function') {
   (window as any).Telegram.WebView.expand();
 }
 
