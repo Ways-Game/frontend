@@ -37,7 +37,6 @@ export function TabBar() {
   }, [])
   
   const getActiveTab = () => {
-    // Check if we're in game replay mode
     if (location.pathname === '/game' && location.state && (location.state as any).isReplay) {
       return 'history'
     }
@@ -51,18 +50,15 @@ export function TabBar() {
     }
   }
   
-  // Function to update highlight position
   const updateHighlightPosition = useCallback(() => {
     const activeTab = getActiveTab()
     const activeIndex = tabs.findIndex(tab => tab.id === activeTab)
     
     if (tabRefs.current[activeIndex] && containerRef.current) {
       const tabElement = tabRefs.current[activeIndex]
-      const containerRect = containerRef.current.getBoundingClientRect()
-      const tabRect = tabElement!.getBoundingClientRect()
-      
-      const newLeft = tabRect.left - containerRect.left
-      const newWidth = tabRect.width
+      // Используем offsetLeft вместо getBoundingClientRect()
+      const newLeft = tabElement!.offsetLeft
+      const newWidth = tabElement!.offsetWidth
       
       setHighlightStyle({
         left: newLeft,
@@ -73,23 +69,18 @@ export function TabBar() {
     }
   }, [location.pathname, location.state])
 
-  // Effect to update highlight position on route change
   useEffect(() => {
     updateHighlightPosition()
   }, [updateHighlightPosition])
 
-  // Effect to handle container resize (scrollbar appearance/disappearance)
   useEffect(() => {
-    if (!containerRef.current) return
-    
-    const resizeObserver = new ResizeObserver(() => {
+    const handleResize = () => {
       updateHighlightPosition()
-    })
-    
-    resizeObserver.observe(containerRef.current)
-    
-    return () => resizeObserver.disconnect()
-  }, [])
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [updateHighlightPosition])
   
   const handleTabChange = (tab: string) => {
     switch (tab) {
@@ -115,7 +106,7 @@ export function TabBar() {
     <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[600px] bg-[#00000090] h-[80px] border-border z-50 py-2 animate-in slide-in-from-bottom-4 duration-300">
       <div ref={containerRef} className="flex items-center justify-around h-full px-4 relative">
         <div 
-          className="absolute top-1/2 -translate-y-1/2   h-16 bg-zinc-800 rounded-3xl backdrop-blur-sm transition-all duration-500 ease-out"
+          className="absolute top-1/2 -translate-y-1/2 h-16 bg-zinc-800 rounded-3xl backdrop-blur-sm transition-all duration-500 ease-out"
           style={{
             left: `${highlightStyle.left}px`,
             width: `${highlightStyle.width}px`,
