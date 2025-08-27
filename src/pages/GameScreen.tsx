@@ -32,9 +32,11 @@ export function GameScreen() {
   const [touchStartY, setTouchStartY] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const dragStartY = useRef(0)
-  const dragStartScrollY = useRef(0) 
- const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0, music_content: "", music_title: "" })
-// ref to keep latest gameData accessible to callbacks
+  const dragStartScrollY = useRef(0)
+  const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0, music_content: "", music_title: "", winner_id: 0 })
+  const [winnerId, setWinnerId] = useState<string | null>(null)
+
+ // ref to keep latest gameData accessible to callbacks
 const gameDataRef = useRef<typeof gameData>(gameData);
 
 useEffect(() => {
@@ -43,7 +45,11 @@ useEffect(() => {
 
 // ref to defer autoStart until gameData is applied; store pending payload
 const autoStartPendingRef = useRef<any | null>(null);
-
+    useEffect(() => {
+    if (gameData.winner_id) {
+      setWinnerId(gameData.winner_id.toString())
+    }
+  }, [gameData])
 
   const handleClose = () => {
     try {
@@ -88,7 +94,8 @@ const autoStartPendingRef = useRef<any | null>(null);
         try {
           const gameDetails = await api.getGameById(currentGameData.game_id)
           if (!gameDetails.winner_id) {
-            await api.updateGameWinner(currentGameData.game_id, +playerId)
+            // убрал пока обновление победителя
+            //await api.updateGameWinner(currentGameData.game_id, +playerId)
           }
         } catch (e) {
           console.warn('Failed to check/update winner:', e)
@@ -135,7 +142,7 @@ const autoStartPendingRef = useRef<any | null>(null);
   }
 
 
-  const startGame = (dataFromState?: { seed: string; mapId: number[] | number; participants: any[] }) => {
+  const startGame = (dataFromState?: { seed: string; mapId: number[] | number; participants: any[]; winner_id: number }) => {
     const countdownDuration = 4;
     
     const currentRoundGameData = dataFromState || gameData;
@@ -181,7 +188,9 @@ const autoStartPendingRef = useRef<any | null>(null);
         prize: payload.total_price ?? payload.total_price ?? payload.prize ?? state.prize ?? 0,
         total_balls: payload.total_balls ?? payload.totalBalls ?? state.total_balls ?? 0,
         music_content: payload.music_content || state.music_content || "",
-        music_title: payload.music_title || state.music_title || ""
+        music_title: payload.music_title || state.music_title || "",
+        winner_id: payload.winner_id || state.winner_id || 0
+
       };
       setGameData(nextGameData as any);
       // Set speedUpTime if passed

@@ -152,6 +152,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Anti-stuck system
     const ballStatesRef = useRef<Map<string, BallState>>(new Map());
+    const winnerBallIdRef = useRef<string | null>(null);
+    const winnerPlayerIdRef = useRef<string | null>(null);
+    const physicsEnabledRef = useRef<boolean>(false);
 
     // RTTTL parser (fixed)
     const parseRTTTL = (rtttl: string) => {
@@ -410,7 +413,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       });
 
       ballsRef.current.forEach((ball) => {
-        if (ball.finished) return;
+        if (ball.finished || !physicsEnabledRef.current) return;
 
         // Инициализируем состояние мяча если нужно
         if (!ballStatesRef.current.has(ball.id)) {
@@ -928,6 +931,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       seed: string;
       mapId: number[] | number;
       participants: any[];
+      winner_id?: number;
+      speedUpTime?: number;
     }) => {
       console.log("Starting game with data:", gameData);
       console.log('gamecanvas speedtime1:', speedUpTime)
@@ -991,21 +996,143 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         Math.random = originalRandom;
       }
 
+      // --- HIDDEN SIMULATION to determine winner ball ---
+      const hiddenSpeedUp = gameData.speedUpTime || speedUpTime || 0;
+      if (hiddenSpeedUp > 0) {
+        // Create temporary simulation with same seed
+        const tempRandom = new DeterministicRandom(gameData.seed);
+        const tempBalls: Ball[] = [];
+        let tempBallIndex = 0;
+        
+        // Create temporary balls for simulation
+        for (const rawParticipant of gameData.participants || []) {
+          const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+          const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
+          if (ballsCount <= 0) continue;
+          
+          for (let i = 0; i < ballsCount; i++) {
+            const ballId = `${gameData.seed}_${tempBallIndex}`;
+            const startX = precise.add(50, precise.mul(tempRandom.next(), WORLD_WIDTH - 100));
+            const startY = precise.add(50, precise.mul(tempRandom.next(), WORLD_HEIGHT - 100));
+            const initialDX = precise.mul(precise.sub(tempRandom.next(), 0.5), 2);
+            
+            tempBalls.push({
+              id: ballId,
+              x: startX,
+              y: startY,
+              dx: initialDX,
+              dy: 0,
+              graphics: null as any,
+              color: 0x4ecdc4,
+              playerId: (user.id ?? rawParticipant.id ?? "").toString(),
+              finished: false,
+              bounceCount: 0,
+            });
+            tempBallIndex++;
+          }
+        }
+        
+        // Run hidden simulation
+        const frames = Math.floor(hiddenSpeedUp * FIXED_FPS);
+        const MAX_FRAMES = 3000;
+        const framesToSimulate = Math.min(frames, MAX_FRAMES);
+        
+        for (let frame = 0; frame < framesToSimulate; frame++) {
+          tempBalls.forEach((ball) => {
+            if (ball.finished) return;
+            ball.dy = precise.add(ball.dy, 0.08);
+            ball.x = precise.add(ball.x, ball.dx);
+            ball.y = precise.add(ball.y, ball.dy);
+            
+            // Simple win condition check
+            if (mapDataRef.current && ball.y > mapDataRef.current.winY) {
+              if (!winnerBallIdRef.current) {
+                winnerBallIdRef.current = ball.id;
+                console.log('DEBUG SIMULATION: Winner ball ID determined:', winnerBallIdRef.current);
+                console.log('DEBUG SIMULATION: Winner ball belongs to playerId:', ball.playerId);
+                console.log('DEBUG SIMULATION: Backend winner_id:', gameData.winner_id);
+                console.log('DEBUG SIMULATION: All temp balls:', tempBalls.map(b => ({ id: b.id, playerId: b.playerId })));
+              }
+              ball.finished = true;
+            }
+          });
+          
+          if (winnerBallIdRef.current) break;
+        }
+      }
+
+      // Create actual game balls with winner info
       const newBalls: Ball[] = [];
       let ballIndex = 0;
+      
+      // Reset random to same seed for consistent ball creation
+      randomRef.current = new DeterministicRandom(gameData.seed);
 
+      // Find winner participant and original ball owner
+      const winnerParticipant = gameData.participants.find(
+        p => (p.id ?? p.user?.id) == gameData.winner_id
+      );
+      
+      // Find which participant originally owns the winner ball
+      let originalBallOwner = null;
+      let tempBallIndex = 0;
+      for (const rawParticipant of gameData.participants || []) {
+        const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+        const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
+        for (let i = 0; i < ballsCount; i++) {
+          const ballId = `${gameData.seed}_${tempBallIndex}`;
+          if (ballId === winnerBallIdRef.current) {
+            originalBallOwner = rawParticipant;
+            break;
+          }
+          tempBallIndex++;
+        }
+        if (originalBallOwner) break;
+      }
+      
+      console.log('DEBUG: Winner search - winner_id:', gameData.winner_id);
+      console.log('DEBUG: Found winner participant:', winnerParticipant);
+      console.log('DEBUG: Original ball owner:', originalBallOwner);
+      console.log('DEBUG: Winner ball ID from simulation:', winnerBallIdRef.current);
+
+      // Create all balls with avatar swapping logic
       for (const rawParticipant of gameData.participants || []) {
         const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
         const ballsCount = Number(
           rawParticipant.balls_count ?? user.balls_count ?? 0
         );
-        const avatarUrl =
-          rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
+        let avatarUrl = rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
         const playerId = (user.id ?? rawParticipant.id ?? "").toString();
+        const isWinnerParticipant = (user.id ?? rawParticipant.id) == gameData.winner_id;
+        const isOriginalBallOwner = originalBallOwner && (user.id ?? rawParticipant.id) == (originalBallOwner.user?.id ?? originalBallOwner.id);
+
+        // Avatar swap logic
+        if (isWinnerParticipant && originalBallOwner) {
+          // Winner gets original ball owner's avatar
+          const originalUser = originalBallOwner.user ? originalBallOwner.user : originalBallOwner;
+          avatarUrl = originalBallOwner.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar;
+        } else if (isOriginalBallOwner && winnerParticipant) {
+          // Original ball owner gets winner's avatar
+          const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
+          avatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar;
+        }
 
         if (ballsCount <= 0) continue;
 
         for (let i = 0; i < ballsCount; i++) {
+          const ballId = `${gameData.seed}_${ballIndex}`;
+          const isWinnerBall = ballId === winnerBallIdRef.current;
+          
+          // Winner ball gets winner's playerId
+          let finalPlayerId = playerId;
+          if (isWinnerBall && winnerParticipant) {
+            const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
+            finalPlayerId = (winnerUser.id ?? winnerParticipant.id ?? "").toString();
+            console.log('DEBUG: Winner ball', ballId, 'gets playerId:', finalPlayerId, 'avatar:', avatarUrl);
+          } else {
+            console.log('DEBUG: Regular ball:', ballId, 'playerId:', playerId, 'avatar:', avatarUrl);
+          }
+
           const ballGraphics = new PIXI.Graphics();
 
           if (avatarUrl) {
@@ -1013,6 +1140,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               const encodedUrl = encodeURI(avatarUrl);
               const proxyUrl = "https://api.corsproxy.io/";
               const finalUrl = proxyUrl + encodedUrl;
+              
               const texture = await PIXI.Assets.load(finalUrl);
               ballGraphics
                 .circle(0, 0, 24)
@@ -1056,18 +1184,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           appRef.current.stage.addChild(indicator);
 
           newBalls.push({
-            id: `${gameData.seed}_${ballIndex}`,
+            id: ballId,
             x: startX,
             y: startY,
             dx: initialDX,
             dy: 0,
             graphics: ballGraphics,
             color: 0x4ecdc4,
-            playerId: playerId,
+            playerId: finalPlayerId,
             finished: false,
             indicator: indicator,
             bounceCount: 0,
           } as Ball);
+          
+          if (isWinnerBall) {
+            console.log('DEBUG: Winner ball created with ID:', ballId, 'playerId:', finalPlayerId);
+          } else {
+            console.log('DEBUG: Regular ball created with ID:', ballId, 'playerId:', finalPlayerId);
+          }
+          
           ballIndex++;
         }
       }
@@ -1085,6 +1220,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       setGameState("playing");
       onGameStart?.();
+      
+      // Physics will be enabled when openGateBarrier is called
         console.log('gamecanvas speedtime2:', speedUpTime)
 
       try {
@@ -1097,29 +1234,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         console.warn("Failed to init melody notes", e);
       }
 
-      // --- FAST-FORWARD (apply speedUpTime if provided) ---
-      try {
-        // speedUpTime is a prop in seconds (passed from parent)
-        const secondsToFastForward = Number(speedUpTime || 0);
-        console.log('gamecanvas speedtime:', secondsToFastForward)
-        if (secondsToFastForward > 0) {
-          const frames = Math.floor(secondsToFastForward * FIXED_FPS);
-          // cap frames to avoid freezing main thread; tune as needed
-          const MAX_FRAMES = 3000; // ~133s at 60fps — adjust if you like
-          const framesToSimulate = Math.min(frames, MAX_FRAMES);
-          console.log(framesToSimulate)
-          // perform physics updates synchronously
-          for (let i = 0; i < framesToSimulate; i++) {
-            updatePhysics();
-            physicsTimeRef.current += FIXED_DELTA;
-          }
-          console.log(`Fast-forwarded physics by ${framesToSimulate} frames (${(framesToSimulate/FIXED_FPS).toFixed(2)}s)`);
-        }
-      } catch (e) {
-        console.warn("Fast-forward failed:", e);
+      // Store winner player ID for later use
+      if (gameData.winner_id) {
+        winnerPlayerIdRef.current = gameData.winner_id.toString();
       }
-      // --- end fast-forward ---
 
+      // Start physics and render loops
       const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
       (gameLoopRef as any).physicsIntervalId = physicsInterval;
 
@@ -1193,6 +1313,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         width: mapDataRef.current?.mapWidth || 1200,
         height: mapDataRef.current?.mapHeight || 2500,
       }),
+      openGateBarrier: () => {
+        physicsEnabledRef.current = true;
+      },
+      setTornadoEffect: (active: boolean) => {
+        // Tornado effect implementation if needed
+      },
       destroyCanvas: () => {
         if ((gameLoopRef as any).physicsIntervalId) {
           clearInterval((gameLoopRef as any).physicsIntervalId);
