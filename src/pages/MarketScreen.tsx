@@ -3,6 +3,9 @@ import { Search, Filter, ArrowUpDown, X } from "lucide-react"
 import { useTelegram } from "@/hooks/useTelegram"
 import { api } from "@/services/api"
 import type { UserProfile } from "@/types/api"
+import marketGift from "@assets/market_gift.png"
+import refBack from "@assets/ref_back.png"
+import { starIcon, refIcon } from "@/assets/icons"
 
 export function MarketScreen() {
   const { user } = useTelegram()
@@ -29,7 +32,7 @@ export function MarketScreen() {
     name: 'Snoop Dogg',
     category: 'Random',
     price: 200,
-    image: '/src/assets/market_gift.png'
+    image: marketGift
   }))
 
   return (
@@ -48,12 +51,12 @@ export function MarketScreen() {
           <div className="flex items-center gap-2">
             {/* Balance Display */}
             <div className="h-8 px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-1.5">
-              <img src="/src/assets/icons/star.svg" className="w-4 h-4" alt="star" />
+              <img src={starIcon} className="w-4 h-4" alt="star" />
               <span className="text-white text-sm font-semibold">{userProfile?.balance || 0}</span>
             </div>
             
             <button className="h-8 px-3 py-2 bg-[#007AFF] rounded-[20px] flex items-center gap-1.5">
-              <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
+              <img src={refIcon} className="w-5 h-5" alt="ref" />
               <span className="text-white text-base font-semibold">Connect</span>
             </button>
           </div>
@@ -63,7 +66,7 @@ export function MarketScreen() {
         <div 
           className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden h-[154px]"
           style={{
-            backgroundImage: 'url(/src/assets/ref_back.png)',
+            backgroundImage: `url(${refBack})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
@@ -114,7 +117,7 @@ export function MarketScreen() {
               <div className="self-stretch px-[26px] py-[8px] bg-zinc-800 rounded-[20px] inline-flex justify-center items-center gap-2 overflow-hidden">
                 <div className="flex justify-start items-center gap-[4px]">
                   <span className="text-neutral-50 text-sm leading-snug text-[20px]">{product.price}</span>
-                  <img src="/src/assets/icons/star.svg" className="w-4 h-[18px]" alt="star" />
+                  <img src={starIcon} className="w-4 h-[18px]" alt="star" />
                 </div>
               </div>
             </div>

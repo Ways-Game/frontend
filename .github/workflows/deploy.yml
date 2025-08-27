@@ -9,6 +9,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.5.3
         with:
@@ -18,7 +21,6 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
-          ssh-keyscan -H github.com >> ~/.ssh/known_hosts
 
       - name: Deploy to Server
         run: |
@@ -35,5 +37,5 @@ jobs:
             cd frontend
             git pull origin main
             docker-compose down --remove-orphans
-            docker-compose up -d
+            docker-compose up -d --build
           "

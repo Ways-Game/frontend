@@ -6,6 +6,8 @@ import { Users, UserPlus, X, User, Link, RefreshCw } from "lucide-react";
 import { useTelegram } from "@/hooks/useTelegram";
 import { api } from "@/services/api";
 import WebApp from "@twa-dev/sdk";
+import refBack from "@assets/ref_back.png"
+import { starIcon, refIcon } from "@/assets/icons"
 
 const generateMockWallet = () => {
   const chars =
@@ -93,7 +95,7 @@ export function ReffScreen() {
         <div
           className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden"
           style={{
-            backgroundImage: "url(/src/assets/ref_back.png)",
+            backgroundImage: `url(${refBack})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
@@ -137,13 +139,13 @@ export function ReffScreen() {
             <div className="flex items-center gap-2">
               {/* Balance Display */}
               <div className="h-8 px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-1.5">
-                <img src="/src/assets/icons/star.svg" className="w-4 h-4" alt="star" />
+                <img src={starIcon} className="w-4 h-4" alt="star" />
                 <span className="text-white text-sm font-semibold">{userProfile?.balance || 0}</span>
               </div>
               
               <div className="px-1.5 py-2 bg-[#4378FF20] rounded-[20px] flex items-center gap-1.5 h-8">
                 <img
-                  src="/src/assets/icons/ref.svg"
+                  src={refIcon}
                   className="w-5 h-5"
                   alt="ref"
                 />
@@ -182,7 +184,7 @@ export function ReffScreen() {
               </span>
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2 w-fit">
                 <img
-                  src="/src/assets/icons/star.svg"
+                  src={starIcon}
                   className="w-4 h-4"
                   alt="star"
                 />
@@ -230,7 +232,7 @@ export function ReffScreen() {
                     {referralUser.earn_money || 0}
                   </span>
                   <img
-                    src="/src/assets/icons/star.svg"
+                    src={starIcon}
                     className="w-3.5 h-3.5"
                     alt="star"
                   />

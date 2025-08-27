@@ -1,6 +1,7 @@
 import React from "react"
 import { cn } from "@/lib/utils"
 import { Chip } from "@/components/ui/ways-chip"
+import { discIcon } from "@/assets/icons"
 
 interface PlayerItemProps {
   name: string
@@ -33,7 +34,7 @@ export function PlayerItem({ name, ballz, avatar, isYou = false, className }: Pl
       </div>
       
       <Chip variant="blue" className="h-7 flex items-center gap-1">
-        <img src="/src/assets/icons/disc.svg" className="w-3 h-3" alt="disc" />
+        <img src={discIcon} className="w-3 h-3" alt="disc" />
         {ballz} ballz
       </Chip>
     </div>

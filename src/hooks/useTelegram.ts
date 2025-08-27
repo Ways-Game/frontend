@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import WebApp from '@twa-dev/sdk'
 import { api } from '@/services/api'
 import { ExtendedUser, UseTelegramReturn, UserProfile } from '@/types'
+import ShareBack from "@assets/share_back.png"
 
 
 export const useTelegram = (): UseTelegramReturn => {
@@ -113,7 +114,7 @@ export const useTelegram = (): UseTelegramReturn => {
     
     try { 
       // Открываем нативный редактор историй Telegram
-      WebApp.shareToStory('/src/assets/share_back.png', {
+      WebApp.shareToStory(ShareBack, {
         text: isWinner ? '🎉 I won in Ways Ball Game! ' : '🎮 Playing Ways Ball Game!',
         widget_link: {
           url: user.start_link || 'https://t.me/ballsbotdevbackendbot',
