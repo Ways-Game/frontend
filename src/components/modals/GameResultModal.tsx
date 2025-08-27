@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react"
 import { X } from "lucide-react"
 import { useTelegram } from "@/hooks/useTelegram"
+import ShareBack from "@assets/share_back.png"
+import { starIcon, musicIcon, forwardIcon } from "@/assets/icons"
 
 interface GameResultModalProps {
   type: "win" | "lose"
@@ -72,7 +74,7 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
               </span>
             </div>
             <div className="flex items-center gap-0.5">
-              <img src="/src/assets/icons/star.svg" className="w-5 h-5" alt="star" />
+              <img src={starIcon} className="w-5 h-5" alt="star" />
 
               <span className="text-base">{`${isWin ? '+' : ''}${prize?.toLocaleString()}`}</span>
             </div>
@@ -83,7 +85,7 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
             <span className="text-zinc-500 text-xs">GAME #23245</span>
             <div className="flex items-center gap-1">
               <span className="text-zinc-500 text-xs">{musicTitle || "Unknown track"}</span>
-              <img src="/src/assets/icons/music.svg" className="w-4 h-4" alt="music" />
+              <img src={musicIcon} className="w-4 h-4" alt="music" />
             </div>
           </div>
         </div>
@@ -117,12 +119,12 @@ export function GameResultModal({ type, prize, onPlayAgain, onShare, onClose, wi
             }}
             className="w-full h-12 px-3 py-3.5 bg-zinc-800 rounded-2xl flex items-center justify-center gap-2.5 text-white text-base font-semibold relative overflow-hidden"
             style={{
-              backgroundImage: 'url(/src/assets/share_back.png)',
+              backgroundImage: `url(${ShareBack})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center'
             }}
           >
-            <img src="/src/assets/icons/forward.svg" className="w-6 h-6" alt="forward" />
+            <img src={forwardIcon} className="w-6 h-6" alt="forward" />
             Share results
           </button>
           

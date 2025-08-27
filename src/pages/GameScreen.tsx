@@ -10,6 +10,7 @@ import { Trophy, Volume2, VolumeX, X, Star, ChevronLeft, ChevronRight } from "lu
 import { api } from "@/services/api"
 import { useTelegram } from "@/hooks/useTelegram"
 import { TabBar } from "@/components/navigation/TabBar"
+import { starIcon, discIcon } from "@/assets/icons"
 
 export function GameScreen() {
   const navigate = useNavigate()
@@ -419,12 +420,12 @@ const autoStartPendingRef = useRef<any | null>(null);
       <div className="absolute top-0 left-0 right-0 z-20">
         <div className="flex items-center justify-between px-3 py-2.5">
           <Chip variant="prize">
-            <span className="text-base font-semibold">Prize: <img src="/src/assets/icons/star.svg" className="w-5 h-5 inline mx-1" alt="star" /> 110</span>
+            <span className="text-base font-semibold">Prize: <img src={starIcon} className="w-5 h-5 inline mx-1" alt="star" /> 110</span>
           </Chip>
           
           <div className="bg-gray-800/20 backdrop-blur-sm rounded-[20px] px-3 py-2">
             <div className="flex justify-start items-center gap-0.5">
-              <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
+              <img src={discIcon} className="w-4 h-4" alt="disc" />
               <div className="text-center text-neutral-50 text-sm leading-snug">{gameData?.total_balls ?? 0}</div>
             </div>
           </div>

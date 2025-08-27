@@ -13,6 +13,7 @@ import { api } from "@/services/api"
 import { GameState } from "@/types/api"
 import type { GameDetailResponse } from "@/types/api"
 import { useTelegram } from "@/hooks/useTelegram"
+import { refIcon, discIcon, starIcon, thickDiscIcon } from "@/assets/icons"
 
 const quickActions = ["210", "5", "10", "X2"]
 
@@ -270,7 +271,7 @@ export function PvPScreen() {
             onClick={handleConnect}
             className="h-8 px-3 py-2 bg-[#007AFF] rounded-[20px] flex items-center gap-1.5"
           >
-            <img src="/src/assets/icons/ref.svg" className="w-5 h-5" alt="ref" />
+            <img src={refIcon} className="w-5 h-5" alt="ref" />
             <span className="text-white text-base font-semibold">Connect</span>
           </button>
         </div>
@@ -297,7 +298,7 @@ export function PvPScreen() {
                 </div>
               )}
               <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
-                <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
+                <img src={discIcon} className="w-4 h-4" alt="disc" />
                 <span className="text-neutral-50 text-sm">{selectedGame?.total_balls || 0}<span className="text-neutral-50/40">/300</span></span>
               </div>
             </div>
@@ -314,7 +315,7 @@ export function PvPScreen() {
             >
               <span className="text-neutral-50 text-base">Prize:</span>
               <div className="flex items-center gap-0.5">
-                <img src="/src/assets/icons/star.svg" className="w-6 h-6" alt="star" />
+                <img src={starIcon} className="w-6 h-6" alt="star" />
                 <span className="text-neutral-50 text-base">{selectedGame?.total_price || 0}</span>
               </div>
             </div>
@@ -351,7 +352,7 @@ export function PvPScreen() {
                         <span className="text-neutral-50 text-sm">{username}</span>
                       </div>
                       <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-2">
-                        <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
+                        <img src={discIcon} className="w-4 h-4" alt="disc" />
                         <span className="text-neutral-50 text-sm">{ballsCount} ballz</span>
                       </div>
                     </div>
@@ -375,7 +376,7 @@ export function PvPScreen() {
               <div className="text-neutral-700 text-xl font-black">1</div>
             </div>
             <div className="inline-flex justify-start items-center gap-0.5">
-              <img src="/src/assets/icons/star.svg" className="w-3 h-3" alt="star" />
+              <img src={starIcon} className="w-3 h-3" alt="star" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">30</div>
             </div>
           </button>
@@ -384,7 +385,7 @@ export function PvPScreen() {
               <div className="text-neutral-700 text-xl font-black">3</div>
             </div>
             <div className="inline-flex justify-start items-center gap-0.5">
-              <img src="/src/assets/icons/star.svg" className="w-3 h-3" alt="star" />
+              <img src={starIcon} className="w-3 h-3" alt="star" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">90</div>
             </div>
           </button>
@@ -394,7 +395,7 @@ export function PvPScreen() {
               <div className="text-neutral-700 text-[10px] font-black uppercase -mt-1">balls</div>
             </div>
             <div className="inline-flex justify-start items-center gap-0.5">
-              <img src="/src/assets/icons/star.svg" className="w-3 h-3" alt="star" />
+              <img src={starIcon} className="w-3 h-3" alt="star" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">150</div>
             </div>
           </button>
@@ -403,7 +404,7 @@ export function PvPScreen() {
               <div className="text-neutral-700 text-xl font-black">10</div>
             </div>
             <div className="inline-flex justify-start items-center gap-0.5">
-              <img src="/src/assets/icons/star.svg" className="w-3 h-3" alt="star" />
+              <img src={starIcon} className="w-3 h-3" alt="star" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">300</div>
             </div>
           </button>
@@ -428,7 +429,7 @@ export function PvPScreen() {
               <div className="text-white text-xl font-black">X2</div>
             </div>
             <div className="inline-flex justify-start items-center gap-0.5">
-              <img src="/src/assets/icons/thick_disc.svg" className="w-3 h-3" alt="thick_disc" />
+              <img src={thickDiscIcon} className="w-3 h-3" alt="thick_disc" />
               <div className="text-center justify-center text-neutral-600 text-xs font-black leading-snug">X2</div>
             </div>
           </button>
@@ -440,7 +441,7 @@ export function PvPScreen() {
         <div className="px-14 py-2.5 bg-black/30 rounded-[243px] flex flex-col items-center justify-center gap-1">
           <div className="flex items-center gap-px">
             <span className="text-white text-xs font-medium">1 ballz = 30</span>
-            <img src="/src/assets/icons/star.svg" className="w-3.5 h-3.5" alt="star" />
+            <img src={starIcon} className="w-3.5 h-3.5" alt="star" />
           </div>
         </div>
       </div>

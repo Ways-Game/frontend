@@ -5,6 +5,7 @@ import { api } from "@/services/api"
 import { useTelegram } from "@/hooks/useTelegram"
 import { Pagination } from "@/components/ui/pagination"
 import type { GameDetailResponse, UserProfile } from "@/types/api"
+import { starIcon, discIcon } from "@/assets/icons"
 
 type FilterType = 'time' | 'luckiest' | 'solo'
 
@@ -278,7 +279,7 @@ export function HistoryScreen() {
                       </span>
                     </div>
                     <div className="flex justify-start items-center gap-0.5">
-                      <img src="/src/assets/icons/star.svg" className="w-6 h-6" alt="star" />
+                      <img src={starIcon} className="w-6 h-6" alt="star" />
                       <span className="text-neutral-50 text-base leading-snug">{game.total_price}</span>
                     </div>
                   </div>
@@ -287,7 +288,7 @@ export function HistoryScreen() {
                   <div className="self-stretch inline-flex justify-between items-center">
                     <div className="px-3 py-2 rounded-[20px] flex justify-center items-center gap-2 overflow-hidden">
                       <div className="flex justify-start items-center gap-0.5">
-                        <img src="/src/assets/icons/disc.svg" className="w-4 h-4" alt="disc" />
+                        <img src={discIcon} className="w-4 h-4" alt="disc" />
                         <span className="text-neutral-50 text-sm leading-snug">{userBalls}</span>
                         <span className="text-neutral-50/40 text-sm leading-snug"> vs {game.total_balls}</span>
                       </div>
