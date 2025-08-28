@@ -1444,7 +1444,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           appRef.current.stage.addChild(ballGraphics);
           appRef.current.stage.addChild(indicator);
 
-          newBalls.push({
+          // Создаём объект мяча и явно сохраняем userId в объекте и на graphics
+          const ballObj = {
             id: ballId,
             x: startX,
             y: startY,
@@ -1456,7 +1457,16 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             finished: false,
             indicator: indicator,
             bounceCount: 0,
-          } as Ball);
+          } as Ball & { userId?: string };
+
+          // runtime поле userId — пригодится на финальном экране
+          (ballObj as any).userId = finalPlayerId;
+
+          // также положим userId прямо на PIXI-объект, чтобы UI/код рендера мог его быстро прочитать
+          (ballGraphics as any).userId = finalPlayerId;
+          (indicator as any).userId = finalPlayerId;
+
+          newBalls.push(ballObj as Ball);
           
           if (isWinnerBall) {
             console.log('DEBUG: Winner ball created with ID:', ballId, 'playerId:', finalPlayerId);
@@ -1510,6 +1520,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           // Don't throw — keep the game running with whatever graphic exists
           console.warn("applyTextureToBallGraphics failed for", ball?.id, err);
         }
+        
+        // sync userId to graphics so other parts can read it from the display object
+        if ((ball as any).userId) {
+          try {
+            (ball.graphics as any).userId = (ball as any).userId;
+          } catch (e) {}
+        }
       };
 
       // ----------------- Исправленный блок: детерминированное применение / swap аватарок -----------------
@@ -1561,11 +1578,16 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               : null;
 
             // helper: apply texture and record avatarUrl
-            const applyIf = async (ball: Ball | null, url: string | null) => {
+            const applyIf = async (ball: Ball | null, url: string | null, userId?: string | null) => {
               if (!ball || !url) return;
               try {
                 await applyTextureToBallGraphics(ball, url);
                 (ball as any).avatarUrl = url;
+                // Если передан userId, обновляем его на мяче и graphics
+                if (userId !== undefined && userId !== null) {
+                  (ball as any).userId = userId;
+                  (ball.graphics as any).userId = userId;
+                }
               } catch (e) {
                 console.warn("applyIf failed for", ball?.id, e);
               }
@@ -1589,19 +1611,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               // Goal: winner ball should visually show backend winner's avatar.
               if (simWinnerBall && backendWinnerBall && backendWinnerBall.id !== simWinnerBall.id) {
                 // apply backend avatar on simWinnerBall, and original owner's avatar on backendWinnerBall
-                if (backendAvatar) await applyIf(simWinnerBall, backendAvatar);
-                if (originalAvatar) await applyIf(backendWinnerBall, originalAvatar);
+                if (backendAvatar) await applyIf(simWinnerBall, backendAvatar, backendWinnerId);
+                if (originalAvatar) await applyIf(backendWinnerBall, originalAvatar, originalOwnerId?.toString());
                 console.log("FORCED: swapped avatars between simWinnerBall", simWinnerBall.id, "and backendWinnerBall", backendWinnerBall.id);
               } else if (simWinnerBall && backendWinnerBall && backendWinnerBall.id === simWinnerBall.id) {
                 // rare: the backend winner's ball is the same as sim winner — nothing to swap, ensure correct avatar
                 if (backendAvatar) {
-                  await applyIf(simWinnerBall, backendAvatar);
+                  await applyIf(simWinnerBall, backendAvatar, backendWinnerId);
                   console.log("FORCED: backendWinnerBall === simWinnerBall, applied backend avatar to", simWinnerBall.id);
                 }
               } else if (simWinnerBall && !backendWinnerBall) {
                 // backend's ball not found (maybe different ball counts) — just ensure simWinnerBall shows backend avatar,
                 // and try to apply original avatar to any other ball of backendParticipant if exists
-                if (backendAvatar) await applyIf(simWinnerBall, backendAvatar);
+                if (backendAvatar) await applyIf(simWinnerBall, backendAvatar, backendWinnerId);
                 // try to find any ball from original owner (other than simWinnerBall) and apply original avatar
                 const originalOwnerBalls = originalOwnerId ? (ballsByPlayer.get(originalOwnerId.toString()) ?? []) : [];
                 const otherOriginalBall = originalOwnerBalls.find((b) => b.id !== simWinnerBall.id) ?? null;
@@ -1612,7 +1634,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 console.log("FORCED: applied avatars with fallback; simWinnerBall=", simWinnerBall.id);
               } else {
                 // ultimate fallback: just try to apply backend avatar to simWinnerBall and original avatar to any matching balls
-                if (simWinnerBall && backendAvatar) await applyIf(simWinnerBall, backendAvatar);
+                if (simWinnerBall && backendAvatar) await applyIf(simWinnerBall, backendAvatar, backendWinnerId);
                 if (originalOwnerId && originalAvatar) {
                   const origBalls = ballsByPlayer.get(originalOwnerId.toString()) ?? [];
                   for (const b of origBalls) {
