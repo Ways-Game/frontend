@@ -846,6 +846,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             }
           } else {
             if (actualWinnersRef.current.length === 0) {
+              console.log("WINNER in visual game", ball.id)
               actualWinnersRef.current = [ball.id];
               setActualWinners([...actualWinnersRef.current]);
               ball.finished = true;
@@ -1010,6 +1011,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       // Функция для запуска симуляции
       const runSimulation = (tempBalls: Ball[], framesToSimulate: number) => {
+        console.log('Starting simulation with', tempBalls.length, 'balls for', framesToSimulate, 'frames');
+        console.log('Map winY:', mapDataRef.current?.winY, 'deathY:', mapDataRef.current?.deathY);
+        
         isSimulationRef.current = true;
         const originalSoundEnabled = soundEnabledRef.current;
         soundEnabledRef.current = false;
@@ -1017,8 +1021,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         // Сохраняем оригинальные состояния
         const originalBalls = ballsRef.current;
         const originalBallStates = new Map(ballStatesRef.current);
-        const originalObstacles = [...obstaclesRef.current]; // Сохраняем препятствия
-        const originalSpinners = [...spinnersRef.current]; // Сохраняем спиннеры
+        const originalObstacles = [...obstaclesRef.current];
+        const originalSpinners = [...spinnersRef.current];
         
         // Используем временные мячи и состояния
         ballsRef.current = tempBalls;
@@ -1036,31 +1040,52 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         // Запускаем симуляцию с учетом препятствий
         for (let frame = 0; frame < framesToSimulate; frame++) {
-          updatePhysics(true); // true указывает на симуляцию
+          updatePhysics(true);
           
-          // Прерываем симуляцию, если найден победитель
-          if (winnerBallIdRef.current) break;
-        }
-
-        // Если победитель не найден, используем fallback - мяч с наибольшей Y-координатой
-        if (!winnerBallIdRef.current && tempBalls.length > 0) {
-          let farthestBall = tempBalls[0];
-          for (const ball of tempBalls) {
-            if (!ball.finished && ball.y > farthestBall.y) {
-              farthestBall = ball;
+          // Детальная отладка каждые 1000 кадров
+          if (frame % 1000 === 0) {
+            const activeBalls = tempBalls.filter(b => !b.finished);
+            if (activeBalls.length > 0) {
+              const maxY = Math.max(...activeBalls.map(b => b.y));
+              console.log(`SIMULATION frame ${frame}: ${activeBalls.length} active balls, max Y: ${maxY}`);
             }
           }
-          winnerBallIdRef.current = farthestBall.id;
-          console.log('SIMULATION: Fallback winner (farthest ball):', farthestBall.id, 'playerId:', farthestBall.playerId);
+          
+          if (winnerBallIdRef.current) {
+            console.log('SIMULATION: Winner found at frame', frame);
+            break;
+          }
+        }
+
+        // Улучшенный fallback механизм
+        if (!winnerBallIdRef.current && tempBalls.length > 0) {
+          const activeBalls = tempBalls.filter(ball => !ball.finished);
+          
+          if (activeBalls.length > 0) {
+            let farthestBall = activeBalls[0];
+            for (const ball of activeBalls) {
+              if (ball.y > farthestBall.y) {
+                farthestBall = ball;
+              }
+            }
+            winnerBallIdRef.current = farthestBall.id;
+            console.log('SIMULATION: Fallback winner (farthest active):', farthestBall.id, 'y=', farthestBall.y);
+          } else {
+            // Все мячи eliminated, берем первый
+            winnerBallIdRef.current = tempBalls[0].id;
+            console.log('SIMULATION: All eliminated, using first ball:', tempBalls[0].id);
+          }
         }
 
         // Восстанавливаем оригинальные состояния
         ballsRef.current = originalBalls;
-        obstaclesRef.current = originalObstacles; // Восстанавливаем препятствия
-        spinnersRef.current = originalSpinners; // Восстанавливаем спиннеры
+        obstaclesRef.current = originalObstacles;
+        spinnersRef.current = originalSpinners;
         ballStatesRef.current = originalBallStates;
         isSimulationRef.current = false;
         soundEnabledRef.current = originalSoundEnabled;
+        
+        console.log('Simulation completed. Winner ball:', winnerBallIdRef.current);
       };
 
       // --- HIDDEN SIMULATION to determine winner ball ---
@@ -1099,10 +1124,16 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         
         // Запускаем симуляцию
         const frames = Math.floor(hiddenSpeedUp * FIXED_FPS);
-        const MAX_FRAMES = 3000;
+        const MAX_FRAMES = 10000; // Увеличиваем лимит
         const framesToSimulate = Math.min(frames, MAX_FRAMES);
         
         runSimulation(tempBalls, framesToSimulate);
+      }
+      
+      // Проверяем, определен ли победитель
+      if (!winnerBallIdRef.current) {
+        console.error('SIMULATION: No winner determined! Using first ball as fallback');
+        winnerBallIdRef.current = `${gameData.seed}_0`;
       }
 
       // Create actual game balls with winner info
@@ -1140,17 +1171,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         console.log('SIMULATION: Using fallback owner for winner ball');
       }
       
+      console.log('DEBUG: Winner ball from simulation:', winnerBallIdRef.current);
       console.log('DEBUG: Original ball owner:', originalBallOwner);
+      console.log('DEBUG: All participants:', gameData.participants.map(p => ({ id: p.id || p.user?.id, balls: p.balls_count || p.user?.balls_count })));
       
       // Check if winner ball already belongs to backend winner - no swap needed
       const originalOwnerId = originalBallOwner?.user?.id ?? originalBallOwner?.id;
       const needsSwap = originalOwnerId != gameData.winner_id;
       
-      console.log('DEBUG: Winner search - winner_id:', gameData.winner_id);
+      console.log('DEBUG: Backend winner_id:', gameData.winner_id);
       console.log('DEBUG: Found winner participant:', winnerParticipant);
-      console.log('DEBUG: Original ball owner:', originalBallOwner);
       console.log('DEBUG: Winner ball ID from simulation:', winnerBallIdRef.current);
-      console.log('DEBUG: Needs swap:', needsSwap, 'originalOwnerId:', originalOwnerId);
+      console.log('DEBUG: Original ball owner ID:', originalOwnerId);
+      console.log('DEBUG: Needs swap:', needsSwap);
 
       // Create all balls with avatar swapping logic
       for (const rawParticipant of gameData.participants || []) {
