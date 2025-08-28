@@ -154,6 +154,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const ballStatesRef = useRef<Map<string, BallState>>(new Map());
     const winnerBallIdRef = useRef<string | null>(null);
     const winnerPlayerIdRef = useRef<string | null>(null);
+    
+    // Добавляем флаг для симуляции
+    const isSimulationRef = useRef(false);
 
 
     // RTTTL parser (fixed)
@@ -388,7 +391,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Deterministic physics loop / render functions (mostly unchanged)
     const gameLoop = () => {
-      updatePhysics();
+      updatePhysics(); // false по умолчанию
 
       physicsTimeRef.current += FIXED_DELTA;
     };
@@ -1005,20 +1008,68 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         Math.random = originalRandom;
       }
 
-      // --- HIDDEN SIMULATION to determine winner ball ---
-      const hiddenSpeedUp = 510;
-      if (hiddenSpeedUp > 0) {
-        // Save original state
+      // Функция для запуска симуляции
+      const runSimulation = (tempBalls: Ball[], framesToSimulate: number) => {
+        isSimulationRef.current = true;
+        const originalSoundEnabled = soundEnabledRef.current;
+        soundEnabledRef.current = false;
+
+        // Сохраняем оригинальные состояния
         const originalBalls = ballsRef.current;
         const originalBallStates = new Map(ballStatesRef.current);
-        const originalPhysicsTime = physicsTimeRef.current;
+        const originalObstacles = [...obstaclesRef.current]; // Сохраняем препятствия
+        const originalSpinners = [...spinnersRef.current]; // Сохраняем спиннеры
         
-        // Create temporary simulation with same seed
-        const tempRandom = new DeterministicRandom(gameData.seed);
+        // Используем временные мячи и состояния
+        ballsRef.current = tempBalls;
+        ballStatesRef.current.clear();
+        
+        // Инициализируем состояния для временных мячей
+        tempBalls.forEach(ball => {
+          ballStatesRef.current.set(ball.id, {
+            stuckFrames: 0,
+            lastPositions: [],
+            isStuck: false,
+            stuckRecoveryCountdown: 0
+          });
+        });
+
+        // Запускаем симуляцию с учетом препятствий
+        for (let frame = 0; frame < framesToSimulate; frame++) {
+          updatePhysics(true); // true указывает на симуляцию
+          
+          // Прерываем симуляцию, если найден победитель
+          if (winnerBallIdRef.current) break;
+        }
+
+        // Если победитель не найден, используем fallback - мяч с наибольшей Y-координатой
+        if (!winnerBallIdRef.current && tempBalls.length > 0) {
+          let farthestBall = tempBalls[0];
+          for (const ball of tempBalls) {
+            if (!ball.finished && ball.y > farthestBall.y) {
+              farthestBall = ball;
+            }
+          }
+          winnerBallIdRef.current = farthestBall.id;
+          console.log('SIMULATION: Fallback winner (farthest ball):', farthestBall.id, 'playerId:', farthestBall.playerId);
+        }
+
+        // Восстанавливаем оригинальные состояния
+        ballsRef.current = originalBalls;
+        obstaclesRef.current = originalObstacles; // Восстанавливаем препятствия
+        spinnersRef.current = originalSpinners; // Восстанавливаем спиннеры
+        ballStatesRef.current = originalBallStates;
+        isSimulationRef.current = false;
+        soundEnabledRef.current = originalSoundEnabled;
+      };
+
+      // --- HIDDEN SIMULATION to determine winner ball ---
+      const hiddenSpeedUp = 600;
+      if (hiddenSpeedUp > 0) {
+        // Создаем временные мячи для симуляции
         const tempBalls: Ball[] = [];
         let tempBallIndex = 0;
         
-        // Create temporary balls for simulation using same logic as visual game
         for (const rawParticipant of gameData.participants || []) {
           const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
           const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
@@ -1026,9 +1077,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           
           for (let i = 0; i < ballsCount; i++) {
             const ballId = `${gameData.seed}_${tempBallIndex}`;
-            const startX = precise.add(600, precise.mul(precise.sub(tempRandom.next(), 0.5), 200));
+            const startX = precise.add(600, precise.mul(precise.sub(randomRef.current!.next(), 0.5), 200));
             const startY = 100;
-            const initialDX = precise.mul(precise.sub(tempRandom.next(), 0.5), 2);
+            const initialDX = precise.mul(precise.sub(randomRef.current!.next(), 0.5), 2);
             
             tempBalls.push({
               id: ballId,
@@ -1046,32 +1097,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
         
-        // Set up simulation state
-        ballsRef.current = tempBalls;
-        ballStatesRef.current.clear();
-        tempBalls.forEach(ball => {
-          ballStatesRef.current.set(ball.id, {
-            stuckFrames: 0,
-            lastPositions: [],
-            isStuck: false,
-            stuckRecoveryCountdown: 0
-          });
-        });
-        
-        // Run simulation using same physics
+        // Запускаем симуляцию
         const frames = Math.floor(hiddenSpeedUp * FIXED_FPS);
         const MAX_FRAMES = 3000;
         const framesToSimulate = Math.min(frames, MAX_FRAMES);
         
-        for (let frame = 0; frame < framesToSimulate; frame++) {
-          updatePhysics(true);
-          if (winnerBallIdRef.current) break;
-        }
-        
-        // Restore original state
-        ballsRef.current = originalBalls;
-        ballStatesRef.current = originalBallStates;
-        physicsTimeRef.current = originalPhysicsTime;
+        runSimulation(tempBalls, framesToSimulate);
       }
 
       // Create actual game balls with winner info
@@ -1102,6 +1133,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
         if (originalBallOwner) break;
       }
+      
+      // Если не нашли владельца, используем первого участника как fallback
+      if (!originalBallOwner && gameData.participants && gameData.participants.length > 0) {
+        originalBallOwner = gameData.participants[0];
+        console.log('SIMULATION: Using fallback owner for winner ball');
+      }
+      
+      console.log('DEBUG: Original ball owner:', originalBallOwner);
       
       // Check if winner ball already belongs to backend winner - no swap needed
       const originalOwnerId = originalBallOwner?.user?.id ?? originalBallOwner?.id;
