@@ -531,6 +531,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 ),
                 0.82
               );
+              
+              if (!isSimulation) playMelodyNote();
             }
           } else if (obstacle.type === "barrier") {
             const halfW = precise.div(obstacle.width, 2);
@@ -597,6 +599,81 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   ball.bounceCount++;
                 }
               }
+              
+              if (!isSimulation) playMelodyNote();
+            }
+          } else if (obstacle.type === "brick") {
+            const halfW = precise.div(obstacle.width, 2);
+            const halfH = precise.div(obstacle.height, 2);
+
+            if (
+              precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+              precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+            ) {
+              (obstacle as any).hitCount = ((obstacle as any).hitCount || 0) + 1;
+              
+              if ((obstacle as any).hitCount >= 3) {
+                obstacle.destroyed = true;
+              }
+
+              const overlapX = precise.sub(
+                halfW + 24,
+                precise.abs(precise.sub(ball.x, obstacle.x))
+              );
+              const overlapY = precise.sub(
+                halfH + 24,
+                precise.abs(precise.sub(ball.y, obstacle.y))
+              );
+
+              if (overlapX < overlapY) {
+                ball.dx = precise.mul(ball.dx, -0.78);
+              } else {
+                ball.dy = precise.mul(ball.dy, -0.78);
+              }
+              
+              if (!isSimulation) playMelodyNote();
+            }
+          } else if (obstacle.type === "spinner") {
+            const dx = precise.sub(ball.x, obstacle.x);
+            const dy = precise.sub(ball.y, obstacle.y);
+            const distanceSq = precise.add(
+              precise.mul(dx, dx),
+              precise.mul(dy, dy)
+            );
+
+            if (distanceSq < 2304 && distanceSq > 0) {
+              const distance = precise.sqrt(distanceSq);
+              const normalX = precise.div(dx, distance);
+              const normalY = precise.div(dy, distance);
+
+              ball.x = precise.add(obstacle.x, precise.mul(normalX, 48));
+              ball.y = precise.add(obstacle.y, precise.mul(normalY, 48));
+
+              const tangentX = precise.mul(normalY, -1);
+              const tangentY = normalX;
+              const currentSpeed = precise.sqrt(
+                precise.add(
+                  precise.mul(ball.dx, ball.dx),
+                  precise.mul(ball.dy, ball.dy)
+                )
+              );
+
+              ball.dx = precise.mul(
+                precise.add(
+                  precise.mul(precise.mul(normalX, currentSpeed), 0.75),
+                  precise.mul(tangentX, 1.6)
+                ),
+                1.1
+              );
+              ball.dy = precise.mul(
+                precise.add(
+                  precise.mul(precise.mul(normalY, currentSpeed), 0.75),
+                  precise.mul(tangentY, 1.6)
+                ),
+                1.1
+              );
+
+              if (!isSimulation) playMelodyNote();
             }
           }
         });
@@ -653,6 +730,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               otherBall.dy,
               precise.mul(normalY, halfImpulse)
             );
+            
+            if (!isSimulation) playMelodyNote();
           }
         });
 
@@ -705,7 +784,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         spinner.rotation = precise.add(spinner.rotation, 0.08);
       });
 
-      const winner = updateBallPhysics(ballsRef.current, obstaclesRef.current, spinnersRef.current, mapDataRef.current, randomRef.current);
+      const winner = updateBallPhysics(ballsRef.current, obstaclesRef.current, spinnersRef.current, mapDataRef.current, randomRef.current, false);
       
       if (winner && actualWinnersRef.current.length === 0) {
         actualWinnersRef.current = [winner];
@@ -870,9 +949,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       // --- HIDDEN SIMULATION to determine winner ball ---
       const hiddenSpeedUp = gameData.speedUpTime || speedUpTime || 0;
+      console.log('DEBUG SIMULATION: Starting simulation with speedUpTime:', hiddenSpeedUp);
+      
       if (hiddenSpeedUp > 0) {
+        console.log('DEBUG SIMULATION: Running simulation...');
         const tempRandom = new DeterministicRandom(gameData.seed);
         const tempBalls: Ball[] = [];
+        const tempSpinners = [...spinnersRef.current.map(s => ({ ...s, rotation: s.rotation }))];
         let tempBallIndex = 0;
         
         // Create temporary balls identical to real game
@@ -903,19 +986,36 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
         
+        console.log('DEBUG SIMULATION: Created', tempBalls.length, 'balls for simulation');
+        
         // Run simulation with same physics
         const frames = Math.floor(hiddenSpeedUp * FIXED_FPS);
-        const MAX_FRAMES = 3000;
+        const MAX_FRAMES = 5000;
         const framesToSimulate = Math.min(frames, MAX_FRAMES);
         
+        console.log('DEBUG SIMULATION: Running', framesToSimulate, 'frames');
+        
         for (let frame = 0; frame < framesToSimulate; frame++) {
-          const winner = updateBallPhysics(tempBalls, obstaclesRef.current, spinnersRef.current, mapDataRef.current, tempRandom, true);
+          // Update spinners rotation (identical to main game)
+          tempSpinners.forEach((spinner) => {
+            spinner.rotation = precise.add(spinner.rotation, 0.08);
+          });
+          
+          const winner = updateBallPhysics(tempBalls, obstaclesRef.current, tempSpinners, mapDataRef.current, tempRandom, true);
           if (winner) {
             winnerBallIdRef.current = winner;
-            console.log('DEBUG SIMULATION: Winner found:', winner);
+            console.log('DEBUG SIMULATION: Winner found at frame', frame, ':', winner);
             break;
           }
+          
+          if (frame % 500 === 0) {
+            console.log('DEBUG SIMULATION: Frame', frame, 'active balls:', tempBalls.filter(b => !b.finished).length);
+          }
         }
+        
+        console.log('DEBUG SIMULATION: Simulation completed. Winner:', winnerBallIdRef.current);
+      } else {
+        console.log('DEBUG SIMULATION: No speedUpTime, skipping simulation');
       }
 
       // Create actual game balls with winner info
