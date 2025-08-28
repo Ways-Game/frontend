@@ -1273,13 +1273,26 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         isSimulationRef.current = true;
 
         try {
+          let simulationWinnerFound = false;
+          
           for (let frame = 0; frame < framesToSimulate; frame++) {
             updatePhysics(true);
 
-            // КРИТИЧНО: останавливаемся сразу при первом победителе
-            if (winnerBallIdRef.current) {
-              console.log('SIMULATION: Immediate winner detected at frame', frame, winnerBallIdRef.current);
-              break; // немедленная остановка при первом победителе
+            // Check if any ball reached winY (same logic as visual game)
+            const winY = mapDataRef.current?.winY || WORLD_HEIGHT - 100;
+            for (const ball of ballsRef.current) {
+              if (!ball.finished && ball.y > winY) {
+                winnerBallIdRef.current = ball.id;
+                ball.finished = true;
+                simulationWinnerFound = true;
+                console.log('SIMULATION: Winner found at frame', frame, 'ball:', ball.id);
+                break;
+              }
+            }
+            
+            // Stop simulation immediately when winner is found
+            if (simulationWinnerFound) {
+              break;
             }
 
             if (frame % 1000 === 0) {
@@ -1291,14 +1304,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             }
           }
 
-          // Fallback if no winner
+          // Fallback if no winner reached winY - use the same logic as visual game
           if (!winnerBallIdRef.current) {
             const activeBalls = ballsRef.current.filter(b => !b.finished);
             if (activeBalls.length > 0) {
+              // Same logic as visual game: find the ball with highest Y position
               let farthest = activeBalls[0];
-              for (const b of activeBalls) if (b.y > farthest.y) farthest = b;
+              for (const b of activeBalls) {
+                if (b.y > farthest.y) farthest = b;
+              }
               winnerBallIdRef.current = farthest.id;
-              console.log('SIMULATION: Fallback farthest winner:', farthest.id, 'y=', farthest.y);
+              console.log('SIMULATION: Fallback to farthest ball:', farthest.id, 'y=', farthest.y);
             } else if (ballsRef.current.length > 0) {
               winnerBallIdRef.current = ballsRef.current[0].id;
             } else {
