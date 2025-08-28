@@ -1084,297 +1084,838 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
+    const performOffscreenFullSimulation = async (
+  gameData: { seed: string; mapId: number[] | number; participants: any[] },
+  preSimSeconds = 500
+): Promise<string | null> => {
+  // Создаём offscreen canvas (если поддерживается — OffscreenCanvas, иначе обычный canvas)
+  let offscreenView: HTMLCanvasElement | OffscreenCanvas;
+  try {
+    if (typeof OffscreenCanvas !== "undefined") {
+      offscreenView = new OffscreenCanvas(WORLD_WIDTH, WORLD_HEIGHT);
+    } else {
+      const c = document.createElement("canvas");
+      c.width = WORLD_WIDTH;
+      c.height = WORLD_HEIGHT;
+      offscreenView = c;
+    }
+  } catch (e) {
+    // fallback if environment doesn't support OffscreenCanvas
+    const c = document.createElement("canvas");
+    c.width = WORLD_WIDTH;
+    c.height = WORLD_HEIGHT;
+    offscreenView = c;
+  }
+
+  // create isolated PIXI app attached to offscreen view
+  const simApp = new PIXI.Application({
+    view: offscreenView as any,
+    width: WORLD_WIDTH,
+    height: WORLD_HEIGHT,
+    resolution: 1,
+    autoDensity: false,
+    backgroundColor: 0x1a1a2e,
+    antialias: false,
+    // do not append to DOM
+  });
+
+  // local deterministic RNG
+  const simRandom = new DeterministicRandom(gameData.seed);
+
+  // local simulation containers (fully isolated)
+  let simMapData: any = null;
+  const simObstacles: any[] = [];
+  const simSpinners: any[] = [];
+  const simBalls: Ball[] = [];
+  const simBallStates: Map<string, BallState> = new Map();
+  const simActualWinners: string[] = [];
+  let simPhysicsTime = 0;
+
+  // helper: local checkCollisions (copied/adapted from original, but using local arrays)
+  const localCheckCollisions = (ball: Ball) => {
+    simObstacles.forEach((obstacle) => {
+      if (obstacle.destroyed) return;
+
+      if (obstacle.type === "peg") {
+        const dx = precise.sub(ball.x, obstacle.x);
+        const dy = precise.sub(ball.y, obstacle.y);
+        const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+        if (distanceSq < 1296) {
+          const distance = precise.sqrt(distanceSq) || 0.0001;
+          const normalX = precise.div(dx, distance);
+          const normalY = precise.div(dy, distance);
+
+          ball.x = precise.add(obstacle.x, precise.mul(normalX, 36));
+          ball.y = precise.add(obstacle.y, precise.mul(normalY, 36));
+
+          const dotProduct = precise.add(
+            precise.mul(ball.dx, normalX),
+            precise.mul(ball.dy, normalY)
+          );
+
+          ball.dx = precise.mul(
+            precise.sub(ball.dx, precise.mul(precise.mul(dotProduct, 2), normalX)),
+            0.82
+          );
+          ball.dy = precise.mul(
+            precise.sub(ball.dy, precise.mul(precise.mul(dotProduct, 2), normalY)),
+            0.82
+          );
+        }
+      } else if (obstacle.type === "barrier") {
+        const halfW = precise.div(obstacle.width, 2);
+        const halfH = precise.div(obstacle.height, 2);
+
+        if (
+          precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+          precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+        ) {
+          const overlapX = precise.sub(
+            halfW + 24,
+            precise.abs(precise.sub(ball.x, obstacle.x))
+          );
+          const overlapY = precise.sub(
+            halfH + 24,
+            precise.abs(precise.sub(ball.y, obstacle.y))
+          );
+
+          const isFunnelSegment = obstacle.width <= 8 && obstacle.height <= 8;
+
+          if (overlapX < overlapY) {
+            // боковое столкновение
+            if (ball.x < obstacle.x) {
+              ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
+            } else {
+              ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
+            }
+
+            if (isFunnelSegment) {
+              const centerX = WORLD_WIDTH / 2;
+              const directionToCenter = ball.x < centerX ? 1 : -1;
+              ball.dx = precise.mul(precise.abs(ball.dx), directionToCenter * 0.82);
+            } else {
+              ball.dx = precise.mul(ball.dx, -0.82);
+            }
+            ball.bounceCount++;
+          } else {
+            if (ball.y < obstacle.y) {
+              ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+
+              if (isFunnelSegment) {
+                const centerX = WORLD_WIDTH / 2;
+                const directionToCenter = ball.x < centerX ? 1 : -1;
+                ball.dy = precise.mul(ball.dy, -0.88);
+                ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 0.5));
+                ball.bounceCount++;
+              } else {
+                const verticalImpact = precise.abs(ball.dy);
+                const shouldStick =
+                  verticalImpact < 1.0 && ball.bounceCount >= 2;
+
+                if (shouldStick) {
+                  (ball as any).onSurface = true;
+                  (ball as any).surfaceObstacle = obstacle;
+                  ball.dy = 0;
+                } else {
+                  ball.dy = precise.mul(ball.dy, -0.78);
+                  ball.bounceCount++;
+                }
+              }
+            } else {
+              ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
+              ball.dy = precise.mul(ball.dy, -0.78);
+              ball.bounceCount++;
+            }
+          }
+        }
+      } else if (obstacle.type === "brick") {
+        const halfW = precise.div(obstacle.width, 2);
+        const halfH = precise.div(obstacle.height, 2);
+
+        if (
+          precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+          precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+        ) {
+          (obstacle as any).hitCount = ((obstacle as any).hitCount || 0) + 1;
+
+          if ((obstacle as any).hitCount >= 3) {
+            obstacle.destroyed = true;
+            // do not remove graphics here in sim
+          }
+
+          const overlapX = precise.sub(
+            halfW + 24,
+            precise.abs(precise.sub(ball.x, obstacle.x))
+          );
+          const overlapY = precise.sub(
+            halfH + 24,
+            precise.abs(precise.sub(ball.y, obstacle.y))
+          );
+
+          if (overlapX < overlapY) {
+            ball.dx = precise.mul(ball.dx, -0.78);
+          } else {
+            ball.dy = precise.mul(ball.dy, -0.78);
+          }
+        }
+      } else if (obstacle.type === "spinner") {
+        const dx = precise.sub(ball.x, obstacle.x);
+        const dy = precise.sub(ball.y, obstacle.y);
+        const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+
+        if (distanceSq < 2304 && distanceSq > 0) {
+          const distance = precise.sqrt(distanceSq) || 0.0001;
+          const normalX = precise.div(dx, distance);
+          const normalY = precise.div(dy, distance);
+
+          ball.x = precise.add(obstacle.x, precise.mul(normalX, 48));
+          ball.y = precise.add(obstacle.y, precise.mul(normalY, 48));
+
+          const tangentX = precise.mul(normalY, -1);
+          const tangentY = normalX;
+          const currentSpeed = precise.sqrt(
+            precise.add(precise.mul(ball.dx, ball.dx), precise.mul(ball.dy, ball.dy))
+          );
+
+          ball.dx = precise.mul(
+            precise.add(
+              precise.mul(precise.mul(normalX, currentSpeed), 0.75),
+              precise.mul(tangentX, 1.6)
+            ),
+            1.1
+          );
+          ball.dy = precise.mul(
+            precise.add(
+              precise.mul(precise.mul(normalY, currentSpeed), 0.75),
+              precise.mul(tangentY, 1.6)
+            ),
+            1.1
+          );
+        }
+      } else if (obstacle.type === "polygon") {
+        const halfW = precise.div(obstacle.width, 2);
+        const halfH = precise.div(obstacle.height, 2);
+
+        if (
+          precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+          precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+        ) {
+          const overlapX = precise.sub(
+            halfW + 24,
+            precise.abs(precise.sub(ball.x, obstacle.x))
+          );
+          const overlapY = precise.sub(
+            halfH + 24,
+            precise.abs(precise.sub(ball.y, obstacle.y))
+          );
+
+          if (overlapX < overlapY) {
+            if (ball.x < obstacle.x) {
+              ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
+            } else {
+              ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
+            }
+            ball.dx = precise.mul(ball.dx, -0.82);
+          } else {
+            if (ball.y < obstacle.y) {
+              ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+            } else {
+              ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
+            }
+            ball.dy = precise.mul(ball.dy, -0.82);
+          }
+        }
+      }
+    });
+
+    // ball-ball collisions (local)
+    simBalls.forEach((otherBall) => {
+      if (otherBall === ball || otherBall.finished) return;
+
+      const dx = precise.sub(ball.x, otherBall.x);
+      const dy = precise.sub(ball.y, otherBall.y);
+      const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+
+      if (distanceSq < 2304 && distanceSq > 0) {
+        const distance = precise.sqrt(distanceSq) || 0.0001;
+        const normalX = precise.div(dx, distance);
+        const normalY = precise.div(dy, distance);
+
+        const overlap = precise.sub(48, distance);
+        const halfOverlap = precise.mul(overlap, 0.5);
+
+        ball.x = precise.add(ball.x, precise.mul(normalX, halfOverlap));
+        ball.y = precise.add(ball.y, precise.mul(normalY, halfOverlap));
+        otherBall.x = precise.sub(otherBall.x, precise.mul(normalX, halfOverlap));
+        otherBall.y = precise.sub(otherBall.y, precise.mul(normalY, halfOverlap));
+
+        const relVelX = precise.sub(ball.dx, otherBall.dx);
+        const relVelY = precise.sub(ball.dy, otherBall.dy);
+        const relSpeed = precise.add(
+          precise.mul(relVelX, normalX),
+          precise.mul(relVelY, normalY)
+        );
+
+        if (relSpeed > 0) return;
+
+        const impulse = precise.mul(relSpeed, 0.86);
+        const halfImpulse = precise.mul(impulse, 0.5);
+
+        ball.dx = precise.sub(ball.dx, precise.mul(normalX, halfImpulse));
+        ball.dy = precise.sub(ball.dy, precise.mul(normalY, halfImpulse));
+        otherBall.dx = precise.add(otherBall.dx, precise.mul(normalX, halfImpulse));
+        otherBall.dy = precise.add(otherBall.dy, precise.mul(normalY, halfImpulse));
+      }
+    });
+
+    // bounds
+    if (ball.x < 24) {
+      ball.x = 24;
+      ball.dx = precise.mul(precise.abs(ball.dx), 0.82);
+    }
+    if (ball.x > 1176) {
+      ball.x = 1176;
+      ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), 0.82);
+    }
+
+    if (simMapData) {
+      const { winY, deathY } = simMapData;
+
+      if (ball.y > winY) {
+        if (simActualWinners.length === 0) {
+          simActualWinners.push(ball.id);
+          ball.finished = true;
+        }
+      }
+
+      if (ball.y > deathY && ball.y < deathY + 30) {
+        ball.finished = true;
+      }
+    }
+  };
+
+  // local updatePhysics (very close to original)
+  const localUpdatePhysics = () => {
+    if (!simRandom) return;
+
+    // spinner rotation
+    simSpinners.forEach((spinner) => {
+      spinner.rotation = precise.add(spinner.rotation, 0.08);
+    });
+
+    simBalls.forEach((ball) => {
+      if (ball.finished) return;
+
+      // init state
+      if (!simBallStates.has(ball.id)) {
+        simBallStates.set(ball.id, {
+          stuckFrames: 0,
+          lastPositions: [],
+          isStuck: false,
+          stuckRecoveryCountdown: 0,
+        });
+      }
+      const ballState = simBallStates.get(ball.id)!;
+
+      if (ballState.stuckRecoveryCountdown > 0) {
+        ballState.stuckRecoveryCountdown--;
+        if (ballState.stuckRecoveryCountdown === 0) {
+          ballState.stuckFrames = 0;
+          ballState.isStuck = false;
+          ballState.lastPositions = [];
+        }
+      }
+
+      ballState.lastPositions.push({ x: ball.x, y: ball.y });
+      if (ballState.lastPositions.length > 10) {
+        ballState.lastPositions.shift();
+      }
+
+      if (ballState.lastPositions.length >= 5) {
+        const first = ballState.lastPositions[0];
+        const last = ballState.lastPositions[ballState.lastPositions.length - 1];
+        const dx = precise.sub(last.x, first.x);
+        const dy = precise.sub(last.y, first.y);
+        const distance = precise.sqrt(precise.add(precise.mul(dx, dx), precise.mul(dy, dy)));
+        if (distance < 5) {
+          ballState.stuckFrames++;
+          if (ballState.stuckFrames > STUCK_THRESHOLD && !ballState.isStuck) {
+            ballState.isStuck = true;
+            ballState.stuckRecoveryCountdown = 60;
+            ball.dy = -STUCK_BOUNCE_FORCE;
+            ball.dx = precise.mul(precise.sub(simRandom.next(), 0.5), 4);
+          }
+        } else {
+          ballState.stuckFrames = 0;
+          ballState.isStuck = false;
+        }
+      }
+
+      ball.dy = precise.add(ball.dy, 0.08);
+      ball.dx = precise.mul(ball.dx, 0.9999800039998667);
+      ball.dy = precise.mul(ball.dy, 0.9999800039998667);
+
+      if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
+        const obs: any = (ball as any).surfaceObstacle;
+        const halfW = obs.width / 2;
+        const halfH = obs.height / 2;
+
+        const minSurfaceSpeed = 0.5;
+        const surfaceFriction = 0.995;
+
+        ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
+        ball.dy = 0;
+
+        if (precise.abs(ball.dx) > minSurfaceSpeed) {
+          ball.dx = precise.mul(ball.dx, surfaceFriction);
+        } else {
+          if (ball.dx === 0) {
+            ball.dx = simRandom.next() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
+          } else {
+            ball.dx = ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed;
+          }
+        }
+
+        const noise = simRandom.next();
+        const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
+        ball.dx = precise.add(ball.dx, noiseValue);
+
+        ball.x = precise.add(ball.x, ball.dx);
+
+        if (
+          obs.destroyed ||
+          ball.x < precise.sub(precise.sub(obs.x, halfW), 24) ||
+          ball.x > precise.add(precise.add(obs.x, halfW), 24)
+        ) {
+          (ball as any).onSurface = false;
+          (ball as any).surfaceObstacle = null;
+          ball.dy = 1;
+        }
+      } else {
+        ball.x = precise.add(ball.x, ball.dx);
+        ball.y = precise.add(ball.y, ball.dy);
+      }
+
+      localCheckCollisions(ball);
+    });
+
+    // remove finished but keep winners (stop simulation when first winner found)
+    // We leave simBalls as-is but we can early-stop if winner found (checked by caller)
+  };
+
+  try {
+    // generate full map using same function (this may create graphics; that's OK for offscreen)
+    simMapData = generateMapFromId(simApp, gameData.mapId, {
+      seed: gameData.seed,
+      worldWidth: WORLD_WIDTH,
+      worldHeight: WORLD_HEIGHT,
+      random: simRandom,
+    });
+
+    simObstacles.push(...(simMapData.obstacles || []).map((o: any) => ({ ...o })));
+    simSpinners.push(...(simMapData.spinners || []).map((s: any) => ({ ...s, rotation: s.rotation || 0 })));
+    // ensure winY/deathY exist
+    simMapData = {
+      ...simMapData,
+      mapWidth: WORLD_WIDTH,
+      mapHeight: WORLD_HEIGHT,
+      screenHeight: WORLD_HEIGHT,
+    };
+
+    // build sim balls (no external avatar loads — simple graphics suffice)
+    let ballIndex = 0;
+    for (const rawParticipant of gameData.participants || []) {
+      const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+      const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
+      const playerId = (user.id ?? rawParticipant.id ?? "").toString();
+      if (ballsCount <= 0) continue;
+      for (let i = 0; i < ballsCount; i++) {
+        const startX = precise.add(50, precise.mul(simRandom.next(), WORLD_WIDTH - 100));
+        const startY = precise.add(50, precise.mul(simRandom.next(), WORLD_HEIGHT - 100));
+        const initialDX = precise.mul(precise.sub(simRandom.next(), 0.5), 2);
+
+        const ballGraphics = new PIXI.Graphics();
+        ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
+        const indicator = new PIXI.Graphics();
+        indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
+        indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
+        indicator.visible = false;
+
+        ballGraphics.position.set(startX, startY);
+        indicator.position.set(startX, startY - 40);
+
+        // add to sim stage (not visible)
+        try {
+          simApp.stage.addChild(ballGraphics);
+          simApp.stage.addChild(indicator);
+        } catch (e) {}
+
+        simBalls.push({
+          id: `${gameData.seed}_${ballIndex}`,
+          x: startX,
+          y: startY,
+          dx: initialDX,
+          dy: 0,
+          graphics: ballGraphics,
+          color: 0x4ecdc4,
+          playerId,
+          finished: false,
+          indicator,
+          bounceCount: 0,
+        } as Ball);
+        ballIndex++;
+      }
+    }
+
+    // now run synchronous physics for requested seconds (or until winner found)
+    const frames = Math.floor(preSimSeconds * FIXED_FPS);
+    const MAX_FRAMES = 500 * FIXED_FPS;
+    const framesToSimulate = Math.min(frames, MAX_FRAMES);
+
+    for (let f = 0; f < framesToSimulate; f++) {
+      // update spinner rotations relative to simSpinners (kept in localUpdatePhysics)
+      // localUpdatePhysics uses simSpinners, simBalls etc.
+      localUpdatePhysics();
+      simPhysicsTime += FIXED_DELTA;
+
+      // if winner found — stop early
+      if (simActualWinners.length > 0) break;
+      // Also check winners discovered inside localCheckCollisions: detect ball.y > winY
+      // We need to evaluate after physics loop to collect finished winners
+      for (const b of simBalls) {
+        if (!b.finished) continue;
+        // if it's finished because of win and simActualWinners already contains, we break
+      }
+      // NOTE: localCheckCollisions already pushes to simActualWinners
+      // But our localCheckCollisions only set b.finished and pushed to simActualWinners,
+      // so the check above will catch it via simActualWinners.
+    }
+
+    // take first winner id if any
+    const winnerId = simActualWinners.length > 0 ? simActualWinners[0] : null;
+    return winnerId;
+  } catch (err) {
+    console.warn("Offscreen pre-simulation failed:", err);
+    return null;
+  } finally {
+    // cleanup simApp and its children
+    try {
+      simBalls.forEach((b) => {
+        try {
+          if (b.graphics) simApp.stage.removeChild(b.graphics);
+        } catch (e) {}
+        try {
+          if (b.indicator) simApp.stage.removeChild(b.indicator);
+        } catch (e) {}
+      });
+      (simObstacles || []).forEach((o: any) => {
+        try {
+          if (o.graphics) simApp.stage.removeChild(o.graphics);
+        } catch (e) {}
+      });
+      (simSpinners || []).forEach((s: any) => {
+        try {
+          if (s.graphics) simApp.stage.removeChild(s.graphics);
+        } catch (e) {}
+      });
+    } catch (e) {}
+
+    try {
+      simApp.destroy({ removeView: true });
+    } catch (e) {}
+  }
+};
+
     // Recreate PIXI app completely
     const recreatePixiApp = async () => {
+  // destroy existing app if any
+  try {
+    if (appRef.current) {
+      // remove children safely
       try {
-        if (appRef.current) {
+        ballsRef.current.forEach((ball) => {
           try {
-            ballsRef.current.forEach((ball) => {
-              try {
-                appRef.current!.stage.removeChild(ball.graphics);
-              } catch (e) {}
-              try {
-                if (ball.indicator) appRef.current!.stage.removeChild(ball.indicator);
-              } catch (e) {}
-            });
+            appRef.current!.stage.removeChild(ball.graphics);
           } catch (e) {}
-
           try {
-            appRef.current.destroy({ removeView: true });
+            if (ball.indicator) appRef.current!.stage.removeChild(ball.indicator);
           } catch (e) {}
-          appRef.current = null;
-        }
-      } catch (e) {
-        console.warn("Failed to destroy app for recreation", e);
-      }
+        });
+      } catch (e) {}
 
-      if (!canvasRef.current) return;
-      const deviceWidth = window.innerWidth;
-      const deviceHeight = window.innerHeight;
+      try {
+        appRef.current.destroy({ removeView: true });
+      } catch (e) {}
+      appRef.current = null;
+    }
+  } catch (e) {
+    console.warn("Failed to destroy app for recreation", e);
+  }
 
-      const pixiApp = new PIXI.Application();
-      await pixiApp.init({
-        width: deviceWidth,
-        height: deviceHeight - 80,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true,
-        backgroundColor: 0x1a1a2e,
-        antialias: false,
-      });
+  // create new PIXI app and attach to canvasRef
+  if (!canvasRef.current) return;
+  const deviceWidth = window.innerWidth;
+  const deviceHeight = window.innerHeight;
 
-      PIXI.Ticker.shared.maxFPS = FIXED_FPS;
-      PIXI.Ticker.shared.minFPS = FIXED_FPS;
+  const pixiApp = new PIXI.Application();
+  await pixiApp.init({
+    width: deviceWidth,
+    height: deviceHeight - 80,
+    resolution: window.devicePixelRatio || 1,
+    autoDensity: true,
+    backgroundColor: 0x1a1a2e,
+    antialias: false,
+  });
 
-      if (canvasRef.current && pixiApp.canvas) {
-        canvasRef.current.innerHTML = "";
-        canvasRef.current.appendChild(pixiApp.canvas);
-      }
+  PIXI.Ticker.shared.maxFPS = FIXED_FPS;
+  PIXI.Ticker.shared.minFPS = FIXED_FPS;
 
-      appRef.current = pixiApp;
+  // attach
+  if (canvasRef.current && pixiApp.canvas) {
+    canvasRef.current.innerHTML = ""; // clear container
+    canvasRef.current.appendChild(pixiApp.canvas);
+  }
 
-      if (appRef.current) {
-        appRef.current.stage.x = 0;
-        appRef.current.stage.y = 0;
-      }
+  appRef.current = pixiApp;
 
-      cameraModeRef.current = cameraMode;
-      scrollYRef.current = scrollY;
-    };
+  // reset stage transform
+  if (appRef.current) {
+    appRef.current.stage.x = 0;
+    appRef.current.stage.y = 0;
+  }
+
+  // ensure cameraModeRef / scrollYRef preserved
+  cameraModeRef.current = cameraMode;
+  scrollYRef.current = scrollY;
+};
 
     // Start game with pre-simulation and ball swapping logic
     const startGame = async (gameData: {
-      seed: string;
-      mapId: number[] | number;
-      participants: any[];
-      winner_id?: number;
-    }) => {
-      console.log("Starting game with data:", gameData);
-      await waitForApp();
-      if (!appRef.current) return;
+  seed: string;
+  mapId: number[] | number;
+  participants: any[];
+  winner_id?: number | string;
+}) => {
+  console.log("Starting game with data:", gameData);
+  await waitForApp();
+  if (!appRef.current) return;
 
-      // If winner_id is specified, perform hidden pre-simulation
-      const targetWinnerPlayerId = gameData.winner_id !== undefined ? String(gameData.winner_id) : null;
-      let preSimWinningBallId: string | null = null;
+  const targetWinnerPlayerId = gameData.winner_id !== undefined ? String(gameData.winner_id) : null;
+  let preSimWinningBallId: string | null = null;
 
-      if (targetWinnerPlayerId) {
-        try {
-          preSimWinningBallId = await performHiddenPreSimulation(gameData, 500);
-          console.log("Hidden pre-simulation winner id:", preSimWinningBallId);
-        } catch (e) {
-          console.warn("Pre-simulation error:", e);
-          preSimWinningBallId = null;
-        }
+  if (targetWinnerPlayerId) {
+    try {
+      // offscreen full simulation — здесь важно: полностью повторяем все физические правила
+      preSimWinningBallId = await performOffscreenFullSimulation(gameData, 500);
+      console.log("Offscreen pre-simulation winner id:", preSimWinningBallId);
+    } catch (e) {
+      console.warn("Offscreen pre-simulation error:", e);
+      preSimWinningBallId = null;
+    }
 
-        // Recreate canvas completely
-        try {
-          await recreatePixiApp();
-        } catch (e) {
-          console.warn("recreatePixiApp failed:", e);
-        }
-      }
+    // если хотим полностью пересоздать канвас визуально — делаем это
+    try {
+      await recreatePixiApp();
+    } catch (e) {
+      console.warn("recreatePixiApp failed:", e);
+    }
+  }
 
-      seedRef.current = gameData.seed;
-      randomRef.current = new DeterministicRandom(gameData.seed);
-      physicsTimeRef.current = 0;
-      lastTimeRef.current = 0;
-      accumulatorRef.current = 0;
+  // --- Дальше — основная логика старта, почти как было (fast-forward сохранён) ---
+  seedRef.current = gameData.seed;
+  randomRef.current = new DeterministicRandom(gameData.seed);
+  physicsTimeRef.current = 0;
+  lastTimeRef.current = 0;
+  accumulatorRef.current = 0;
 
-      setActualWinners([]);
-      actualWinnersRef.current = [];
-      ballsRef.current.forEach((ball) => {
-        appRef.current!.stage.removeChild(ball.graphics);
-        if (ball.indicator) {
-          appRef.current!.stage.removeChild(ball.indicator);
-        }
-      });
+  setActualWinners([]);
+  actualWinnersRef.current = [];
+  ballsRef.current.forEach((ball) => {
+    appRef.current!.stage.removeChild(ball.graphics);
+    if (ball.indicator) {
+      appRef.current!.stage.removeChild(ball.indicator);
+    }
+  });
 
-      const originalRandom = Math.random;
-      Math.random = () => randomRef.current!.next();
+  const originalRandom = Math.random;
+  Math.random = () => randomRef.current!.next();
 
-      try {
-        const mapData = generateMapFromId(appRef.current, gameData.mapId, {
-          seed: gameData.seed,
-          worldWidth: WORLD_WIDTH,
-          worldHeight: WORLD_HEIGHT,
-          random: randomRef.current,
-        });
+  try {
+    const mapData = generateMapFromId(appRef.current, gameData.mapId, {
+      seed: gameData.seed,
+      worldWidth: WORLD_WIDTH,
+      worldHeight: WORLD_HEIGHT,
+      random: randomRef.current,
+    });
 
-        obstaclesRef.current = mapData.obstacles.sort(
-          (a, b) => a.x + a.y - (b.x + b.y)
-        );
-        spinnersRef.current = mapData.spinners.sort(
-          (a, b) => a.x + a.y - (b.x + b.y)
-        );
+    obstaclesRef.current = mapData.obstacles.sort(
+      (a, b) => a.x + a.y - (b.x + b.y)
+    );
+    spinnersRef.current = mapData.spinners.sort(
+      (a, b) => a.x + a.y - (b.x + b.y)
+    );
 
-        mapDataRef.current = {
-          ...mapData,
-          mapWidth: WORLD_WIDTH,
-          mapHeight: WORLD_HEIGHT,
-          screenHeight: WORLD_HEIGHT,
-        };
-
-        if (appRef.current) {
-          appRef.current.stage.x = 0;
-          appRef.current.stage.y = 0;
-
-          const deviceWidth = window.innerWidth;
-          const deviceHeight = window.innerHeight - 80;
-          appRef.current.renderer.resize(deviceWidth, deviceHeight);
-          appRef.current.stage.scale.set(deviceWidth / WORLD_WIDTH);
-        }
-      } finally {
-        Math.random = originalRandom;
-      }
-
-      const newBalls: Ball[] = [];
-      let ballIndex = 0;
-
-      for (const rawParticipant of gameData.participants || []) {
-        const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-        const ballsCount = Number(
-          rawParticipant.balls_count ?? user.balls_count ?? 0
-        );
-        const avatarUrl =
-          rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
-        const playerId = (user.id ?? rawParticipant.id ?? "").toString();
-
-        if (ballsCount <= 0) continue;
-
-        for (let i = 0; i < ballsCount; i++) {
-          const ballGraphics = new PIXI.Graphics();
-
-          if (avatarUrl) {
-            try {
-              const encodedUrl = encodeURI(avatarUrl);
-              const proxyUrl = "https://api.corsproxy.io/";
-              const finalUrl = proxyUrl + encodedUrl;
-              const texture = await PIXI.Assets.load(finalUrl);
-              ballGraphics
-                .circle(0, 0, 24)
-                .fill({ texture })
-                .stroke({ width: 2, color: 0xffffff });
-            } catch (error) {
-              ballGraphics
-                .circle(0, 0, 24)
-                .fill(0x4ecdc4)
-                .stroke({ width: 2, color: 0xffffff });
-            }
-          } else {
-            ballGraphics
-              .circle(0, 0, 24)
-              .fill(0x4ecdc4)
-              .stroke({ width: 2, color: 0xffffff });
-          }
-
-          const indicator = new PIXI.Graphics();
-          indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
-          indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
-          indicator.visible = false;
-
-          const startX = precise.add(
-            50,
-            precise.mul(randomRef.current.next(), WORLD_WIDTH - 100)
-          );
-          const startY = precise.add(
-            50,
-            precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100)
-          );
-          const initialDX = precise.mul(
-            precise.sub(randomRef.current.next(), 0.5),
-            2
-          );
-
-          ballGraphics.position.set(startX, startY);
-          indicator.position.set(startX, startY - 40);
-
-          appRef.current.stage.addChild(ballGraphics);
-          appRef.current.stage.addChild(indicator);
-
-          newBalls.push({
-            id: `${gameData.seed}_${ballIndex}`,
-            x: startX,
-            y: startY,
-            dx: initialDX,
-            dy: 0,
-            graphics: ballGraphics,
-            color: 0x4ecdc4,
-            playerId: playerId,
-            finished: false,
-            indicator: indicator,
-            bounceCount: 0,
-          } as Ball);
-          ballIndex++;
-        }
-      }
-
-      // Perform ball swap if we have pre-simulation results
-      if (preSimWinningBallId && targetWinnerPlayerId) {
-        const idxWin = newBalls.findIndex((b) => b.id === preSimWinningBallId);
-        const idxTarget = newBalls.findIndex((b) => b.playerId === targetWinnerPlayerId);
-        if (idxWin > -1 && idxTarget > -1 && idxWin !== idxTarget) {
-          // Swap balls in array
-          const tmp = newBalls[idxWin];
-          newBalls[idxWin] = newBalls[idxTarget];
-          newBalls[idxTarget] = tmp;
-          console.log("Swapped balls:", preSimWinningBallId, "↔", targetWinnerPlayerId);
-        } else {
-          console.log("Swap not performed — indexes:", idxWin, idxTarget);
-        }
-      }
-
-      ballsRef.current = newBalls;
-
-      const gateBarrier = (mapDataRef.current as any)?.gateBarrier;
-      if (gateBarrier) {
-        const index = obstaclesRef.current.indexOf(gateBarrier);
-        if (index > -1) {
-          obstaclesRef.current.splice(index, 1);
-        }
-      }
-        console.log('gamecanvas speedtime1:', speedUpTime)
-
-      setGameState("playing");
-      onGameStart?.();
-        console.log('gamecanvas speedtime2:', speedUpTime)
-
-      try {
-        const rtttlContent = musicContent || RTTTL;
-        if (rtttlContent && typeof rtttlContent === "string") {
-          melodyNotesRef.current = parseRTTTL(rtttlContent);
-          currentNoteIndexRef.current = 0;
-        }
-      } catch (e) {
-        console.warn("Failed to init melody notes", e);
-      }
-
-      // --- FAST-FORWARD (apply speedUpTime if provided) ---
-      try {
-        // speedUpTime is a prop in seconds (passed from parent)
-        const secondsToFastForward = Number(speedUpTime || 0);
-        console.log('gamecanvas speedtime:', secondsToFastForward)
-        if (secondsToFastForward > 0) {
-          const frames = Math.floor(secondsToFastForward * FIXED_FPS);
-          // cap frames to avoid freezing main thread; tune as needed
-          const MAX_FRAMES = 3000; // ~133s at 60fps — adjust if you like
-          const framesToSimulate = Math.min(frames, MAX_FRAMES);
-          console.log(framesToSimulate)
-          // perform physics updates synchronously
-          for (let i = 0; i < framesToSimulate; i++) {
-            updatePhysics();
-            physicsTimeRef.current += FIXED_DELTA;
-          }
-          console.log(`Fast-forwarded physics by ${framesToSimulate} frames (${(framesToSimulate/FIXED_FPS).toFixed(2)}s)`);
-        }
-      } catch (e) {
-        console.warn("Fast-forward failed:", e);
-      }
-      // --- end fast-forward ---
-
-      const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
-      (gameLoopRef as any).physicsIntervalId = physicsInterval;
-
-      gameLoopRef.current = requestAnimationFrame(renderLoop);
+    mapDataRef.current = {
+      ...mapData,
+      mapWidth: WORLD_WIDTH,
+      mapHeight: WORLD_HEIGHT,
+      screenHeight: WORLD_HEIGHT,
     };
+
+    if (appRef.current) {
+      appRef.current.stage.x = 0;
+      appRef.current.stage.y = 0;
+
+      const deviceWidth = window.innerWidth;
+      const deviceHeight = window.innerHeight - 80;
+      appRef.current.renderer.resize(deviceWidth, deviceHeight);
+      appRef.current.stage.scale.set(deviceWidth / WORLD_WIDTH);
+    }
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  const newBalls: Ball[] = [];
+  let ballIndex = 0;
+
+  for (const rawParticipant of gameData.participants || []) {
+    const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+    const ballsCount = Number(
+      rawParticipant.balls_count ?? user.balls_count ?? 0
+    );
+    const avatarUrl =
+      rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
+    const playerId = (user.id ?? rawParticipant.id ?? "").toString();
+
+    if (ballsCount <= 0) continue;
+
+    for (let i = 0; i < ballsCount; i++) {
+      const ballGraphics = new PIXI.Graphics();
+
+      if (avatarUrl) {
+        try {
+          const encodedUrl = encodeURI(avatarUrl);
+          const proxyUrl = "https://api.corsproxy.io/";
+          const finalUrl = proxyUrl + encodedUrl;
+          const texture = await PIXI.Assets.load(finalUrl);
+          ballGraphics
+            .circle(0, 0, 24)
+            .fill({ texture })
+            .stroke({ width: 2, color: 0xffffff });
+        } catch (error) {
+          ballGraphics
+            .circle(0, 0, 24)
+            .fill(0x4ecdc4)
+            .stroke({ width: 2, color: 0xffffff });
+        }
+      } else {
+        ballGraphics
+          .circle(0, 0, 24)
+          .fill(0x4ecdc4)
+          .stroke({ width: 2, color: 0xffffff });
+      }
+
+      const indicator = new PIXI.Graphics();
+      indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
+      indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
+      indicator.visible = false;
+
+      const startX = precise.add(
+        50,
+        precise.mul(randomRef.current.next(), WORLD_WIDTH - 100)
+      );
+      const startY = precise.add(
+        50,
+        precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100)
+      );
+      const initialDX = precise.mul(
+        precise.sub(randomRef.current.next(), 0.5),
+        2
+      );
+
+      ballGraphics.position.set(startX, startY);
+      indicator.position.set(startX, startY - 40);
+
+      appRef.current.stage.addChild(ballGraphics);
+      appRef.current.stage.addChild(indicator);
+
+      newBalls.push({
+        id: `${gameData.seed}_${ballIndex}`,
+        x: startX,
+        y: startY,
+        dx: initialDX,
+        dy: 0,
+        graphics: ballGraphics,
+        color: 0x4ecdc4,
+        playerId: playerId,
+        finished: false,
+        indicator: indicator,
+        bounceCount: 0,
+      } as Ball);
+      ballIndex++;
+    }
+  }
+
+  // Если offscreen дал победителя и у нас есть target player id — делаем swap
+  if (preSimWinningBallId && targetWinnerPlayerId) {
+    const idxWin = newBalls.findIndex((b) => b.id === preSimWinningBallId);
+    const idxTarget = newBalls.findIndex((b) => b.playerId === targetWinnerPlayerId);
+    if (idxWin > -1 && idxTarget > -1 && idxWin !== idxTarget) {
+      const tmp = newBalls[idxWin];
+      newBalls[idxWin] = newBalls[idxTarget];
+      newBalls[idxTarget] = tmp;
+      console.log("Swapped balls:", preSimWinningBallId, "↔", targetWinnerPlayerId);
+    } else {
+      console.log("Swap not performed — indexes:", idxWin, idxTarget);
+    }
+  }
+
+  ballsRef.current = newBalls;
+
+  const gateBarrier = (mapDataRef.current as any)?.gateBarrier;
+  if (gateBarrier) {
+    const index = obstaclesRef.current.indexOf(gateBarrier);
+    if (index > -1) {
+      obstaclesRef.current.splice(index, 1);
+    }
+  }
+
+  setGameState("playing");
+  onGameStart?.();
+
+  try {
+    const rtttlContent = musicContent || RTTTL;
+    if (rtttlContent && typeof rtttlContent === "string") {
+      melodyNotesRef.current = parseRTTTL(rtttlContent);
+      currentNoteIndexRef.current = 0;
+    }
+  } catch (e) {
+    console.warn("Failed to init melody notes", e);
+  }
+
+  // --- FAST-FORWARD (apply speedUpTime if provided) ---
+  try {
+    const secondsToFastForward = Number(speedUpTime || 0);
+    if (secondsToFastForward > 0) {
+      const frames = Math.floor(secondsToFastForward * FIXED_FPS);
+      const MAX_FRAMES = 3000;
+      const framesToSimulate = Math.min(frames, MAX_FRAMES);
+      for (let i = 0; i < framesToSimulate; i++) {
+        updatePhysics();
+        physicsTimeRef.current += FIXED_DELTA;
+      }
+      console.log(`Fast-forwarded physics by ${framesToSimulate} frames (${(framesToSimulate/FIXED_FPS).toFixed(2)}s)`);
+    }
+  } catch (e) {
+    console.warn("Fast-forward failed:", e);
+  }
+  // --- end fast-forward ---
+
+  const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
+  (gameLoopRef as any).physicsIntervalId = physicsInterval;
+
+  gameLoopRef.current = requestAnimationFrame(renderLoop);
+};
 
     const resetGame = () => {
       if ((gameLoopRef as any).physicsIntervalId) {
