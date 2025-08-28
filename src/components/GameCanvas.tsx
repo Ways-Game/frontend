@@ -1039,57 +1039,74 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         Math.random = originalRandom;
       }
 
-      // Замените старую runSimulation этой реализацией:
-      const runSimulation = (tempBalls: Ball[], framesToSimulate: number) => {
-        // Declare variables at function scope so they're available in finally block
-        let originalBalls: Ball[];
-        let originalBallStates: Map<string, BallState>;
-        let originalObstacles: Obstacle[];
-        let originalSpinners: Spinner[];
-        let originalRandom: DeterministicRandom | null;
-        let originalSound: boolean;
+      // Run complete deterministic simulation until winner is found
+      const runFullDeterministicSimulation = () => {
+        console.log('Starting FULL deterministic simulation until winner is found');
         
+        // Clear previous
+        winnerBallIdRef.current = null;
+        simulatedInitialStatesRef.current.clear();
+
+        // Backup world
+        const originalBalls = ballsRef.current;
+        const originalBallStates = new Map(ballStatesRef.current);
+        const originalObstacles = obstaclesRef.current;
+        const originalSpinners = spinnersRef.current;
+        const originalRandom = randomRef.current;
+        const originalSound = soundEnabledRef.current;
+
         try {
-          console.log('SIM: runSimulation start, balls=', tempBalls.length, 'frames=', framesToSimulate);
+          // Use same seed as visual creation
+          const simRandom = new DeterministicRandom(gameData.seed);
 
-          // clear any previous winner
-          winnerBallIdRef.current = null;
+          // Build temp balls exactly like visual creation will do
+          const tempBalls: Ball[] = [];
+          let tempIndex = 0;
+          for (const rawParticipant of gameData.participants || []) {
+            const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+            const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
+            if (ballsCount <= 0) continue;
 
-          // Save originals
-          originalBalls = ballsRef.current;
-          originalBallStates = new Map(ballStatesRef.current);
-          originalObstacles = obstaclesRef.current;
-          originalSpinners = spinnersRef.current;
-          originalRandom = randomRef.current;
-          originalSound = soundEnabledRef.current;
+            for (let i = 0; i < ballsCount; i++) {
+              const ballId = `${gameData.seed}_${tempIndex}`;
 
-          // Defensive: ensure we have a RNG to use — prefer existing one (to replay same random sequence),
-          // otherwise create one from seedRef (fallback).
-          const simRandom = originalRandom ?? new DeterministicRandom(seedRef.current || "default_sim_seed");
-          // Use simulation RNG for the physics update (updatePhysics reads randomRef.current)
+              // Same random call order as visual creation
+              const startX = precise.add(50, precise.mul(simRandom.next(), WORLD_WIDTH - 100));
+              const startY = precise.add(50, precise.mul(simRandom.next(), WORLD_HEIGHT - 100));
+              const initialDX = precise.mul(precise.sub(simRandom.next(), 0.5), 2);
+
+              tempBalls.push({
+                id: ballId,
+                x: startX,
+                y: startY,
+                dx: initialDX,
+                dy: 0,
+                graphics: null as any,
+                color: 0x4ecdc4,
+                playerId: (user.id ?? rawParticipant.id ?? "").toString(),
+                finished: false,
+                bounceCount: 0,
+              } as Ball);
+
+              // Store initial state for visual game to reuse
+              simulatedInitialStatesRef.current.set(ballId, { x: startX, y: startY, dx: initialDX, dy: 0 });
+
+              tempIndex++;
+            }
+          }
+
+          // Prepare simulation world - exact clone of visual game
+          obstaclesRef.current = cloneObstaclesForSimulation(originalObstacles || []);
+          spinnersRef.current = cloneSpinnersForSimulation(originalSpinners || []);
+
+
+
+          // Install sim state
           randomRef.current = simRandom;
-
-          // Clone obstacles/spinners for safe simulation (no PIXI graphics)
-          const cloneObs = (list: Obstacle[] = []) =>
-            list.map((o) => ({
-              ...o,
-              destroyed: !!(o as any).destroyed,
-              hitCount: (o as any).hitCount || 0,
-              graphics: null as any,
-            }));
-          const cloneSpin = (list: Spinner[] = []) =>
-            list.map((s) => ({ ...s, rotation: typeof s.rotation === "number" ? s.rotation : 0, graphics: null as any }));
-
-          obstaclesRef.current = cloneObs(originalObstacles || []);
-          spinnersRef.current = cloneSpin(originalSpinners || []);
-
-          // Put temp balls into world (shallow clones so simulation can mutate positions)
-          ballsRef.current = tempBalls.map((b) => ({ ...b } as Ball));
-
-          // Reset ball states for sim
-          ballStatesRef.current = new Map<string, BallState>();
-          ballsRef.current.forEach((ball) => {
-            ballStatesRef.current.set(ball.id, {
+          ballsRef.current = tempBalls.map(b => ({ ...b } as Ball));
+          ballStatesRef.current = new Map();
+          ballsRef.current.forEach(b => {
+            ballStatesRef.current.set(b.id, {
               stuckFrames: 0,
               lastPositions: [],
               isStuck: false,
@@ -1097,67 +1114,37 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             });
           });
 
-          // Disable effects during sim
           soundEnabledRef.current = false;
           isSimulationRef.current = true;
 
-          // Run frames
-          for (let frame = 0; frame < framesToSimulate; frame++) {
-            try {
-              updatePhysics(true);
-            } catch (err) {
-              console.error('SIM: updatePhysics error at frame', frame, err);
-              break;
-            }
+          // Run simulation until winner is found
+          let frame = 0;
+          const MAX_FRAMES = 60000; // 1000 seconds at 60fps
+          
+          while (frame < MAX_FRAMES && !winnerBallIdRef.current) {
+            updatePhysics(true);
+            frame++;
 
+            // Log progress every 1000 frames
             if (frame % 1000 === 0) {
-              const active = ballsRef.current.filter((b) => !b.finished);
+              const active = ballsRef.current.filter(b => !b.finished);
               if (active.length > 0) {
-                const maxY = Math.max(...active.map((b) => b.y));
+                const maxY = Math.max(...active.map(b => b.y));
                 console.log(`SIM frame ${frame}: active=${active.length}, maxY=${maxY}`);
               } else {
                 console.log(`SIM frame ${frame}: no active balls`);
+                break;
               }
-            }
-
-            if (winnerBallIdRef.current) {
-              console.log('SIM: winner found during sim at frame', frame, winnerBallIdRef.current);
-              break;
             }
           }
 
-          // Fallback: if simulation didn't set winner, pick the farthest active ball, else first, else seed_0
-          if (!winnerBallIdRef.current) {
-            try {
-              const activeBalls = (ballsRef.current || []).filter((b) => !b.finished);
-              if (activeBalls.length > 0) {
-                let farthest = activeBalls[0];
-                for (const b of activeBalls) {
-                  if (b.y > farthest.y) farthest = b;
-                }
-                winnerBallIdRef.current = farthest.id;
-                console.log('SIM: fallback -> farthest active:', winnerBallIdRef.current, 'y=', farthest.y);
-              } else if ((ballsRef.current || []).length > 0) {
-                winnerBallIdRef.current = ballsRef.current[0].id;
-                console.log('SIM: fallback -> first ball (all finished):', winnerBallIdRef.current);
-              } else {
-                // ultimate fallback
-                winnerBallIdRef.current = `${seedRef.current || 'default_sim_seed'}_0`;
-                console.log('SIM: ultimate fallback ->', winnerBallIdRef.current);
-              }
-            } catch (err) {
-              console.error('SIM: fallback selection error', err);
-              winnerBallIdRef.current = `${seedRef.current || 'default_sim_seed'}_0`;
-            }
-          }
-
-          console.log('SIM: runSimulation finished, winner=', winnerBallIdRef.current);
+          console.log('SIMULATION completed at frame', frame, 'Winner:', winnerBallIdRef.current);
         } finally {
-          // Restore originals no matter what
-          ballsRef.current = (typeof originalBalls !== 'undefined' && originalBalls) ? originalBalls : [];
-          ballStatesRef.current = (originalBallStates instanceof Map) ? originalBallStates : new Map();
-          obstaclesRef.current = (typeof originalObstacles !== 'undefined' && originalObstacles) ? originalObstacles : [];
-          spinnersRef.current = (typeof originalSpinners !== 'undefined' && originalSpinners) ? originalSpinners : [];
+          // Restore originals
+          ballsRef.current = originalBalls;
+          ballStatesRef.current = originalBallStates;
+          obstaclesRef.current = originalObstacles;
+          spinnersRef.current = originalSpinners;
           randomRef.current = originalRandom;
           soundEnabledRef.current = originalSound;
           isSimulationRef.current = false;
@@ -1197,152 +1184,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         });
       };
 
-      // ----------------- Полная детерминированная симуляция (останавливается при первом победителе) -----------------
-      const runFullDeterministicSimulation = (framesToSimulate: number) => {
-        console.log('Starting FULL deterministic simulation for', framesToSimulate, 'frames');
-        
-        // Clear previous
-        winnerBallIdRef.current = null;
-        simulatedInitialStatesRef.current.clear();
-
-        // Backup world
-        const originalBalls = ballsRef.current;
-        const originalBallStates = new Map(ballStatesRef.current);
-        const originalObstacles = obstaclesRef.current;
-        const originalSpinners = spinnersRef.current;
-        const originalRandom = randomRef.current;
-        const originalSound = soundEnabledRef.current;
-
-        // Use same seed as visual creation
-        const simRandom = new DeterministicRandom(gameData.seed);
-
-        // Build temp balls exactly like visual creation will do
-        const tempBalls: Ball[] = [];
-        let tempIndex = 0;
-        for (const rawParticipant of gameData.participants || []) {
-          const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-          const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
-          if (ballsCount <= 0) continue;
-
-          for (let i = 0; i < ballsCount; i++) {
-            const ballId = `${gameData.seed}_${tempIndex}`;
-
-            // Same random call order as visual creation
-            const startX = precise.add(50, precise.mul(simRandom.next(), WORLD_WIDTH - 100));
-            const startY = precise.add(50, precise.mul(simRandom.next(), WORLD_HEIGHT - 100));
-            const initialDX = precise.mul(precise.sub(simRandom.next(), 0.5), 2);
-
-            tempBalls.push({
-              id: ballId,
-              x: startX,
-              y: startY,
-              dx: initialDX,
-              dy: 0,
-              graphics: null as any,
-              color: 0x4ecdc4,
-              playerId: (user.id ?? rawParticipant.id ?? "").toString(),
-              finished: false,
-              bounceCount: 0,
-            } as Ball);
-
-            // Store initial state for visual game to reuse
-            simulatedInitialStatesRef.current.set(ballId, { x: startX, y: startY, dx: initialDX, dy: 0 });
-
-            tempIndex++;
-          }
-        }
-
-        // Prepare simulation world
-        obstaclesRef.current = cloneObstaclesForSimulation(originalObstacles || []);
-        spinnersRef.current = cloneSpinnersForSimulation(originalSpinners || []);
-
-        // Install sim state
-        randomRef.current = simRandom;
-        ballsRef.current = tempBalls.map(b => ({ ...b } as Ball));
-        ballStatesRef.current = new Map();
-        ballsRef.current.forEach(b => {
-          ballStatesRef.current.set(b.id, {
-            stuckFrames: 0,
-            lastPositions: [],
-            isStuck: false,
-            stuckRecoveryCountdown: 0,
-          });
-        });
-
-        soundEnabledRef.current = false;
-        isSimulationRef.current = true;
-
-        try {
-          let simulationWinnerFound = false;
-          
-          for (let frame = 0; frame < framesToSimulate; frame++) {
-            updatePhysics(true);
-
-            // Check if any ball reached winY (same logic as visual game)
-            const winY = mapDataRef.current?.winY || WORLD_HEIGHT - 100;
-            for (const ball of ballsRef.current) {
-              if (!ball.finished && ball.y > winY) {
-                winnerBallIdRef.current = ball.id;
-                ball.finished = true;
-                simulationWinnerFound = true;
-                console.log('SIMULATION: Winner found at frame', frame, 'ball:', ball.id);
-                break;
-              }
-            }
-            
-            // Stop simulation immediately when winner is found
-            if (simulationWinnerFound) {
-              break;
-            }
-
-            if (frame % 1000 === 0) {
-              const active = ballsRef.current.filter(b => !b.finished);
-              if (active.length > 0) {
-                const maxY = Math.max(...active.map(b => b.y));
-                console.log(`SIM frame ${frame}: active=${active.length}, maxY=${maxY}`);
-              }
-            }
-          }
-
-          // Fallback if no winner reached winY - use the same logic as visual game
-          if (!winnerBallIdRef.current) {
-            const activeBalls = ballsRef.current.filter(b => !b.finished);
-            if (activeBalls.length > 0) {
-              // Same logic as visual game: find the ball with highest Y position
-              let farthest = activeBalls[0];
-              for (const b of activeBalls) {
-                if (b.y > farthest.y) farthest = b;
-              }
-              winnerBallIdRef.current = farthest.id;
-              console.log('SIMULATION: Fallback to farthest ball:', farthest.id, 'y=', farthest.y);
-            } else if (ballsRef.current.length > 0) {
-              winnerBallIdRef.current = ballsRef.current[0].id;
-            } else {
-              winnerBallIdRef.current = `${gameData.seed}_0`;
-            }
-          }
-
-          console.log('SIMULATION completed. Winner:', winnerBallIdRef.current);
-        } finally {
-          // Restore originals
-          ballsRef.current = originalBalls;
-          ballStatesRef.current = originalBallStates;
-          obstaclesRef.current = originalObstacles;
-          spinnersRef.current = originalSpinners;
-          randomRef.current = originalRandom;
-          soundEnabledRef.current = originalSound;
-          isSimulationRef.current = false;
-        }
-      };
-
       // Run deterministic simulation to find winner
-      const hiddenSpeedUp = 600;
-      if (hiddenSpeedUp > 0) {
-        const frames = Math.floor(hiddenSpeedUp * FIXED_FPS);
-        const MAX_FRAMES_SIM = 10000;
-        const framesToSimulate = Math.min(frames, MAX_FRAMES_SIM);
-        runFullDeterministicSimulation(framesToSimulate);
-      }
+      runFullDeterministicSimulation();
 
       // Create actual game balls with winner info
       const newBalls: Ball[] = [];
@@ -1682,14 +1525,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       ballsRef.current = newBalls;
-
-      const gateBarrier = (mapDataRef.current as any)?.gateBarrier;
-      if (gateBarrier) {
-        const index = obstaclesRef.current.indexOf(gateBarrier);
-        if (index > -1) {
-          obstaclesRef.current.splice(index, 1);
-        }
-      }
         console.log('gamecanvas speedtime1:', speedUpTime)
 
       setGameState("playing");
