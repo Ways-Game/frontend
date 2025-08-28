@@ -89,7 +89,6 @@ const useGameSound = (initialEnabled = true) => {
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
   onGameStart?: () => void;
-  ballImages?: string[];
   className?: string;
   speedUpTime?: number;
   initialCameraMode?: "leader" | "swipe";
@@ -103,7 +102,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     {
       onBallWin,
       onGameStart,
-      ballImages = [],
       className,
       speedUpTime = 0,
       initialCameraMode = "leader",
@@ -804,12 +802,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    // Start game with new hidden simulation logic
     const startGame = async (gameData: {
       seed: string;
       mapId: number[] | number;
       participants: any[];
-      winner_id?: number;
+      winner_id?: string;
     }) => {
       console.log("Starting game with data:", gameData);
       console.log('gamecanvas speedtime1:', speedUpTime)
@@ -826,6 +823,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       lastTimeRef.current = 0;
       accumulatorRef.current = 0;
 
+      // ОЧИСТКА ПРЕДЫДУЩИХ ПОБЕДИТЕЛЕЙ - важно делать это до любой симуляции
       setActualWinners([]);
       actualWinnersRef.current = [];
       ballsRef.current.forEach((ball) => {
@@ -873,85 +871,98 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         Math.random = originalRandom;
       }
 
-      // NEW LOGIC: Hidden simulation if winner_id is provided
-      let hiddenWinnerBallId: string | null = null;
-      
-      if (gameData.winner_id && gameData.winner_id !== 0) {
-        console.log('Running hidden simulation for winner_id:', gameData.winner_id);
+      const newBalls: Ball[] = [];
+      let ballIndex = 0;
+
+      // Если передан winner_id, выполняем специальную логику
+      if (gameData.winner_id && gameData.winner_id !== "0") {
+        console.log("Starting game with winner_id logic:", gameData.winner_id);
         
-        // Save current state
-        const savedBalls = ballsRef.current;
-        const savedObstacles = obstaclesRef.current;
-        const savedSpinners = spinnersRef.current;
-        const savedPhysicsTime = physicsTimeRef.current;
-        const savedActualWinners = actualWinnersRef.current;
+        // 1. Сохраняем текущее состояние игры
+        const originalGameState = gameState;
+        const originalWinners = [...actualWinnersRef.current];
         
-        // Create temporary balls for hidden simulation
+        // 2. Временно отключаем обработчик победы
+        const originalOnBallWin = onBallWin;
+        const tempOnBallWin = () => {}; // Пустая функция
+        
+        // 3. Создаем временные шары для симуляции
         const tempBalls: Ball[] = [];
-        let tempIndex = 0;
-        const tempRandom = new DeterministicRandom(gameData.seed);
+        let tempBallIndex = 0;
         
         for (const rawParticipant of gameData.participants || []) {
           const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-          const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
+          const ballsCount = Number(
+            rawParticipant.balls_count ?? user.balls_count ?? 0
+          );
+          const playerId = (user.id ?? rawParticipant.id ?? "").toString();
+
           if (ballsCount <= 0) continue;
 
           for (let i = 0; i < ballsCount; i++) {
-            const ballId = `${gameData.seed}_${tempIndex}`;
-            const startX = precise.add(50, precise.mul(tempRandom.next(), WORLD_WIDTH - 100));
-            const startY = precise.add(50, precise.mul(tempRandom.next(), WORLD_HEIGHT - 100));
-            const initialDX = precise.mul(precise.sub(tempRandom.next(), 0.5), 2);
+            const startX = precise.add(
+              50,
+              precise.mul(randomRef.current!.next(), WORLD_WIDTH - 100)
+            );
+            const startY = precise.add(
+              50,
+              precise.mul(randomRef.current!.next(), WORLD_HEIGHT - 100)
+            );
+            const initialDX = precise.mul(
+              precise.sub(randomRef.current!.next(), 0.5),
+              2
+            );
 
             tempBalls.push({
-              id: ballId,
+              id: `temp_${tempBallIndex}`,
               x: startX,
               y: startY,
               dx: initialDX,
               dy: 0,
-              graphics: null as any,
+              graphics: new PIXI.Graphics(), // Пустая графика для симуляции
               color: 0x4ecdc4,
-              playerId: (user.id ?? rawParticipant.id ?? "").toString(),
+              playerId: playerId,
               finished: false,
+              indicator: null,
               bounceCount: 0,
             } as Ball);
-            tempIndex++;
+            tempBallIndex++;
           }
         }
         
-        // Set up hidden simulation
+        // 4. Запускаем ускоренную симуляцию на 500 секунд
+        const originalBalls = ballsRef.current;
         ballsRef.current = tempBalls;
-        physicsTimeRef.current = 0;
-        actualWinnersRef.current = [];
-        randomRef.current = tempRandom;
         
-        // Run hidden simulation for 500 seconds
-        const hiddenFrames = 500 * FIXED_FPS;
-        for (let i = 0; i < hiddenFrames; i++) {
+        const fastForwardSeconds = 500;
+        const framesToSimulate = Math.min(fastForwardSeconds * FIXED_FPS, 30000); // Ограничиваем максимум 30000 кадров
+        
+        console.log(`Starting fast-forward simulation for ${framesToSimulate} frames`);
+        
+        // Временно заменяем обработчики
+        onBallWin = tempOnBallWin;
+        
+        for (let i = 0; i < framesToSimulate; i++) {
           updatePhysics();
           physicsTimeRef.current += FIXED_DELTA;
           
-          if (actualWinnersRef.current.length > 0) {
-            hiddenWinnerBallId = actualWinnersRef.current[0];
-            console.log('Hidden simulation winner:', hiddenWinnerBallId);
-            break;
-          }
+          // Прерываем если есть победитель
+          if (actualWinnersRef.current.length > 0) break;
         }
         
-        // Restore state
-        ballsRef.current = savedBalls;
-        obstaclesRef.current = savedObstacles;
-        spinnersRef.current = savedSpinners;
-        physicsTimeRef.current = savedPhysicsTime;
-        actualWinnersRef.current = savedActualWinners;
-      }
-
-      const newBalls: Ball[] = [];
-      let ballIndex = 0;
-      
-      // Reset random to same seed for consistent ball creation
-      randomRef.current = new DeterministicRandom(gameData.seed);
-
-      for (const rawParticipant of gameData.participants || []) {
+        // 5. Запоминаем ID победившего шара
+        const winningBallId = actualWinnersRef.current[0];
+        console.log("Winning ball from simulation:", winningBallId);
+        
+        // 6. Восстанавливаем оригинальное состояние
+        ballsRef.current = originalBalls;
+        setActualWinners([]);
+        actualWinnersRef.current = [];
+        onBallWin = originalOnBallWin;
+        setGameState(originalGameState);
+        
+        // 7. Теперь создаем шары для реальной игры, но меняем местами
+        for (const rawParticipant of gameData.participants || []) {
         const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
         const ballsCount = Number(
           rawParticipant.balls_count ?? user.balls_count ?? 0
@@ -964,14 +975,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         for (let i = 0; i < ballsCount; i++) {
           const ballId = `${gameData.seed}_${ballIndex}`;
-          const isHiddenWinnerBall = ballId === hiddenWinnerBallId;
+          const isWinningBall = winningBallId === `temp_${ballIndex}`;
           
-          // NEW SWAPPING LOGIC: If this is the hidden winner ball, assign it to winner_id
+          // NEW SWAPPING LOGIC: If this is the winning ball, assign it to winner_id
           let finalPlayerId = playerId;
           let finalAvatarUrl = avatarUrl;
           
-          if (hiddenWinnerBallId && gameData.winner_id) {
-            if (isHiddenWinnerBall) {
+          if (winningBallId && gameData.winner_id) {
+            if (isWinningBall) {
               // This ball won in hidden simulation, assign to winner_id
               finalPlayerId = gameData.winner_id.toString();
               const winnerParticipant = gameData.participants.find(
@@ -992,7 +1003,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   const rpBallsCount = Number(rp.balls_count ?? rpUser.balls_count ?? 0);
                   for (let j = 0; j < rpBallsCount; j++) {
                     const tempBallId = `${gameData.seed}_${tempBallIndex}`;
-                    if (tempBallId === hiddenWinnerBallId) {
+                    if (tempBallId === winningBallId) {
                       return (rpUser.id ?? rp.id) === (p.user?.id ?? p.id);
                     }
                     tempBallIndex++;
@@ -1072,6 +1083,86 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             bounceCount: 0,
           } as Ball);
           ballIndex++;
+        }
+        }
+      } else {
+        // Обычная логика создания шаров
+        for (const rawParticipant of gameData.participants || []) {
+          const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+          const ballsCount = Number(
+            rawParticipant.balls_count ?? user.balls_count ?? 0
+          );
+          const avatarUrl =
+            rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
+          const playerId = (user.id ?? rawParticipant.id ?? "").toString();
+
+          if (ballsCount <= 0) continue;
+
+          for (let i = 0; i < ballsCount; i++) {
+            const ballGraphics = new PIXI.Graphics();
+
+            if (avatarUrl) {
+              try {
+                const encodedUrl = encodeURI(avatarUrl);
+                const proxyUrl = "https://api.corsproxy.io/";
+                const finalUrl = proxyUrl + encodedUrl;
+                const texture = await PIXI.Assets.load(finalUrl);
+                ballGraphics
+                  .circle(0, 0, 24)
+                  .fill({ texture })
+                  .stroke({ width: 2, color: 0xffffff });
+              } catch (error) {
+                ballGraphics
+                  .circle(0, 0, 24)
+                  .fill(0x4ecdc4)
+                  .stroke({ width: 2, color: 0xffffff });
+              }
+            } else {
+              ballGraphics
+                .circle(0, 0, 24)
+                .fill(0x4ecdc4)
+                .stroke({ width: 2, color: 0xffffff });
+            }
+
+            const indicator = new PIXI.Graphics();
+            indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
+            indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
+            indicator.visible = false;
+
+            const startX = precise.add(
+              50,
+              precise.mul(randomRef.current!.next(), WORLD_WIDTH - 100)
+            );
+            const startY = precise.add(
+              50,
+              precise.mul(randomRef.current!.next(), WORLD_HEIGHT - 100)
+            );
+            const initialDX = precise.mul(
+              precise.sub(randomRef.current!.next(), 0.5),
+              2
+            );
+
+            ballGraphics.position.set(startX, startY);
+            indicator.position.set(startX, startY - 40);
+
+            appRef.current!.stage.addChild(ballGraphics);
+            appRef.current!.stage.addChild(indicator);
+
+            newBalls.push({
+              id: `${gameData.seed}_${ballIndex}`,
+              x: startX,
+              y: startY,
+              dx: initialDX,
+              dy: 0,
+              graphics: ballGraphics,
+              color: 0x4ecdc4,
+              playerId: playerId,
+              finished: false,
+              indicator: indicator,
+              bounceCount: 0,
+            } as Ball);
+            ballIndex++;
+          }
         }
       }
 
