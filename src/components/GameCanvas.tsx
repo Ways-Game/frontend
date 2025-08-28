@@ -1106,12 +1106,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const isWinnerParticipant = (user.id ?? rawParticipant.id) == gameData.winner_id;
         const isOriginalBallOwner = originalBallOwner && (user.id ?? rawParticipant.id) == (originalBallOwner.user?.id ?? originalBallOwner.id);
 
-        // Avatar swap logic
-        if (isWinnerParticipant && originalBallOwner) {
+        // Avatar swap logic - ensure winner ball shows winner's avatar
+        if (isWinnerParticipant && originalBallOwner && winnerParticipant.id !== originalBallOwner.id) {
           // Winner gets original ball owner's avatar
           const originalUser = originalBallOwner.user ? originalBallOwner.user : originalBallOwner;
           avatarUrl = originalBallOwner.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar;
-        } else if (isOriginalBallOwner && winnerParticipant) {
+        } else if (isOriginalBallOwner && winnerParticipant && winnerParticipant.id !== originalBallOwner.id) {
           // Original ball owner gets winner's avatar
           const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
           avatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar;
@@ -1126,17 +1126,24 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           // Keep original playerId - only swap avatars, not player ownership
           const finalPlayerId = playerId;
           
+          // Override avatar for winner ball to ensure it shows winner's avatar
+          let finalAvatarUrl = avatarUrl;
+          if (isWinnerBall && winnerParticipant) {
+            const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
+            finalAvatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar;
+          }
+          
           if (isWinnerBall) {
-            console.log('DEBUG: Winner ball', ballId, 'keeps original playerId:', finalPlayerId, 'with swapped avatar:', avatarUrl);
+            console.log('DEBUG: Winner ball', ballId, 'keeps original playerId:', finalPlayerId, 'with winner avatar:', finalAvatarUrl);
           } else {
-            console.log('DEBUG: Regular ball:', ballId, 'playerId:', playerId, 'avatar:', avatarUrl);
+            console.log('DEBUG: Regular ball:', ballId, 'playerId:', playerId, 'avatar:', finalAvatarUrl);
           }
 
           const ballGraphics = new PIXI.Graphics();
 
-          if (avatarUrl) {
+          if (finalAvatarUrl) {
             try {
-              const encodedUrl = encodeURI(avatarUrl);
+              const encodedUrl = encodeURI(finalAvatarUrl);
               const proxyUrl = "https://api.corsproxy.io/";
               const finalUrl = proxyUrl + encodedUrl;
               
