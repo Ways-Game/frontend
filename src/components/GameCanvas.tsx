@@ -1123,12 +1123,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const ballId = `${gameData.seed}_${ballIndex}`;
           const isWinnerBall = ballId === winnerBallIdRef.current;
           
-          // Winner ball gets winner's playerId
-          let finalPlayerId = playerId;
-          if (isWinnerBall && winnerParticipant) {
-            const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
-            finalPlayerId = (winnerUser.id ?? winnerParticipant.id ?? "").toString();
-            console.log('DEBUG: Winner ball', ballId, 'gets playerId:', finalPlayerId, 'avatar:', avatarUrl);
+          // Keep original playerId - only swap avatars, not player ownership
+          const finalPlayerId = playerId;
+          
+          if (isWinnerBall) {
+            console.log('DEBUG: Winner ball', ballId, 'keeps original playerId:', finalPlayerId, 'with swapped avatar:', avatarUrl);
           } else {
             console.log('DEBUG: Regular ball:', ballId, 'playerId:', playerId, 'avatar:', avatarUrl);
           }
