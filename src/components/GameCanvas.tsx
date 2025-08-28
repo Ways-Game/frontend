@@ -1406,44 +1406,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           // Keep original playerId - only swap avatars, not player ownership
           const finalPlayerId = playerId;
           
-          // Override avatar for winner ball to ensure it shows winner's avatar (only if swap needed)
-          let finalAvatarUrl = avatarUrl;
-          if (isWinnerBall && winnerParticipant && needsSwap) {
-            const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
-            finalAvatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar;
-          }
-          
           if (isWinnerBall) {
-            console.log('DEBUG: Winner ball', ballId, 'keeps original playerId:', finalPlayerId, 'with winner avatar:', finalAvatarUrl);
+            console.log('DEBUG: Winner ball', ballId, 'keeps original playerId:', finalPlayerId);
           } else {
-            console.log('DEBUG: Regular ball:', ballId, 'playerId:', playerId, 'avatar:', finalAvatarUrl);
+            console.log('DEBUG: Regular ball:', ballId, 'playerId:', playerId);
           }
 
+          // Create ball graphics without texture initially - textures will be applied later
           const ballGraphics = new PIXI.Graphics();
-
-          if (finalAvatarUrl) {
-            try {
-              const encodedUrl = encodeURI(finalAvatarUrl);
-              const proxyUrl = "https://api.corsproxy.io/";
-              const finalUrl = proxyUrl + encodedUrl;
-              
-              const texture = await PIXI.Assets.load(finalUrl);
-              ballGraphics
-                .circle(0, 0, 24)
-                .fill({ texture })
-                .stroke({ width: 2, color: 0xffffff });
-            } catch (error) {
-              ballGraphics
-                .circle(0, 0, 24)
-                .fill(0x4ecdc4)
-                .stroke({ width: 2, color: 0xffffff });
-            }
-          } else {
-            ballGraphics
-              .circle(0, 0, 24)
-              .fill(0x4ecdc4)
-              .stroke({ width: 2, color: 0xffffff });
-          }
+          ballGraphics
+            .circle(0, 0, 24)
+            .fill(0x4ecdc4)
+            .stroke({ width: 2, color: 0xffffff });
 
           const indicator = new PIXI.Graphics();
           indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
@@ -1538,86 +1512,129 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       };
 
-      // ----------------- Ensure winner's avatar (and optional swap) is applied deterministically -----------------
-      // (place right after newBalls are created and before `ballsRef.current = newBalls;`)
+      // ----------------- Исправленный блок: детерминированное применение / swap аватарок -----------------
       if (typeof window !== "undefined") {
-        // Await here because startGame is async — this makes application of textures deterministic
         await (async () => {
           try {
-            // 1) Ensure each ball has a stable avatarUrl property (already computed earlier as finalAvatarUrl in your loop)
-            // If not present, we try to derive from participant data (best-effort).
-            newBalls.forEach((b) => {
-              if (!(b as any).avatarUrl) {
-                // try to find participant avatar by playerId
-                const part = (gameData.participants || []).find((p: any) => {
-                  const user = p.user ? p.user : p;
-                  const pid = (user.id ?? p.id ?? "").toString();
-                  return pid === b.playerId?.toString();
-                });
-                if (part) {
-                  const user = part.user ? part.user : part;
-                  (b as any).avatarUrl = part.avatar_url ?? user.avatar_url ?? user.avatar ?? null;
-                } else {
-                  (b as any).avatarUrl = null;
-                }
-              }
-            });
-
-            // 2) Force-apply winner's avatar (this ensures the visible winner will always show backend winner's avatar)
-            if (winnerBallIdRef.current && typeof winnerParticipant !== "undefined" && winnerParticipant) {
-              const winnerBall = newBalls.find((b) => b.id === winnerBallIdRef.current);
-              if (winnerBall) {
-                const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
-                const winnerAvatar =
-                  winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar ?? null;
-                if (winnerAvatar) {
-                  await applyTextureToBallGraphics(winnerBall, winnerAvatar);
-                  // store to keep consistent if other code reads avatarUrl
-                  (winnerBall as any).avatarUrl = winnerAvatar;
-                  console.log("FORCED: applied backend winner avatar to ball", winnerBall.id);
-                }
-              }
-            }
-
-            // 3) If a swap was intended (needsSwap true), enforce the swap explicitly on graphics as well.
-            // This mirrors your earlier avatar-swap logic but applies textures deterministically here.
-            if (typeof needsSwap !== "undefined" && needsSwap && originalBallOwner && winnerParticipant) {
-              // find the original owner's ball (first ball belonging to originalBallOwner)
-              const originalOwnerId = originalBallOwner.user?.id ?? originalBallOwner.id;
-              const originalBall = newBalls.find(
-                (b) => b.playerId?.toString() === (originalOwnerId ?? "").toString()
-              );
-              const winnerBallAfter = newBalls.find((b) => b.id === winnerBallIdRef.current);
-
-              const originalUser = originalBallOwner.user ? originalBallOwner.user : originalBallOwner;
-              const originalAvatar = originalBallOwner.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar ?? null;
-              const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
-              const winnerAvatar = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar ?? null;
-
-              // swap textures: originalBall <- winnerAvatar, winnerBall <- originalAvatar
-              if (originalBall && winnerBallAfter) {
-                if (winnerAvatar) {
-                  await applyTextureToBallGraphics(originalBall, winnerAvatar);
-                  (originalBall as any).avatarUrl = winnerAvatar;
-                }
-                if (originalAvatar) {
-                  await applyTextureToBallGraphics(winnerBallAfter, originalAvatar);
-                  (winnerBallAfter as any).avatarUrl = originalAvatar;
-                }
-                console.log("FORCED: applied swapped avatars to original & winner balls:", originalBall.id, winnerBallAfter.id);
-              }
-            }
-
-            // 4) For any remaining balls that don't have textures applied, apply their avatarUrl if present (best-effort)
+            // Map playerId -> balls (может быть >1 мяч на игрока)
+            const ballsByPlayer = new Map<string, Ball[]>();
             for (const b of newBalls) {
-              const hasTextureAlready = false; // we don't track texture state precisely; attempt to apply if avatarUrl exists
-              const avatar = (b as any).avatarUrl;
-              if (avatar && (!b.graphics || (b.graphics && b.graphics.texture == null))) {
-                await applyTextureToBallGraphics(b, avatar);
+              const pid = (b.playerId ?? "").toString();
+              if (!ballsByPlayer.has(pid)) ballsByPlayer.set(pid, []);
+              ballsByPlayer.get(pid)!.push(b);
+            }
+
+            const simWinnerBallId = winnerBallIdRef.current;
+            const simWinnerBall = newBalls.find((b) => b.id === simWinnerBallId) ?? null;
+
+            // backend winner id (string)
+            const backendWinnerId =
+              (gameData.winner_id !== undefined && gameData.winner_id !== null)
+                ? gameData.winner_id.toString()
+                : (winnerPlayerIdRef.current ?? null);
+
+            // ball(s) that originally belong to backend winner (may be undefined)
+            const backendBalls = backendWinnerId ? (ballsByPlayer.get(backendWinnerId) ?? []) : [];
+            // prefer a backend ball that is NOT the simWinnerBall (we want to swap with the other ball if possible)
+            let backendWinnerBall = backendBalls.find((b) => b.id !== simWinnerBallId) ?? backendBalls[0] ?? null;
+
+            // Determine avatars from participants data (best-effort)
+            const getParticipantById = (id: any) =>
+              (gameData.participants || []).find((p: any) => {
+                const user = p.user ? p.user : p;
+                return (user.id ?? p.id)?.toString?.() === id?.toString?.();
+              });
+
+            const backendParticipant = backendWinnerId ? getParticipantById(backendWinnerId) : null;
+            const backendUser = backendParticipant ? (backendParticipant.user ?? backendParticipant) : null;
+            const backendAvatar = backendParticipant
+              ? backendParticipant.avatar_url ?? backendUser?.avatar_url ?? backendUser?.avatar ?? null
+              : null;
+
+            const originalOwnerId = originalBallOwner
+              ? (originalBallOwner.user?.id ?? originalBallOwner.id)
+              : null;
+            const originalParticipant = originalOwnerId ? getParticipantById(originalOwnerId) : null;
+            const originalUser = originalParticipant ? (originalParticipant.user ?? originalParticipant) : null;
+            const originalAvatar = originalParticipant
+              ? originalParticipant.avatar_url ?? originalUser?.avatar_url ?? originalUser?.avatar ?? null
+              : null;
+
+            // helper: apply texture and record avatarUrl
+            const applyIf = async (ball: Ball | null, url: string | null) => {
+              if (!ball || !url) return;
+              try {
+                await applyTextureToBallGraphics(ball, url);
+                (ball as any).avatarUrl = url;
+              } catch (e) {
+                console.warn("applyIf failed for", ball?.id, e);
+              }
+            };
+
+            // CORE LOGIC:
+            if (!needsSwap) {
+              // No swap requested — ensure simWinnerBall shows backend winner's avatar (if known)
+              if (simWinnerBall && backendAvatar) {
+                await applyIf(simWinnerBall, backendAvatar);
+                console.log("FORCED: applied backend winner avatar to simWinnerBall", simWinnerBall.id);
+              } else if (simWinnerBall) {
+                // fallback: apply original owner's avatar if backend not available
+                if (originalAvatar) {
+                  await applyIf(simWinnerBall, originalAvatar);
+                  console.log("FORCED: applied original avatar to simWinnerBall (no backend avatar)", simWinnerBall.id);
+                }
+              }
+            } else {
+              // Swap required: swap avatars between simWinnerBall and the ball that belongs to backend winner
+              // Goal: winner ball should visually show backend winner's avatar.
+              if (simWinnerBall && backendWinnerBall && backendWinnerBall.id !== simWinnerBall.id) {
+                // apply backend avatar on simWinnerBall, and original owner's avatar on backendWinnerBall
+                if (backendAvatar) await applyIf(simWinnerBall, backendAvatar);
+                if (originalAvatar) await applyIf(backendWinnerBall, originalAvatar);
+                console.log("FORCED: swapped avatars between simWinnerBall", simWinnerBall.id, "and backendWinnerBall", backendWinnerBall.id);
+              } else if (simWinnerBall && backendWinnerBall && backendWinnerBall.id === simWinnerBall.id) {
+                // rare: the backend winner's ball is the same as sim winner — nothing to swap, ensure correct avatar
+                if (backendAvatar) {
+                  await applyIf(simWinnerBall, backendAvatar);
+                  console.log("FORCED: backendWinnerBall === simWinnerBall, applied backend avatar to", simWinnerBall.id);
+                }
+              } else if (simWinnerBall && !backendWinnerBall) {
+                // backend's ball not found (maybe different ball counts) — just ensure simWinnerBall shows backend avatar,
+                // and try to apply original avatar to any other ball of backendParticipant if exists
+                if (backendAvatar) await applyIf(simWinnerBall, backendAvatar);
+                // try to find any ball from original owner (other than simWinnerBall) and apply original avatar
+                const originalOwnerBalls = originalOwnerId ? (ballsByPlayer.get(originalOwnerId.toString()) ?? []) : [];
+                const otherOriginalBall = originalOwnerBalls.find((b) => b.id !== simWinnerBall.id) ?? null;
+                if (otherOriginalBall && originalAvatar) {
+                  await applyIf(otherOriginalBall, originalAvatar);
+                  console.log("FORCED: applied original avatar to otherOriginalBall", otherOriginalBall.id);
+                }
+                console.log("FORCED: applied avatars with fallback; simWinnerBall=", simWinnerBall.id);
+              } else {
+                // ultimate fallback: just try to apply backend avatar to simWinnerBall and original avatar to any matching balls
+                if (simWinnerBall && backendAvatar) await applyIf(simWinnerBall, backendAvatar);
+                if (originalOwnerId && originalAvatar) {
+                  const origBalls = ballsByPlayer.get(originalOwnerId.toString()) ?? [];
+                  for (const b of origBalls) {
+                    if (b.id !== simWinnerBall?.id) await applyIf(b, originalAvatar);
+                  }
+                }
+                console.log("FORCED: applied avatars in fallback path; simWinnerBall=", simWinnerBall?.id);
+              }
+            }
+
+            // Final pass: ensure every ball has some avatar (participant avatar) — do not overwrite existing avatarUrl
+            for (const b of newBalls) {
+              if ((b as any).avatarUrl) continue;
+              const part = getParticipantById(b.playerId);
+              const user = part ? (part.user ?? part) : null;
+              const url = part ? (part.avatar_url ?? user?.avatar_url ?? user?.avatar ?? null) : null;
+              if (url) {
+                await applyIf(b, url);
               }
             }
           } catch (err) {
-            console.warn("Avatar application pass failed:", err);
+            console.warn("Avatar application pass failed (corrected):", err);
           }
         })();
       }
