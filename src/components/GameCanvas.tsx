@@ -1197,7 +1197,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         });
       };
 
-      // ----------------- Полная детерминированная симуляция (заменяет старую) -----------------
+      // ----------------- Полная детерминированная симуляция (останавливается при первом победителе) -----------------
       const runFullDeterministicSimulation = (framesToSimulate: number) => {
         console.log('Starting FULL deterministic simulation for', framesToSimulate, 'frames');
         
@@ -1276,17 +1276,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           for (let frame = 0; frame < framesToSimulate; frame++) {
             updatePhysics(true);
 
+            // КРИТИЧНО: останавливаемся сразу при первом победителе
+            if (winnerBallIdRef.current) {
+              console.log('SIMULATION: Immediate winner detected at frame', frame, winnerBallIdRef.current);
+              break; // немедленная остановка при первом победителе
+            }
+
             if (frame % 1000 === 0) {
               const active = ballsRef.current.filter(b => !b.finished);
               if (active.length > 0) {
                 const maxY = Math.max(...active.map(b => b.y));
                 console.log(`SIM frame ${frame}: active=${active.length}, maxY=${maxY}`);
               }
-            }
-
-            if (winnerBallIdRef.current) {
-              console.log('SIMULATION: Winner found at frame', frame, winnerBallIdRef.current);
-              break;
             }
           }
 
