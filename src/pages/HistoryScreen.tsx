@@ -34,7 +34,9 @@ export function HistoryScreen() {
         autoStart: true,
         isReplay: true,
         music_content: game.music_content,
-        music_title: game.music_title
+        music_title: game.music_title,
+        winner_id: game.winner_id
+
       }
     })
   }

@@ -79,7 +79,8 @@ export function PvPScreen() {
         autoStart: true,
         speedUpTime: speedUpTime,
         music_content: game.music_content,
-        music_title: game.music_title
+        music_title: game.music_title,
+        winner_id: game.winner_id
       }
     });
   };
@@ -156,7 +157,8 @@ export function PvPScreen() {
           fullGame: fresh,
           autoStart: true,
           music_content: fresh.music_content,
-          music_title: fresh.music_title
+          music_title: fresh.music_title,
+          winner_id: fresh.winner_id
         }})
       }
     } catch (error) {
