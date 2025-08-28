@@ -152,39 +152,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Anti-stuck system
     const ballStatesRef = useRef<Map<string, BallState>>(new Map());
-    const winnerBallIdRef = useRef<string | null>(null);
-    const winnerPlayerIdRef = useRef<string | null>(null);
-    
-    // Добавляем флаг для симуляции
-    const isSimulationRef = useRef(false);
-    
-    // Store initial states from simulation to ensure visual matches
-    const simulatedInitialStatesRef = useRef<Map<string, { x: number; y: number; dx: number; dy: number }>>(new Map());
-
-    // ----------------- helpers for simulation -----------------
-    const cloneObstaclesForSimulation = (obsList: Obstacle[]) => {
-      return obsList.map((o) => {
-        // Клонируем только простые свойства, не копируем graphics/PIXI-объекты
-        return {
-          ...o,
-          // защитные поля: ensure basic runtime fields exist for simulation
-          destroyed: !!(o as any).destroyed,
-          hitCount: (o as any).hitCount || 0,
-          graphics: null as any,
-        };
-      });
-    };
-
-    const cloneSpinnersForSimulation = (spinners: Spinner[]) => {
-      return spinners.map((s) => {
-        return {
-          ...s,
-          rotation: typeof s.rotation === "number" ? s.rotation : 0,
-          graphics: null as any,
-        };
-      });
-    };
-
 
     // RTTTL parser (fixed)
     const parseRTTTL = (rtttl: string) => {
@@ -418,7 +385,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Deterministic physics loop / render functions (mostly unchanged)
     const gameLoop = () => {
-      updatePhysics(); // false по умолчанию
+      updatePhysics();
 
       physicsTimeRef.current += FIXED_DELTA;
     };
@@ -428,7 +395,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
-    const updatePhysics = (isSimulation: boolean = false) => {
+    const updatePhysics = () => {
       if (!randomRef.current) return;
 
       if (physicsTimeRef.current % 1000 === 0 && physicsTimeRef.current > 0) {
@@ -550,17 +517,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ball.y = precise.add(ball.y, ball.dy);
         }
 
-        checkCollisions(ball, isSimulation);
+        checkCollisions(ball);
       });
 
-      if (!isSimulation) {
-        ballsRef.current = ballsRef.current.filter(
-          (ball) => !ball.finished || actualWinnersRef.current.includes(ball.id)
-        );
-      }
+      ballsRef.current = ballsRef.current.filter(
+        (ball) => !ball.finished || actualWinnersRef.current.includes(ball.id)
+      );
     };
 
-    const checkCollisions = (ball: Ball, isSimulation: boolean = false) => {
+    const checkCollisions = (ball: Ball) => {
       obstaclesRef.current.forEach((obstacle) => {
         if (obstacle.destroyed) return;
 
@@ -600,7 +565,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               0.82
             );
 
-            if (!isSimulation) playMelodyNote();
+            playMelodyNote();
           }
         } else if (obstacle.type === "barrier") {
           const halfW = precise.div(obstacle.width, 2);
@@ -674,7 +639,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 ball.bounceCount++;
               }
             }
-            if (!isSimulation) playMelodyNote();
+            playMelodyNote();
           }
         } else if (obstacle.type === "brick") {
           const halfW = precise.div(obstacle.width, 2);
@@ -695,7 +660,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             // Destroy after 3 hits
             if ((obstacle as any).hitCount >= 3) {
               obstacle.destroyed = true;
-              if (!isSimulation && obstacle.graphics && appRef.current) {
+              if (obstacle.graphics && appRef.current) {
                 appRef.current.stage.removeChild(obstacle.graphics);
               }
             }
@@ -714,7 +679,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             } else {
               ball.dy = precise.mul(ball.dy, -0.78);
             }
-            if (!isSimulation) playMelodyNote();
+            playMelodyNote();
           }
         } else if (obstacle.type === "spinner") {
           const dx = precise.sub(ball.x, obstacle.x);
@@ -756,7 +721,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               1.1
             );
 
-            if (!isSimulation) playMelodyNote();
+            playMelodyNote();
           }
         } else if (obstacle.type === "polygon") {
           // Простая проверка коллизии с полигоном через bounding box
@@ -791,7 +756,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               }
               ball.dy = precise.mul(ball.dy, -0.82);
             }
-            if (!isSimulation) playMelodyNote();
+            playMelodyNote();
           }
         }
       });
@@ -849,46 +814,28 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             precise.mul(normalY, halfImpulse)
           );
 
-          if (!isSimulation) playMelodyNote();
+          playMelodyNote();
         }
       });
 
-      if (ball.x < 24) {
-        ball.x = 24;
-        ball.dx = precise.mul(precise.abs(ball.dx), 0.82);
-      }
-      if (ball.x > 1176) {
-        ball.x = 1176;
-        ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), 0.82);
-      }
+
 
       if (mapDataRef.current) {
         const { winY, deathY } = mapDataRef.current;
 
         if (ball.y > winY) {
-          if (isSimulation) {
-            if (!winnerBallIdRef.current) {
-              winnerBallIdRef.current = ball.id;
-              ball.finished = true;
-            }
-          } else {
-            if (actualWinnersRef.current.length === 0) {
-              console.log("WINNER in visual game", ball.id)
-              actualWinnersRef.current = [ball.id];
-              setActualWinners([...actualWinnersRef.current]);
-              ball.finished = true;
-              // Use userId instead of playerId for correct winner identification
-              const winnerUserId = (ball as any).userId || ball.playerId;
-              console.log("winner send", winnerUserId, ball)
-              onBallWin?.(ball.id, winnerUserId);
-              setGameState("finished");
-            }
+          if (actualWinnersRef.current.length === 0) {
+            actualWinnersRef.current = [ball.id];
+            setActualWinners([...actualWinnersRef.current]);
+            ball.finished = true;
+            onBallWin?.(ball.id, ball.playerId);
+            setGameState("finished");
           }
         }
 
         if (ball.y > deathY && ball.y < deathY + 30) {
           ball.finished = true;
-          if (!isSimulation && appRef.current) {
+          if (appRef.current) {
             appRef.current.stage.removeChild(ball.graphics);
           }
         }
@@ -969,13 +916,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    // Start game (unchanged except kept in same scope)
+    // Start game with new hidden simulation logic
     const startGame = async (gameData: {
       seed: string;
       mapId: number[] | number;
       participants: any[];
       winner_id?: number;
-      speedUpTime?: number;
     }) => {
       console.log("Starting game with data:", gameData);
       console.log('gamecanvas speedtime1:', speedUpTime)
@@ -1039,267 +985,184 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         Math.random = originalRandom;
       }
 
-      // Run complete deterministic simulation until winner is found
-      const runFullDeterministicSimulation = () => {
-        console.log('Starting FULL deterministic simulation until winner is found');
+      // NEW LOGIC: Hidden simulation if winner_id is provided
+      let hiddenWinnerBallId: string | null = null;
+      
+      if (gameData.winner_id && gameData.winner_id !== 0) {
+        console.log('Running hidden simulation for winner_id:', gameData.winner_id);
         
-        // Clear previous
-        winnerBallIdRef.current = null;
-        simulatedInitialStatesRef.current.clear();
+        // Save current state
+        const savedBalls = ballsRef.current;
+        const savedObstacles = obstaclesRef.current;
+        const savedSpinners = spinnersRef.current;
+        const savedPhysicsTime = physicsTimeRef.current;
+        const savedActualWinners = actualWinnersRef.current;
+        
+        // Create temporary balls for hidden simulation
+        const tempBalls: Ball[] = [];
+        let tempIndex = 0;
+        const tempRandom = new DeterministicRandom(gameData.seed);
+        
+        for (const rawParticipant of gameData.participants || []) {
+          const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+          const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
+          if (ballsCount <= 0) continue;
 
-        // Backup world
-        const originalBalls = ballsRef.current;
-        const originalBallStates = new Map(ballStatesRef.current);
-        const originalObstacles = obstaclesRef.current;
-        const originalSpinners = spinnersRef.current;
-        const originalRandom = randomRef.current;
-        const originalSound = soundEnabledRef.current;
+          for (let i = 0; i < ballsCount; i++) {
+            const ballId = `${gameData.seed}_${tempIndex}`;
+            const startX = precise.add(50, precise.mul(tempRandom.next(), WORLD_WIDTH - 100));
+            const startY = precise.add(50, precise.mul(tempRandom.next(), WORLD_HEIGHT - 100));
+            const initialDX = precise.mul(precise.sub(tempRandom.next(), 0.5), 2);
 
-        try {
-          // Use same seed as visual creation
-          const simRandom = new DeterministicRandom(gameData.seed);
-
-          // Build temp balls exactly like visual creation will do
-          const tempBalls: Ball[] = [];
-          let tempIndex = 0;
-          for (const rawParticipant of gameData.participants || []) {
-            const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-            const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
-            if (ballsCount <= 0) continue;
-
-            for (let i = 0; i < ballsCount; i++) {
-              const ballId = `${gameData.seed}_${tempIndex}`;
-
-              // Same random call order as visual creation
-              const startX = precise.add(50, precise.mul(simRandom.next(), WORLD_WIDTH - 100));
-              const startY = precise.add(50, precise.mul(simRandom.next(), WORLD_HEIGHT - 100));
-              const initialDX = precise.mul(precise.sub(simRandom.next(), 0.5), 2);
-
-              tempBalls.push({
-                id: ballId,
-                x: startX,
-                y: startY,
-                dx: initialDX,
-                dy: 0,
-                graphics: null as any,
-                color: 0x4ecdc4,
-                playerId: (user.id ?? rawParticipant.id ?? "").toString(),
-                finished: false,
-                bounceCount: 0,
-              } as Ball);
-
-              // Store initial state for visual game to reuse
-              simulatedInitialStatesRef.current.set(ballId, { x: startX, y: startY, dx: initialDX, dy: 0 });
-
-              tempIndex++;
-            }
+            tempBalls.push({
+              id: ballId,
+              x: startX,
+              y: startY,
+              dx: initialDX,
+              dy: 0,
+              graphics: null as any,
+              color: 0x4ecdc4,
+              playerId: (user.id ?? rawParticipant.id ?? "").toString(),
+              finished: false,
+              bounceCount: 0,
+            } as Ball);
+            tempIndex++;
           }
-
-          // Prepare simulation world - exact clone of visual game
-          obstaclesRef.current = cloneObstaclesForSimulation(originalObstacles || []);
-          spinnersRef.current = cloneSpinnersForSimulation(originalSpinners || []);
-
-
-
-          // Install sim state
-          randomRef.current = simRandom;
-          ballsRef.current = tempBalls.map(b => ({ ...b } as Ball));
-          ballStatesRef.current = new Map();
-          ballsRef.current.forEach(b => {
-            ballStatesRef.current.set(b.id, {
-              stuckFrames: 0,
-              lastPositions: [],
-              isStuck: false,
-              stuckRecoveryCountdown: 0,
-            });
-          });
-
-          soundEnabledRef.current = false;
-          isSimulationRef.current = true;
-
-          // Run simulation until winner is found
-          let frame = 0;
-          const MAX_FRAMES = 60000; // 1000 seconds at 60fps
-          
-          while (frame < MAX_FRAMES && !winnerBallIdRef.current) {
-            updatePhysics(true);
-            frame++;
-
-            // Log progress every 1000 frames
-            if (frame % 1000 === 0) {
-              const active = ballsRef.current.filter(b => !b.finished);
-              if (active.length > 0) {
-                const maxY = Math.max(...active.map(b => b.y));
-                console.log(`SIM frame ${frame}: active=${active.length}, maxY=${maxY}`);
-              } else {
-                console.log(`SIM frame ${frame}: no active balls`);
-                break;
-              }
-            }
-          }
-
-          console.log('SIMULATION completed at frame', frame, 'Winner:', winnerBallIdRef.current);
-        } finally {
-          // Restore originals
-          ballsRef.current = originalBalls;
-          ballStatesRef.current = originalBallStates;
-          obstaclesRef.current = originalObstacles;
-          spinnersRef.current = originalSpinners;
-          randomRef.current = originalRandom;
-          soundEnabledRef.current = originalSound;
-          isSimulationRef.current = false;
         }
-      };
+        
+        // Set up hidden simulation
+        ballsRef.current = tempBalls;
+        physicsTimeRef.current = 0;
+        actualWinnersRef.current = [];
+        randomRef.current = tempRandom;
+        
+        // Run hidden simulation for 500 seconds
+        const hiddenFrames = 500 * FIXED_FPS;
+        for (let i = 0; i < hiddenFrames; i++) {
+          updatePhysics();
+          physicsTimeRef.current += FIXED_DELTA;
+          
+          if (actualWinnersRef.current.length > 0) {
+            hiddenWinnerBallId = actualWinnersRef.current[0];
+            console.log('Hidden simulation winner:', hiddenWinnerBallId);
+            break;
+          }
+        }
+        
+        // Restore state
+        ballsRef.current = savedBalls;
+        obstaclesRef.current = savedObstacles;
+        spinnersRef.current = savedSpinners;
+        physicsTimeRef.current = savedPhysicsTime;
+        actualWinnersRef.current = savedActualWinners;
+      }
 
-      // ----------------- Helpers: клонирование препятствий / спиннеров -----------------
-      const cloneObstaclesForSimulation = (obsList: Obstacle[]) => {
-        return obsList.map((o) => {
-          return {
-            // копируем только данные, не graphics
-            type: o.type,
-            x: o.x,
-            y: o.y,
-            width: o.width,
-            height: o.height,
-            destroyed: !!(o as any).destroyed,
-            hitCount: (o as any).hitCount || 0,
-            // сохраняем специфичные поля для gate/other если есть
-            ...(o as any).extraProps ? { extraProps: (o as any).extraProps } : {},
-            graphics: null as any,
-            id: (o as any).id,
-          } as Obstacle;
-        });
-      };
-
-      const cloneSpinnersForSimulation = (spinners: Spinner[]) => {
-        return spinners.map((s) => {
-          return {
-            x: s.x,
-            y: s.y,
-            rotation: typeof s.rotation === "number" ? s.rotation : 0,
-            radius: (s as any).radius,
-            graphics: null as any,
-            id: (s as any).id,
-          } as Spinner;
-        });
-      };
-
-      // Run deterministic simulation to find winner
-      runFullDeterministicSimulation();
-
-      // Create actual game balls with winner info
       const newBalls: Ball[] = [];
       let ballIndex = 0;
       
       // Reset random to same seed for consistent ball creation
       randomRef.current = new DeterministicRandom(gameData.seed);
 
-      // Find winner participant and original ball owner
-      const winnerParticipant = gameData.participants.find(
-        p => (p.id ?? p.user?.id) == gameData.winner_id
-      );
-      
-      // Find which participant originally owns the winner ball
-      let originalBallOwner = null;
-      let tempBallIndex = 0;
-      for (const rawParticipant of gameData.participants || []) {
-        const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-        const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
-        for (let i = 0; i < ballsCount; i++) {
-          const ballId = `${gameData.seed}_${tempBallIndex}`;
-          if (ballId === winnerBallIdRef.current) {
-            originalBallOwner = rawParticipant;
-            break;
-          }
-          tempBallIndex++;
-        }
-        if (originalBallOwner) break;
-      }
-      
-      // Если не нашли владельца, используем первого участника как fallback
-      if (!originalBallOwner && gameData.participants && gameData.participants.length > 0) {
-        originalBallOwner = gameData.participants[0];
-        console.log('SIMULATION: Using fallback owner for winner ball');
-      }
-      
-      console.log('DEBUG: Winner ball from simulation:', winnerBallIdRef.current);
-      console.log('DEBUG: Original ball owner:', originalBallOwner);
-      console.log('DEBUG: All participants:', gameData.participants.map(p => ({ id: p.id || p.user?.id, balls: p.balls_count || p.user?.balls_count })));
-      
-      // Check if winner ball already belongs to backend winner - no swap needed
-      const originalOwnerId = originalBallOwner?.user?.id ?? originalBallOwner?.id;
-      const needsSwap = originalOwnerId != gameData.winner_id;
-      
-      console.log('DEBUG: Backend winner_id:', gameData.winner_id);
-      console.log('DEBUG: Found winner participant:', winnerParticipant);
-      console.log('DEBUG: Winner ball ID from simulation:', winnerBallIdRef.current);
-      console.log('DEBUG: Original ball owner ID:', originalOwnerId);
-      console.log('DEBUG: Needs swap:', needsSwap);
-
-      // Create all balls with avatar swapping logic
       for (const rawParticipant of gameData.participants || []) {
         const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
         const ballsCount = Number(
           rawParticipant.balls_count ?? user.balls_count ?? 0
         );
-        let avatarUrl = rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
+        const avatarUrl =
+          rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
         const playerId = (user.id ?? rawParticipant.id ?? "").toString();
-        const isWinnerParticipant = (user.id ?? rawParticipant.id) == gameData.winner_id;
-        const isOriginalBallOwner = originalBallOwner && (user.id ?? rawParticipant.id) == (originalBallOwner.user?.id ?? originalBallOwner.id);
-
-        // Avatar swap logic - only if swap is needed
-        if (needsSwap) {
-          if (isWinnerParticipant && originalBallOwner) {
-            // Winner gets original ball owner's avatar
-            const originalUser = originalBallOwner.user ? originalBallOwner.user : originalBallOwner;
-            avatarUrl = originalBallOwner.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar;
-          } else if (isOriginalBallOwner && winnerParticipant) {
-            // Original ball owner gets winner's avatar
-            const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
-            avatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar;
-          }
-        }
 
         if (ballsCount <= 0) continue;
 
         for (let i = 0; i < ballsCount; i++) {
           const ballId = `${gameData.seed}_${ballIndex}`;
-          const isWinnerBall = ballId === winnerBallIdRef.current;
+          const isHiddenWinnerBall = ballId === hiddenWinnerBallId;
           
-          // Keep original playerId - only swap avatars, not player ownership
-          const finalPlayerId = playerId;
+          // NEW SWAPPING LOGIC: If this is the hidden winner ball, assign it to winner_id
+          let finalPlayerId = playerId;
+          let finalAvatarUrl = avatarUrl;
           
-          if (isWinnerBall) {
-            console.log('DEBUG: Winner ball', ballId, 'keeps original playerId:', finalPlayerId);
-          } else {
-            console.log('DEBUG: Regular ball:', ballId, 'playerId:', playerId);
+          if (hiddenWinnerBallId && gameData.winner_id) {
+            if (isHiddenWinnerBall) {
+              // This ball won in hidden simulation, assign to winner_id
+              finalPlayerId = gameData.winner_id.toString();
+              const winnerParticipant = gameData.participants.find(
+                p => (p.id ?? p.user?.id) == gameData.winner_id
+              );
+              if (winnerParticipant) {
+                const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
+                finalAvatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar ?? avatarUrl;
+              }
+              console.log('Assigning hidden winner ball', ballId, 'to winner_id:', finalPlayerId);
+            } else if ((user.id ?? rawParticipant.id) == gameData.winner_id) {
+              // This participant is winner_id but ball is not the hidden winner
+              // Find the original owner of hidden winner ball and swap avatars
+              const hiddenWinnerOriginalOwner = gameData.participants.find(p => {
+                let tempBallIndex = 0;
+                for (const rp of gameData.participants || []) {
+                  const rpUser = rp.user ? rp.user : rp;
+                  const rpBallsCount = Number(rp.balls_count ?? rpUser.balls_count ?? 0);
+                  for (let j = 0; j < rpBallsCount; j++) {
+                    const tempBallId = `${gameData.seed}_${tempBallIndex}`;
+                    if (tempBallId === hiddenWinnerBallId) {
+                      return (rpUser.id ?? rp.id) === (p.user?.id ?? p.id);
+                    }
+                    tempBallIndex++;
+                  }
+                }
+                return false;
+              });
+              
+              if (hiddenWinnerOriginalOwner) {
+                const originalUser = hiddenWinnerOriginalOwner.user ? hiddenWinnerOriginalOwner.user : hiddenWinnerOriginalOwner;
+                finalAvatarUrl = hiddenWinnerOriginalOwner.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar ?? avatarUrl;
+                console.log('Swapping winner participant ball', ballId, 'avatar with original owner');
+              }
+            }
           }
-
-          // Create ball graphics without texture initially - textures will be applied later
+          
           const ballGraphics = new PIXI.Graphics();
-          ballGraphics
-            .circle(0, 0, 24)
-            .fill(0x4ecdc4)
-            .stroke({ width: 2, color: 0xffffff });
+
+          if (finalAvatarUrl) {
+            try {
+              const encodedUrl = encodeURI(finalAvatarUrl);
+              const proxyUrl = "https://api.corsproxy.io/";
+              const finalUrl = proxyUrl + encodedUrl;
+              const texture = await PIXI.Assets.load(finalUrl);
+              ballGraphics
+                .circle(0, 0, 24)
+                .fill({ texture })
+                .stroke({ width: 2, color: 0xffffff });
+            } catch (error) {
+              ballGraphics
+                .circle(0, 0, 24)
+                .fill(0x4ecdc4)
+                .stroke({ width: 2, color: 0xffffff });
+            }
+          } else {
+            ballGraphics
+              .circle(0, 0, 24)
+              .fill(0x4ecdc4)
+              .stroke({ width: 2, color: 0xffffff });
+          }
 
           const indicator = new PIXI.Graphics();
           indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
           indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
           indicator.visible = false;
 
-          // Use simulated initial state if available to ensure visual matches simulation
-          const simState = simulatedInitialStatesRef.current.get(ballId);
-          let startX: number, startY: number, initialDX: number;
-          if (simState) {
-            startX = simState.x;
-            startY = simState.y;
-            initialDX = simState.dx;
-          } else {
-            // fallback to deterministic generation if simState absent
-            startX = precise.add(50, precise.mul(randomRef.current.next(), WORLD_WIDTH - 100));
-            startY = precise.add(50, precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100));
-            initialDX = precise.mul(precise.sub(randomRef.current.next(), 0.5), 2);
-          }
+          const startX = precise.add(
+            50,
+            precise.mul(randomRef.current.next(), WORLD_WIDTH - 100)
+          );
+          const startY = precise.add(
+            50,
+            precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100)
+          );
+          const initialDX = precise.mul(
+            precise.sub(randomRef.current.next(), 0.5),
+            2
+          );
 
           ballGraphics.position.set(startX, startY);
           indicator.position.set(startX, startY - 40);
@@ -1307,8 +1170,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           appRef.current.stage.addChild(ballGraphics);
           appRef.current.stage.addChild(indicator);
 
-          // Создаём объект мяча и явно сохраняем userId в объекте и на graphics
-          const ballObj = {
+          newBalls.push({
             id: ballId,
             x: startX,
             y: startY,
@@ -1320,217 +1182,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             finished: false,
             indicator: indicator,
             bounceCount: 0,
-          } as Ball & { userId?: string };
-
-          // runtime поле userId — пригодится на финальном экране
-          (ballObj as any).userId = finalPlayerId;
-
-          // также положим userId прямо на PIXI-объект, чтобы UI/код рендера мог его быстро прочитать
-          (ballGraphics as any).userId = finalPlayerId;
-          (indicator as any).userId = finalPlayerId;
-
-          newBalls.push(ballObj as Ball);
-          
-          if (isWinnerBall) {
-            console.log('DEBUG: Winner ball created with ID:', ballId, 'playerId:', finalPlayerId);
-          } else {
-            console.log('DEBUG: Regular ball created with ID:', ballId, 'playerId:', finalPlayerId);
-          }
-          
+          } as Ball);
           ballIndex++;
         }
       }
 
-      // ----------------- Utility: apply texture to a ball's graphics -----------------
-      const applyTextureToBallGraphics = async (ball: Ball, avatarUrl?: string) => {
-        if (!ball || !ball.graphics) return;
-        try {
-          if (!avatarUrl || typeof avatarUrl !== "string" || avatarUrl.trim() === "") return;
-
-          const encodedUrl = encodeURI(avatarUrl);
-          const proxyUrl = "https://api.corsproxy.io/";
-          const finalUrl = proxyUrl + encodedUrl;
-
-          // load texture via PIXI (await so ordering is deterministic)
-          const texture = await PIXI.Assets.load(finalUrl);
-
-          // redraw the ball graphics with texture (clear previous drawings)
-          try {
-            ball.graphics.clear();
-          } catch (e) {}
-
-          // Use beginTextureFill / drawCircle for consistent result
-          try {
-            // Some PIXI versions use beginTextureFill, others require different API.
-            // We try beginTextureFill and fallback to fill({ texture }) approach.
-            if ((ball.graphics as any).beginTextureFill) {
-              (ball.graphics as any).beginTextureFill({ texture });
-              (ball.graphics as any).drawCircle(0, 0, 24);
-              (ball.graphics as any).endFill();
-              ball.graphics.lineStyle(2, 0xffffff);
-            } else {
-              // fallback: draw circle with texture via fill API
-              (ball.graphics as any).circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
-            }
-          } catch (e) {
-            // final fallback: plain colored circle
-            try {
-              ball.graphics.clear();
-              ball.graphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
-            } catch (e) {}
-          }
-        } catch (err) {
-          // Don't throw — keep the game running with whatever graphic exists
-          console.warn("applyTextureToBallGraphics failed for", ball?.id, err);
-        }
-        
-        // sync userId to graphics so other parts can read it from the display object
-        if ((ball as any).userId) {
-          try {
-            (ball.graphics as any).userId = (ball as any).userId;
-          } catch (e) {}
-        }
-      };
-
-      // ----------------- Исправленный блок: детерминированное применение / swap аватарок -----------------
-      if (typeof window !== "undefined") {
-        await (async () => {
-          try {
-            // Map playerId -> balls (может быть >1 мяч на игрока)
-            const ballsByPlayer = new Map<string, Ball[]>();
-            for (const b of newBalls) {
-              const pid = (b.playerId ?? "").toString();
-              if (!ballsByPlayer.has(pid)) ballsByPlayer.set(pid, []);
-              ballsByPlayer.get(pid)!.push(b);
-            }
-
-            const simWinnerBallId = winnerBallIdRef.current;
-            const simWinnerBall = newBalls.find((b) => b.id === simWinnerBallId) ?? null;
-
-            // backend winner id (string)
-            const backendWinnerId =
-              (gameData.winner_id !== undefined && gameData.winner_id !== null)
-                ? gameData.winner_id.toString()
-                : (winnerPlayerIdRef.current ?? null);
-
-            // ball(s) that originally belong to backend winner (may be undefined)
-            const backendBalls = backendWinnerId ? (ballsByPlayer.get(backendWinnerId) ?? []) : [];
-            // prefer a backend ball that is NOT the simWinnerBall (we want to swap with the other ball if possible)
-            let backendWinnerBall = backendBalls.find((b) => b.id !== simWinnerBallId) ?? backendBalls[0] ?? null;
-
-            // Determine avatars from participants data (best-effort)
-            const getParticipantById = (id: any) =>
-              (gameData.participants || []).find((p: any) => {
-                const user = p.user ? p.user : p;
-                return (user.id ?? p.id)?.toString?.() === id?.toString?.();
-              });
-
-            const backendParticipant = backendWinnerId ? getParticipantById(backendWinnerId) : null;
-            const backendUser = backendParticipant ? (backendParticipant.user ?? backendParticipant) : null;
-            const backendAvatar = backendParticipant
-              ? backendParticipant.avatar_url ?? backendUser?.avatar_url ?? backendUser?.avatar ?? null
-              : null;
-
-            const originalOwnerId = originalBallOwner
-              ? (originalBallOwner.user?.id ?? originalBallOwner.id)
-              : null;
-            const originalParticipant = originalOwnerId ? getParticipantById(originalOwnerId) : null;
-            const originalUser = originalParticipant ? (originalParticipant.user ?? originalParticipant) : null;
-            const originalAvatar = originalParticipant
-              ? originalParticipant.avatar_url ?? originalUser?.avatar_url ?? originalUser?.avatar ?? null
-              : null;
-
-            // helper: apply texture and record avatarUrl
-            const applyIf = async (ball: Ball | null, url: string | null, userId?: string | null) => {
-              if (!ball || !url) return;
-              try {
-                await applyTextureToBallGraphics(ball, url);
-                (ball as any).avatarUrl = url;
-                // Если передан userId, обновляем его на мяче и graphics
-                if (userId !== undefined && userId !== null) {
-                  (ball as any).userId = userId;
-                  (ball.graphics as any).userId = userId;
-                }
-              } catch (e) {
-                console.warn("applyIf failed for", ball?.id, e);
-              }
-            };
-
-            // CORE LOGIC:
-            if (!needsSwap) {
-              // No swap requested — ensure simWinnerBall shows backend winner's avatar (if known)
-              if (simWinnerBall && backendAvatar) {
-                await applyIf(simWinnerBall, backendAvatar);
-                console.log("FORCED: applied backend winner avatar to simWinnerBall", simWinnerBall.id);
-              } else if (simWinnerBall) {
-                // fallback: apply original owner's avatar if backend not available
-                if (originalAvatar) {
-                  await applyIf(simWinnerBall, originalAvatar);
-                  console.log("FORCED: applied original avatar to simWinnerBall (no backend avatar)", simWinnerBall.id);
-                }
-              }
-            } else {
-              // Swap required: swap avatars between simWinnerBall and the ball that belongs to backend winner
-              // Goal: winner ball should visually show backend winner's avatar.
-              if (simWinnerBall && backendWinnerBall && backendWinnerBall.id !== simWinnerBall.id) {
-                // apply backend avatar on simWinnerBall, and original owner's avatar on backendWinnerBall
-                if (backendAvatar) await applyIf(simWinnerBall, backendAvatar, backendWinnerId);
-                if (originalAvatar) await applyIf(backendWinnerBall, originalAvatar, originalOwnerId?.toString());
-                console.log("FORCED: swapped avatars between simWinnerBall", simWinnerBall.id, "and backendWinnerBall", backendWinnerBall.id);
-              } else if (simWinnerBall && backendWinnerBall && backendWinnerBall.id === simWinnerBall.id) {
-                // rare: the backend winner's ball is the same as sim winner — nothing to swap, ensure correct avatar
-                if (backendAvatar) {
-                  await applyIf(simWinnerBall, backendAvatar, backendWinnerId);
-                  console.log("FORCED: backendWinnerBall === simWinnerBall, applied backend avatar to", simWinnerBall.id);
-                }
-              } else if (simWinnerBall && !backendWinnerBall) {
-                // backend's ball not found (maybe different ball counts) — just ensure simWinnerBall shows backend avatar,
-                // and try to apply original avatar to any other ball of backendParticipant if exists
-                if (backendAvatar) await applyIf(simWinnerBall, backendAvatar, backendWinnerId);
-                // try to find any ball from original owner (other than simWinnerBall) and apply original avatar
-                const originalOwnerBalls = originalOwnerId ? (ballsByPlayer.get(originalOwnerId.toString()) ?? []) : [];
-                const otherOriginalBall = originalOwnerBalls.find((b) => b.id !== simWinnerBall.id) ?? null;
-                if (otherOriginalBall && originalAvatar) {
-                  await applyIf(otherOriginalBall, originalAvatar);
-                  console.log("FORCED: applied original avatar to otherOriginalBall", otherOriginalBall.id);
-                }
-                console.log("FORCED: applied avatars with fallback; simWinnerBall=", simWinnerBall.id);
-              } else {
-                // ultimate fallback: just try to apply backend avatar to simWinnerBall and original avatar to any matching balls
-                if (simWinnerBall && backendAvatar) await applyIf(simWinnerBall, backendAvatar, backendWinnerId);
-                if (originalOwnerId && originalAvatar) {
-                  const origBalls = ballsByPlayer.get(originalOwnerId.toString()) ?? [];
-                  for (const b of origBalls) {
-                    if (b.id !== simWinnerBall?.id) await applyIf(b, originalAvatar);
-                  }
-                }
-                console.log("FORCED: applied avatars in fallback path; simWinnerBall=", simWinnerBall?.id);
-              }
-            }
-
-            // Final pass: ensure every ball has some avatar (participant avatar) — do not overwrite existing avatarUrl
-            for (const b of newBalls) {
-              if ((b as any).avatarUrl) continue;
-              const part = getParticipantById(b.playerId);
-              const user = part ? (part.user ?? part) : null;
-              const url = part ? (part.avatar_url ?? user?.avatar_url ?? user?.avatar ?? null) : null;
-              if (url) {
-                await applyIf(b, url);
-              }
-            }
-          } catch (err) {
-            console.warn("Avatar application pass failed (corrected):", err);
-          }
-        })();
-      }
-
       ballsRef.current = newBalls;
+      console.log('Created', newBalls.length, 'balls with new swapping logic');
         console.log('gamecanvas speedtime1:', speedUpTime)
 
       setGameState("playing");
       onGameStart?.();
-      
-      // Physics will be enabled when openGateBarrier is called
         console.log('gamecanvas speedtime2:', speedUpTime)
 
       try {
@@ -1566,12 +1228,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
       // --- end fast-forward ---
 
-      // Store winner player ID for later use
-      if (gameData.winner_id) {
-        winnerPlayerIdRef.current = gameData.winner_id.toString();
-      }
-
-      // Start physics and render loops
       const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
       (gameLoopRef as any).physicsIntervalId = physicsInterval;
 
@@ -1645,7 +1301,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         width: mapDataRef.current?.mapWidth || 1200,
         height: mapDataRef.current?.mapHeight || 2500,
       }),
-
       destroyCanvas: () => {
         if ((gameLoopRef as any).physicsIntervalId) {
           clearInterval((gameLoopRef as any).physicsIntervalId);
