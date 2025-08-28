@@ -877,7 +877,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               actualWinnersRef.current = [ball.id];
               setActualWinners([...actualWinnersRef.current]);
               ball.finished = true;
-              onBallWin?.(ball.id, ball.playerId);
+              // Use userId instead of playerId for correct winner identification
+              const winnerUserId = (ball as any).userId || ball.playerId;
+              console.log("winner send", winnerUserId, ball)
+              onBallWin?.(ball.id, winnerUserId);
               setGameState("finished");
             }
           }
