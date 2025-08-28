@@ -395,7 +395,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
-    const updatePhysics = () => {
+    const updatePhysics = (isHiddenSimulation = false) => {
       if (!randomRef.current) return;
 
       if (physicsTimeRef.current % 1000 === 0 && physicsTimeRef.current > 0) {
@@ -473,51 +473,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         ball.dx = precise.mul(ball.dx, 0.9999800039998667);
         ball.dy = precise.mul(ball.dy, 0.9999800039998667);
 
-        if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
-          const obs: any = (ball as any).surfaceObstacle;
-          const halfW = obs.width / 2;
-          const halfH = obs.height / 2;
+        ball.x = precise.add(ball.x, ball.dx);
+        ball.y = precise.add(ball.y, ball.dy);
 
-          const minSurfaceSpeed = 0.5;
-          const surfaceFriction = 0.995;
-
-          ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
-          ball.dy = 0;
-
-          // Применяем трение с учетом минимальной скорости
-          if (precise.abs(ball.dx) > minSurfaceSpeed) {
-            ball.dx = precise.mul(ball.dx, surfaceFriction);
-          } else {
-            // Если скорость ниже минимальной, устанавливаем минимальную скорость
-            if (ball.dx === 0) {
-              ball.dx = randomRef.current!.next() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
-            } else {
-              ball.dx = ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed;
-            }
-          }
-
-          // Добавляем небольшой случайный импульс для предотвращения застревания
-          const noise = randomRef.current!.next();
-          const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
-          ball.dx = precise.add(ball.dx, noiseValue);
-
-          ball.x = precise.add(ball.x, ball.dx);
-
-          if (
-            obs.destroyed ||
-            ball.x < precise.sub(precise.sub(obs.x, halfW), 24) ||
-            ball.x > precise.add(precise.add(obs.x, halfW), 24)
-          ) {
-            (ball as any).onSurface = false;
-            (ball as any).surfaceObstacle = null;
-            ball.dy = 1;
-          }
-        } else {
-          ball.x = precise.add(ball.x, ball.dx);
-          ball.y = precise.add(ball.y, ball.dy);
-        }
-
-        checkCollisions(ball);
+        checkCollisions(ball, isHiddenSimulation);
       });
 
       ballsRef.current = ballsRef.current.filter(
@@ -525,7 +484,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       );
     };
 
-    const checkCollisions = (ball: Ball) => {
+    const checkCollisions = (ball: Ball, isHiddenSimulation = false) => {
       obstaclesRef.current.forEach((obstacle) => {
         if (obstacle.destroyed) return;
 
@@ -565,82 +524,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               0.82
             );
 
-            playMelodyNote();
+            if (!isHiddenSimulation) playMelodyNote();
           }
-        } else if (obstacle.type === "barrier") {
-          const halfW = precise.div(obstacle.width, 2);
-          const halfH = precise.div(obstacle.height, 2);
 
-          if (
-            precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
-            precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
-          ) {
-            const overlapX = precise.sub(
-              halfW + 24,
-              precise.abs(precise.sub(ball.x, obstacle.x))
-            );
-            const overlapY = precise.sub(
-              halfH + 24,
-              precise.abs(precise.sub(ball.y, obstacle.y))
-            );
-
-            // Проверяем, является ли это частью воронки (маленькие сегменты)
-            const isFunnelSegment = obstacle.width <= 8 && obstacle.height <= 8;
-            
-            if (overlapX < overlapY) {
-              // Боковое столкновение
-              if (ball.x < obstacle.x) {
-                ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
-              } else {
-                ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
-              }
-              
-              if (isFunnelSegment) {
-                // Для воронки: направляем к центру
-                const centerX = WORLD_WIDTH / 2;
-                const directionToCenter = ball.x < centerX ? 1 : -1;
-                ball.dx = precise.mul(precise.abs(ball.dx), directionToCenter * 0.82);
-              } else {
-                ball.dx = precise.mul(ball.dx, -0.82);
-              }
-              ball.bounceCount++;
-            } else {
-              if (ball.y < obstacle.y) {
-                // Столкновение с верхней частью барьера
-                ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
-                
-                if (isFunnelSegment) {
-                  // Для воронки: отскок с направлением к центру
-                  const centerX = WORLD_WIDTH / 2;
-                  const directionToCenter = ball.x < centerX ? 1 : -1;
-                  ball.dy = precise.mul(ball.dy, -0.88);
-                  ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 0.5));
-                  ball.bounceCount++;
-                } else {
-                  // Обычная логика для больших барьеров
-                  const verticalImpact = precise.abs(ball.dy);
-                  const shouldStick = 
-                    verticalImpact < 1.0 &&
-                    ball.bounceCount >= 2; 
-                    
-                  if (shouldStick) {
-                    (ball as any).onSurface = true;
-                    (ball as any).surfaceObstacle = obstacle;
-                    ball.dy = 0;
-                  } else {
-                    ball.dy = precise.mul(ball.dy, -0.78);
-                    ball.bounceCount++;
-                  }
-                }
-              } else {
-                // Столкновение с нижней частью барьера
-                ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
-                ball.dy = precise.mul(ball.dy, -0.78);
-                ball.bounceCount++;
-              }
-            }
-            playMelodyNote();
-          }
         } else if (obstacle.type === "brick") {
           const halfW = precise.div(obstacle.width, 2);
           const halfH = precise.div(obstacle.height, 2);
@@ -679,7 +565,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             } else {
               ball.dy = precise.mul(ball.dy, -0.78);
             }
-            playMelodyNote();
+            if (!isHiddenSimulation) playMelodyNote();
           }
         } else if (obstacle.type === "spinner") {
           const dx = precise.sub(ball.x, obstacle.x);
@@ -721,7 +607,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               1.1
             );
 
-            playMelodyNote();
+            if (!isHiddenSimulation) playMelodyNote();
           }
         } else if (obstacle.type === "polygon") {
           // Простая проверка коллизии с полигоном через bounding box
@@ -756,7 +642,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               }
               ball.dy = precise.mul(ball.dy, -0.82);
             }
-            playMelodyNote();
+            if (!isHiddenSimulation) playMelodyNote();
           }
         }
       });
@@ -814,7 +700,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             precise.mul(normalY, halfImpulse)
           );
 
-          playMelodyNote();
+          if (!isHiddenSimulation) playMelodyNote();
         }
       });
 
@@ -826,10 +712,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (ball.y > winY) {
           if (actualWinnersRef.current.length === 0) {
             actualWinnersRef.current = [ball.id];
-            setActualWinners([...actualWinnersRef.current]);
+            if (!isHiddenSimulation) {
+              setActualWinners([...actualWinnersRef.current]);
+              onBallWin?.(ball.id, ball.playerId);
+              setGameState("finished");
+            }
             ball.finished = true;
-            onBallWin?.(ball.id, ball.playerId);
-            setGameState("finished");
           }
         }
 
