@@ -155,27 +155,16 @@ const autoStartPendingRef = useRef<any | null>(null);
     } else {
       setShowCountdown(true);
       
-      // Запускаем скрытую симуляцию во время таймера если есть winner_id
-      let simulationPromise = null;
-      if (currentRoundGameData.winner_id && currentRoundGameData.winner_id !== 0) {
-        simulationPromise = gameCanvasRef.current?.runHiddenSimulation?.(gameDataForCanvas);
-      }
-      
       const remainingCountdown = countdownDuration - speedUpTime - 1;
       let count = Math.max(1, remainingCountdown);
       
-      const countdown = async () => {
+      const countdown = () => {
         if (count > 0) {
           setCountdownText(count.toString());
           count--;
           setTimeout(countdown, 1000);
         } else {
           setCountdownText("LET'S GO!");
-          
-          // Ждем завершения скрытой симуляции если она запущена
-          if (simulationPromise) {
-            await simulationPromise;
-          }
           
           setTimeout(() => {
             setShowCountdown(false);
