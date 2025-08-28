@@ -154,7 +154,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const ballStatesRef = useRef<Map<string, BallState>>(new Map());
     const winnerBallIdRef = useRef<string | null>(null);
     const winnerPlayerIdRef = useRef<string | null>(null);
-    const isSimulationRef = useRef(false);
 
 
     // RTTTL parser (fixed)
@@ -402,15 +401,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const updatePhysics = (isSimulation: boolean = false) => {
       if (!randomRef.current) return;
 
-      if (!isSimulation) {
-        spinnersRef.current.forEach((spinner) => {
-          spinner.rotation = precise.add(spinner.rotation, 0.08);
-        });
+      if (physicsTimeRef.current % 1000 === 0 && physicsTimeRef.current > 0) {
+        const checksum = ballsRef.current.reduce(
+          (sum, b) => sum + b.x * 10000 + b.y * 100 + b.dx * 10 + b.dy,
+          0
+        );
       }
+
+      spinnersRef.current.forEach((spinner) => {
+        spinner.rotation = precise.add(spinner.rotation, 0.08);
+      });
 
       ballsRef.current.forEach((ball) => {
         if (ball.finished) return;
 
+        // Инициализируем состояние мяча если нужно
         if (!ballStatesRef.current.has(ball.id)) {
           ballStatesRef.current.set(ball.id, {
             stuckFrames: 0,
@@ -422,6 +427,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         
         const ballState = ballStatesRef.current.get(ball.id)!;
         
+        // Обрабатываем восстановление после застревания
         if (ballState.stuckRecoveryCountdown > 0) {
           ballState.stuckRecoveryCountdown--;
           if (ballState.stuckRecoveryCountdown === 0) {
@@ -431,11 +437,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
         
+        // Сохраняем текущую позицию
         ballState.lastPositions.push({ x: ball.x, y: ball.y });
+        
+        // Ограничиваем историю позиций
         if (ballState.lastPositions.length > 10) {
           ballState.lastPositions.shift();
         }
         
+        // Проверяем, не застрял ли мяч
         if (ballState.lastPositions.length >= 5) {
           const first = ballState.lastPositions[0];
           const last = ballState.lastPositions[ballState.lastPositions.length - 1];
@@ -447,9 +457,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           
           if (distance < 5) {
             ballState.stuckFrames++;
+            
             if (ballState.stuckFrames > STUCK_THRESHOLD && !ballState.isStuck) {
               ballState.isStuck = true;
-              ballState.stuckRecoveryCountdown = 60;
+              ballState.stuckRecoveryCountdown = 60; // 60 кадров = 1 секунда при 60 FPS
+              
+              // Принудительный отскок
               ball.dy = -STUCK_BOUNCE_FORCE;
               ball.dx = precise.mul(precise.sub(randomRef.current!.next(), 0.5), 4);
             }
@@ -467,15 +480,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const obs: any = (ball as any).surfaceObstacle;
           const halfW = obs.width / 2;
           const halfH = obs.height / 2;
+
           const minSurfaceSpeed = 0.5;
           const surfaceFriction = 0.995;
 
           ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
           ball.dy = 0;
 
+          // Применяем трение с учетом минимальной скорости
           if (precise.abs(ball.dx) > minSurfaceSpeed) {
             ball.dx = precise.mul(ball.dx, surfaceFriction);
           } else {
+            // Если скорость ниже минимальной, устанавливаем минимальную скорость
             if (ball.dx === 0) {
               ball.dx = randomRef.current!.next() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
             } else {
@@ -483,9 +499,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             }
           }
 
+          // Добавляем небольшой случайный импульс для предотвращения застревания
           const noise = randomRef.current!.next();
           const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
           ball.dx = precise.add(ball.dx, noiseValue);
+
           ball.x = precise.add(ball.x, ball.dx);
 
           if (
@@ -571,9 +589,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               precise.abs(precise.sub(ball.y, obstacle.y))
             );
 
+            // Проверяем, является ли это частью воронки (маленькие сегменты)
             const isFunnelSegment = obstacle.width <= 8 && obstacle.height <= 8;
             
             if (overlapX < overlapY) {
+              // Боковое столкновение
               if (ball.x < obstacle.x) {
                 ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
               } else {
@@ -581,6 +601,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               }
               
               if (isFunnelSegment) {
+                // Для воронки: направляем к центру
                 const centerX = WORLD_WIDTH / 2;
                 const directionToCenter = ball.x < centerX ? 1 : -1;
                 ball.dx = precise.mul(precise.abs(ball.dx), directionToCenter * 0.82);
@@ -590,15 +611,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               ball.bounceCount++;
             } else {
               if (ball.y < obstacle.y) {
+                // Столкновение с верхней частью барьера
                 ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
                 
                 if (isFunnelSegment) {
+                  // Для воронки: отскок с направлением к центру
                   const centerX = WORLD_WIDTH / 2;
                   const directionToCenter = ball.x < centerX ? 1 : -1;
                   ball.dy = precise.mul(ball.dy, -0.88);
                   ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 0.5));
                   ball.bounceCount++;
                 } else {
+                  // Обычная логика для больших барьеров
                   const verticalImpact = precise.abs(ball.dy);
                   const shouldStick = 
                     verticalImpact < 1.0 &&
@@ -614,6 +638,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                   }
                 }
               } else {
+                // Столкновение с нижней частью барьера
                 ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
                 ball.dy = precise.mul(ball.dy, -0.78);
                 ball.bounceCount++;
@@ -629,12 +654,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
             precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
           ) {
+            // Increase hit count
             (obstacle as any).hitCount = ((obstacle as any).hitCount || 0) + 1;
             
-            if (!isSimulation && obstacle.graphics) {
+            // Set transparency based on hit count
+            if (obstacle.graphics) {
               obstacle.graphics.alpha = 1 - ((obstacle as any).hitCount / 3) * 0.3;
             }
             
+            // Destroy after 3 hits
             if ((obstacle as any).hitCount >= 3) {
               obstacle.destroyed = true;
               if (!isSimulation && obstacle.graphics && appRef.current) {
@@ -701,6 +729,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             if (!isSimulation) playMelodyNote();
           }
         } else if (obstacle.type === "polygon") {
+          // Простая проверка коллизии с полигоном через bounding box
           const halfW = precise.div(obstacle.width, 2);
           const halfH = precise.div(obstacle.height, 2);
 
@@ -737,6 +766,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
+      // ball-ball collisions (unchanged)
       ballsRef.current.forEach((otherBall) => {
         if (otherBall === ball || otherBall.finished) return;
 
@@ -976,11 +1006,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       // --- HIDDEN SIMULATION to determine winner ball ---
-      const hiddenSpeedUp = 10;
+      const hiddenSpeedUp = 510;
       if (hiddenSpeedUp > 0) {
+        // Save original state
+        const originalBalls = ballsRef.current;
+        const originalBallStates = new Map(ballStatesRef.current);
+        const originalPhysicsTime = physicsTimeRef.current;
+        
+        // Create temporary simulation with same seed
+        const tempRandom = new DeterministicRandom(gameData.seed);
         const tempBalls: Ball[] = [];
         let tempBallIndex = 0;
         
+        // Create temporary balls for simulation using same logic as visual game
         for (const rawParticipant of gameData.participants || []) {
           const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
           const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
@@ -988,9 +1026,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           
           for (let i = 0; i < ballsCount; i++) {
             const ballId = `${gameData.seed}_${tempBallIndex}`;
-            const startX = precise.add(600, precise.mul(precise.sub(randomRef.current!.next(), 0.5), 200));
+            const startX = precise.add(600, precise.mul(precise.sub(tempRandom.next(), 0.5), 200));
             const startY = 100;
-            const initialDX = precise.mul(precise.sub(randomRef.current!.next(), 0.5), 2);
+            const initialDX = precise.mul(precise.sub(tempRandom.next(), 0.5), 2);
             
             tempBalls.push({
               id: ballId,
@@ -1008,13 +1046,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
         
-        // Run simulation
-        const originalBalls = ballsRef.current;
-        const originalBallStates = new Map(ballStatesRef.current);
-        
+        // Set up simulation state
         ballsRef.current = tempBalls;
         ballStatesRef.current.clear();
+        tempBalls.forEach(ball => {
+          ballStatesRef.current.set(ball.id, {
+            stuckFrames: 0,
+            lastPositions: [],
+            isStuck: false,
+            stuckRecoveryCountdown: 0
+          });
+        });
         
+        // Run simulation using same physics
         const frames = Math.floor(hiddenSpeedUp * FIXED_FPS);
         const MAX_FRAMES = 3000;
         const framesToSimulate = Math.min(frames, MAX_FRAMES);
@@ -1024,12 +1068,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           if (winnerBallIdRef.current) break;
         }
         
+        // Restore original state
         ballsRef.current = originalBalls;
         ballStatesRef.current = originalBallStates;
-        
-        if (winnerBallIdRef.current) {
-          console.log('DEBUG SIMULATION: Winner ball ID determined:', winnerBallIdRef.current);
-        }
+        physicsTimeRef.current = originalPhysicsTime;
       }
 
       // Create actual game balls with winner info
@@ -1149,10 +1191,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           indicator.visible = false;
 
           const startX = precise.add(
-            600,
-            precise.mul(precise.sub(randomRef.current.next(), 0.5), 200)
+            50,
+            precise.mul(randomRef.current.next(), WORLD_WIDTH - 100)
           );
-          const startY = 100;
+          const startY = precise.add(
+            50,
+            precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100)
+          );
           const initialDX = precise.mul(
             precise.sub(randomRef.current.next(), 0.5),
             2
