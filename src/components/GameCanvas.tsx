@@ -772,8 +772,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           const minX = Math.min(0, deviceWidth - mapWidth * scale);
           const maxX = 0;
-
           targetX = Math.max(minX, Math.min(maxX, targetX));
+
+          // clamp Y (добавляем)
+          const minY = Math.min(0, deviceHeight - mapHeight * scale);
+          const maxY = 0;
+          targetY = Math.max(minY, Math.min(maxY, targetY));
 
           appRef.current.stage.x += (targetX - appRef.current.stage.x) * 0.05;
           appRef.current.stage.y += (targetY - appRef.current.stage.y) * 0.05;
@@ -827,6 +831,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       // Создаем отдельный random для симуляции
       const simulationRandom = new DeterministicRandom(gameData.seed);
       
+      // Создаём "виртуальную" контейнерную сцену для симуляции (НЕ добавляем в app.stage)
+      const simContainer = new PIXI.Container();
+      
       // Создаем временную карту для симуляции
       const tempMapData = generateMapFromId(appRef.current, gameData.mapId, {
         seed: gameData.seed,
@@ -835,7 +842,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         random: simulationRandom,
       });
 
-      // Создаем временные шары для симуляции (без графики)
+      // Переносим графику во временный контейнер
+      tempMapData.obstacles.forEach(o => {
+        if (o.graphics) {
+          if (o.graphics.parent && o.graphics.parent !== simContainer) {
+            try { o.graphics.parent.removeChild(o.graphics); } catch(e){}
+          }
+          simContainer.addChild(o.graphics);
+        }
+      });
+      tempMapData.spinners.forEach(s => {
+        if (s.graphics) {
+          if (s.graphics.parent && s.graphics.parent !== simContainer) {
+            try { s.graphics.parent.removeChild(s.graphics); } catch(e){}
+          }
+          simContainer.addChild(s.graphics);
+        }
+      });
+
+      // Создаем временные шары для симуляции
       const tempBalls: Ball[] = [];
       
       for (const rawParticipant of gameData.participants || []) {
@@ -850,13 +875,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const startY = precise.add(50, precise.mul(simulationRandom.next(), WORLD_HEIGHT - 100));
           const initialDX = precise.mul(precise.sub(simulationRandom.next(), 0.5), 2);
 
+          const ballGraphics = new PIXI.Graphics();
+          ballGraphics.circle(0, 0, 24).fill(0x4ecdc4);
+          simContainer.addChild(ballGraphics);
+
           tempBalls.push({
             id: `temp_${tempBalls.length}`,
             x: startX,
             y: startY,
             dx: initialDX,
             dy: 0,
-            graphics: new PIXI.Graphics(),
+            graphics: ballGraphics,
             color: 0x4ecdc4,
             playerId: playerId,
             finished: false,
@@ -866,35 +895,77 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       }
 
-      // Сохраняем текущее состояние
-      const originalBalls = ballsRef.current;
-      const originalObstacles = obstaclesRef.current;
-      const originalSpinners = spinnersRef.current;
-      const originalMapData = mapDataRef.current;
-      const originalWinners = actualWinnersRef.current;
-      
-      // Устанавливаем временное состояние для симуляции
-      ballsRef.current = tempBalls;
-      obstaclesRef.current = tempMapData.obstacles;
-      spinnersRef.current = tempMapData.spinners;
-      mapDataRef.current = {
+      // Локальные переменные для симуляции (НЕ мутируем глобальные)
+      let actualWinnersLocal: string[] = [];
+      const localMapData = {
         ...tempMapData,
         mapWidth: WORLD_WIDTH,
         mapHeight: WORLD_HEIGHT,
         screenHeight: WORLD_HEIGHT,
       };
-      actualWinnersRef.current = [];
       
       const framesToSimulate = Math.min(500 * FIXED_FPS, 30000);
-      let tempPhysicsTime = 0;
       
-      // Выполняем симуляцию
+      // Локальная функция проверки коллизий для симуляции
+      const checkCollisionsLocal = (ball: Ball) => {
+        tempMapData.obstacles.forEach((obstacle) => {
+          if (obstacle.destroyed) return;
+
+          if (obstacle.type === "peg") {
+            const dx = precise.sub(ball.x, obstacle.x);
+            const dy = precise.sub(ball.y, obstacle.y);
+            const distanceSq = precise.add(
+              precise.mul(dx, dx),
+              precise.mul(dy, dy)
+            );
+
+            if (distanceSq < 1296) {
+              const distance = precise.sqrt(distanceSq);
+              const normalX = precise.div(dx, distance);
+              const normalY = precise.div(dy, distance);
+
+              ball.x = precise.add(obstacle.x, precise.mul(normalX, 36));
+              ball.y = precise.add(obstacle.y, precise.mul(normalY, 36));
+
+              const dotProduct = precise.add(
+                precise.mul(ball.dx, normalX),
+                precise.mul(ball.dy, normalY)
+              );
+
+              ball.dx = precise.mul(
+                precise.sub(
+                  ball.dx,
+                  precise.mul(precise.mul(dotProduct, 2), normalX)
+                ),
+                0.82
+              );
+              ball.dy = precise.mul(
+                precise.sub(
+                  ball.dy,
+                  precise.mul(precise.mul(dotProduct, 2), normalY)
+                ),
+                0.82
+              );
+            }
+          }
+        });
+
+        // Проверка победы
+        if (ball.y > localMapData.winY) {
+          if (actualWinnersLocal.length === 0) {
+            actualWinnersLocal = [ball.id];
+            ball.finished = true;
+          }
+        }
+      };
+      
+      // Выполняем симуляцию с локальными данными
       for (let i = 0; i < framesToSimulate; i++) {
-        spinnersRef.current.forEach((spinner) => {
+        tempMapData.spinners.forEach((spinner) => {
           spinner.rotation = precise.add(spinner.rotation, 0.08);
         });
 
-        ballsRef.current.forEach((ball) => {
+        tempBalls.forEach((ball) => {
           if (ball.finished) return;
 
           ball.dy = precise.add(ball.dy, 0.08);
@@ -904,17 +975,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ball.x = precise.add(ball.x, ball.dx);
           ball.y = precise.add(ball.y, ball.dy);
 
-          checkCollisions(ball, true);
+          checkCollisionsLocal(ball);
         });
-
-        tempPhysicsTime += FIXED_DELTA;
         
-        if (actualWinnersRef.current.length > 0) break;
+        if (actualWinnersLocal.length > 0) break;
       }
       
       // Сохраняем результат симуляции
-      if (actualWinnersRef.current.length > 0) {
-        const winningBallId = actualWinnersRef.current[0];
+      if (actualWinnersLocal.length > 0) {
+        const winningBallId = actualWinnersLocal[0];
         const winningBall = tempBalls.find(b => b.id === winningBallId);
         if (winningBall) {
           simulationResultRef.current = {
@@ -925,85 +994,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       }
       
-      // ПОЛНОСТЬЮ УНИЧТОЖАЕМ ВСЕ СЛЕДЫ СИМУЛЯЦИИ
-      console.log("DESTROYING ALL SIMULATION TRACES...");
-      
-      // Уничтожаем все временные шары
-      tempBalls.forEach(ball => {
+      // Уничтожаем simContainer и всё его содержимое
+      if (simContainer) {
         try {
-          if (ball.graphics && ball.graphics.parent) {
-            ball.graphics.parent.removeChild(ball.graphics);
-          }
-          if (ball.graphics) {
-            ball.graphics.destroy({ children: true, texture: false });
-          }
-          if (ball.indicator && ball.indicator.parent) {
-            ball.indicator.parent.removeChild(ball.indicator);
-          }
-          if (ball.indicator) {
-            ball.indicator.destroy({ children: true, texture: false });
-          }
-        } catch (e) {
-          console.warn('Error destroying temp ball:', e);
-        }
-      });
-      
-      // Уничтожаем все временные препятствия
-      tempMapData.obstacles.forEach(obstacle => {
-        try {
-          if (obstacle.graphics && obstacle.graphics.parent) {
-            obstacle.graphics.parent.removeChild(obstacle.graphics);
-          }
-          if (obstacle.graphics) {
-            obstacle.graphics.destroy({ children: true, texture: false });
-          }
-        } catch (e) {
-          console.warn('Error destroying temp obstacle:', e);
-        }
-      });
-      
-      // Уничтожаем все временные спиннеры
-      tempMapData.spinners.forEach(spinner => {
-        try {
-          if (spinner.graphics && spinner.graphics.parent) {
-            spinner.graphics.parent.removeChild(spinner.graphics);
-          }
-          if (spinner.graphics) {
-            spinner.graphics.destroy({ children: true, texture: false });
-          }
-        } catch (e) {
-          console.warn('Error destroying temp spinner:', e);
-        }
-      });
-      
-      // ПОЛНОСТЬЮ ОЧИЩАЕМ КАНВАС
-      if (appRef.current && appRef.current.stage) {
-        console.log("CLEARING ENTIRE STAGE...");
-        appRef.current.stage.removeChildren();
-        // Принудительно очищаем все дочерние элементы
-        while (appRef.current.stage.children.length > 0) {
-          const child = appRef.current.stage.children[0];
-          appRef.current.stage.removeChild(child);
-          try {
-            child.destroy({ children: true, texture: false });
-          } catch (e) {}
+          simContainer.removeChildren();
+          simContainer.destroy({ children: true, texture: false });
+        } catch (e) { 
+          console.warn("destroy simContainer failed", e); 
         }
       }
-      
-      // Восстанавливаем оригинальное состояние
-      ballsRef.current = originalBalls;
-      obstaclesRef.current = originalObstacles;
-      spinnersRef.current = originalSpinners;
-      mapDataRef.current = originalMapData;
-      actualWinnersRef.current = originalWinners;
-      
-      // Очищаем состояния мячей
-      ballStatesRef.current.clear();
-      
-      // Сбрасываем физику
-      physicsTimeRef.current = 0;
-      lastTimeRef.current = 0;
-      accumulatorRef.current = 0;
       
       // Снимаем флаг симуляции
       isSimulationRunningRef.current = false;
