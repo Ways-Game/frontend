@@ -138,7 +138,7 @@ const autoStartPendingRef = useRef<any | null>(null);
   }
 
 
-  const startGame = (dataFromState?: { seed: string; mapId: number[] | number; participants: any[]; winner_id: number }) => {
+  const startGame = async (dataFromState?: { seed: string; mapId: number[] | number; participants: any[]; winner_id: number }) => {
     const countdownDuration = 4;
     
     const currentRoundGameData = dataFromState || gameData;

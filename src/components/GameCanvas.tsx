@@ -809,23 +809,20 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       winner_id?: string;
     }) => {
       console.log("Starting game with data:", gameData);
-      console.log('gamecanvas speedtime1:', speedUpTime)
 
       await waitForApp();
-      console.log("app ready, continue...", appRef.current);
-
       if (!appRef.current) return;
-      console.log("Starting game with data2:", gameData);
 
+      // Очищаем предыдущее состояние
       seedRef.current = gameData.seed;
       randomRef.current = new DeterministicRandom(gameData.seed);
       physicsTimeRef.current = 0;
       lastTimeRef.current = 0;
       accumulatorRef.current = 0;
-
-      // ОЧИСТКА ПРЕДЫДУЩИХ ПОБЕДИТЕЛЕЙ - важно делать это до любой симуляции
       setActualWinners([]);
       actualWinnersRef.current = [];
+      
+      // Очищаем предыдущие шары
       ballsRef.current.forEach((ball) => {
         appRef.current!.stage.removeChild(ball.graphics);
         if (ball.indicator) {
@@ -844,12 +841,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           random: randomRef.current,
         });
 
-        obstaclesRef.current = mapData.obstacles.sort(
-          (a, b) => a.x + a.y - (b.x + b.y)
-        );
-        spinnersRef.current = mapData.spinners.sort(
-          (a, b) => a.x + a.y - (b.x + b.y)
-        );
+        obstaclesRef.current = mapData.obstacles;
+        spinnersRef.current = mapData.spinners;
 
         mapDataRef.current = {
           ...mapData,
@@ -861,7 +854,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (appRef.current) {
           appRef.current.stage.x = 0;
           appRef.current.stage.y = 0;
-
           const deviceWidth = window.innerWidth;
           const deviceHeight = window.innerHeight - 80;
           appRef.current.renderer.resize(deviceWidth, deviceHeight);
@@ -871,157 +863,146 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         Math.random = originalRandom;
       }
 
-      const newBalls: Ball[] = [];
-      let ballIndex = 0;
-
-      // Если передан winner_id, выполняем специальную логику
+      // Если передан winner_id, выполняем скрытую симуляцию
+      let winningBallInfo: {id: string, playerId: string} | null = null;
+      
       if (gameData.winner_id && gameData.winner_id !== "0") {
-        console.log("Starting game with winner_id logic:", gameData.winner_id);
+        console.log("Running hidden simulation for winner_id:", gameData.winner_id);
         
-        // 1. Сохраняем текущее состояние игры
-        const originalGameState = gameState;
-        const originalWinners = [...actualWinnersRef.current];
-        
-        // 2. Временно отключаем обработчик победы
-        const originalOnBallWin = onBallWin;
-        const tempOnBallWin = () => {}; // Пустая функция
-        
-        // 3. Создаем временные шары для симуляции
+        // Создаем временные шары для симуляции (без графики)
         const tempBalls: Ball[] = [];
-        let tempBallIndex = 0;
         
         for (const rawParticipant of gameData.participants || []) {
           const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-          const ballsCount = Number(
-            rawParticipant.balls_count ?? user.balls_count ?? 0
-          );
+          const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
           const playerId = (user.id ?? rawParticipant.id ?? "").toString();
 
           if (ballsCount <= 0) continue;
 
           for (let i = 0; i < ballsCount; i++) {
-            const startX = precise.add(
-              50,
-              precise.mul(randomRef.current!.next(), WORLD_WIDTH - 100)
-            );
-            const startY = precise.add(
-              50,
-              precise.mul(randomRef.current!.next(), WORLD_HEIGHT - 100)
-            );
-            const initialDX = precise.mul(
-              precise.sub(randomRef.current!.next(), 0.5),
-              2
-            );
+            const startX = precise.add(50, precise.mul(randomRef.current!.next(), WORLD_WIDTH - 100));
+            const startY = precise.add(50, precise.mul(randomRef.current!.next(), WORLD_HEIGHT - 100));
+            const initialDX = precise.mul(precise.sub(randomRef.current!.next(), 0.5), 2);
 
             tempBalls.push({
-              id: `temp_${tempBallIndex}`,
+              id: `temp_${tempBalls.length}`,
               x: startX,
               y: startY,
               dx: initialDX,
               dy: 0,
-              graphics: new PIXI.Graphics(), // Пустая графика для симуляции
+              graphics: new PIXI.Graphics(),
               color: 0x4ecdc4,
               playerId: playerId,
               finished: false,
               indicator: null,
               bounceCount: 0,
             } as Ball);
-            tempBallIndex++;
           }
         }
-        
-        // 4. Запускаем ускоренную симуляцию на 500 секунд
+
+        // Запускаем ускоренную симуляцию
         const originalBalls = ballsRef.current;
         ballsRef.current = tempBalls;
         
         const fastForwardSeconds = 500;
-        const framesToSimulate = Math.min(fastForwardSeconds * FIXED_FPS, 30000); // Ограничиваем максимум 30000 кадров
+        const framesToSimulate = Math.min(fastForwardSeconds * FIXED_FPS, 30000);
         
-        console.log(`Starting fast-forward simulation for ${framesToSimulate} frames`);
+        console.log(`Starting hidden simulation for ${framesToSimulate} frames`);
         
-        // Временно заменяем обработчики
-        onBallWin = tempOnBallWin;
-        
+        // Выполняем симуляцию синхронно
         for (let i = 0; i < framesToSimulate; i++) {
-          updatePhysics();
+          updatePhysics(true); // Передаем true для скрытой симуляции
           physicsTimeRef.current += FIXED_DELTA;
           
           // Прерываем если есть победитель
           if (actualWinnersRef.current.length > 0) break;
         }
         
-        // 5. Запоминаем ID победившего шара
-        const winningBallId = actualWinnersRef.current[0];
-        console.log("Winning ball from simulation:", winningBallId);
+        // Запоминаем информацию о победившем шаре
+        if (actualWinnersRef.current.length > 0) {
+          const winningBallId = actualWinnersRef.current[0];
+          const winningBall = tempBalls.find(b => b.id === winningBallId);
+          if (winningBall) {
+            winningBallInfo = {
+              id: winningBallId,
+              playerId: winningBall.playerId
+            };
+            console.log("Hidden simulation winner:", winningBallInfo);
+          }
+        }
         
-        // 6. Восстанавливаем оригинальное состояние
+        // Восстанавливаем оригинальное состояние
         ballsRef.current = originalBalls;
-        setActualWinners([]);
         actualWinnersRef.current = [];
-        onBallWin = originalOnBallWin;
-        setGameState(originalGameState);
-        
-        // 7. Теперь создаем шары для реальной игры, но меняем местами
-        for (const rawParticipant of gameData.participants || []) {
+        physicsTimeRef.current = 0; // Сбрасываем время физики
+      }
+
+      // Создаем реальные шары для отображения
+      const newBalls: Ball[] = [];
+      let ballIndex = 0;
+
+      for (const rawParticipant of gameData.participants || []) {
         const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-        const ballsCount = Number(
-          rawParticipant.balls_count ?? user.balls_count ?? 0
-        );
-        const avatarUrl =
-          rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
+        const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
+        const avatarUrl = rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
         const playerId = (user.id ?? rawParticipant.id ?? "").toString();
 
         if (ballsCount <= 0) continue;
 
         for (let i = 0; i < ballsCount; i++) {
           const ballId = `${gameData.seed}_${ballIndex}`;
-          const isWinningBall = winningBallId === `temp_${ballIndex}`;
           
-          // NEW SWAPPING LOGIC: If this is the winning ball, assign it to winner_id
+          // Определяем, нужно ли менять этот шар
           let finalPlayerId = playerId;
           let finalAvatarUrl = avatarUrl;
           
-          if (winningBallId && gameData.winner_id) {
-            if (isWinningBall) {
-              // This ball won in hidden simulation, assign to winner_id
+          if (winningBallInfo && gameData.winner_id) {
+            const isWinningBallInSimulation = winningBallInfo.id === `temp_${ballIndex}`;
+            const isWinnerParticipant = playerId === gameData.winner_id.toString();
+            
+            if (isWinningBallInSimulation) {
+              // Этот шар победил в симуляции - присваиваем ему winner_id
               finalPlayerId = gameData.winner_id.toString();
-              const winnerParticipant = gameData.participants.find(
-                p => (p.id ?? p.user?.id) == gameData.winner_id
-              );
-              if (winnerParticipant) {
-                const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
-                finalAvatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar ?? avatarUrl;
-              }
-              console.log('Assigning hidden winner ball', ballId, 'to winner_id:', finalPlayerId);
-            } else if ((user.id ?? rawParticipant.id) == gameData.winner_id) {
-              // This participant is winner_id but ball is not the hidden winner
-              // Find the original owner of hidden winner ball and swap avatars
-              const hiddenWinnerOriginalOwner = gameData.participants.find(p => {
-                let tempBallIndex = 0;
-                for (const rp of gameData.participants || []) {
-                  const rpUser = rp.user ? rp.user : rp;
-                  const rpBallsCount = Number(rp.balls_count ?? rpUser.balls_count ?? 0);
-                  for (let j = 0; j < rpBallsCount; j++) {
-                    const tempBallId = `${gameData.seed}_${tempBallIndex}`;
-                    if (tempBallId === winningBallId) {
-                      return (rpUser.id ?? rp.id) === (p.user?.id ?? p.id);
-                    }
-                    tempBallIndex++;
-                  }
-                }
-                return false;
+              
+              // Находим аватар для winner_id
+              const winnerParticipant = gameData.participants.find(p => {
+                const pUser = p.user ? p.user : p;
+                return (pUser.id ?? p.id)?.toString() === gameData.winner_id.toString();
               });
               
-              if (hiddenWinnerOriginalOwner) {
-                const originalUser = hiddenWinnerOriginalOwner.user ? hiddenWinnerOriginalOwner.user : hiddenWinnerOriginalOwner;
-                finalAvatarUrl = hiddenWinnerOriginalOwner.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar ?? avatarUrl;
-                console.log('Swapping winner participant ball', ballId, 'avatar with original owner');
+              if (winnerParticipant) {
+                const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
+                finalAvatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar;
+              }
+            } else if (isWinnerParticipant) {
+              // Это шар участника с winner_id, но не победивший в симуляции
+              // Находим оригинального владельца победившего шара
+              const originalWinnerIndex = parseInt(winningBallInfo.id.replace("temp_", ""));
+              let originalWinnerParticipant = null;
+              let participantIndex = 0;
+              
+              for (const p of gameData.participants || []) {
+                const pUser = p.user ? p.user : p;
+                const pBallsCount = Number(p.balls_count ?? pUser.balls_count ?? 0);
+                
+                if (originalWinnerIndex >= participantIndex && originalWinnerIndex < participantIndex + pBallsCount) {
+                  originalWinnerParticipant = p;
+                  break;
+                }
+                
+                participantIndex += pBallsCount;
+              }
+              
+              if (originalWinnerParticipant) {
+                const originalUser = originalWinnerParticipant.user ? originalWinnerParticipant.user : originalWinnerParticipant;
+                finalAvatarUrl = originalWinnerParticipant.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar;
               }
             }
           }
           
+          // Создаем графику для шара
           const ballGraphics = new PIXI.Graphics();
-
+          
           if (finalAvatarUrl) {
             try {
               const encodedUrl = encodeURI(finalAvatarUrl);
@@ -1050,18 +1031,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
           indicator.visible = false;
 
-          const startX = precise.add(
-            50,
-            precise.mul(randomRef.current.next(), WORLD_WIDTH - 100)
-          );
-          const startY = precise.add(
-            50,
-            precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100)
-          );
-          const initialDX = precise.mul(
-            precise.sub(randomRef.current.next(), 0.5),
-            2
-          );
+          const startX = precise.add(50, precise.mul(randomRef.current!.next(), WORLD_WIDTH - 100));
+          const startY = precise.add(50, precise.mul(randomRef.current!.next(), WORLD_HEIGHT - 100));
+          const initialDX = precise.mul(precise.sub(randomRef.current!.next(), 0.5), 2);
 
           ballGraphics.position.set(startX, startY);
           indicator.position.set(startX, startY - 40);
@@ -1084,96 +1056,24 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           } as Ball);
           ballIndex++;
         }
-        }
-      } else {
-        // Обычная логика создания шаров
-        for (const rawParticipant of gameData.participants || []) {
-          const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-          const ballsCount = Number(
-            rawParticipant.balls_count ?? user.balls_count ?? 0
-          );
-          const avatarUrl =
-            rawParticipant.avatar_url ?? user.avatar_url ?? user.avatar;
-          const playerId = (user.id ?? rawParticipant.id ?? "").toString();
-
-          if (ballsCount <= 0) continue;
-
-          for (let i = 0; i < ballsCount; i++) {
-            const ballGraphics = new PIXI.Graphics();
-
-            if (avatarUrl) {
-              try {
-                const encodedUrl = encodeURI(avatarUrl);
-                const proxyUrl = "https://api.corsproxy.io/";
-                const finalUrl = proxyUrl + encodedUrl;
-                const texture = await PIXI.Assets.load(finalUrl);
-                ballGraphics
-                  .circle(0, 0, 24)
-                  .fill({ texture })
-                  .stroke({ width: 2, color: 0xffffff });
-              } catch (error) {
-                ballGraphics
-                  .circle(0, 0, 24)
-                  .fill(0x4ecdc4)
-                  .stroke({ width: 2, color: 0xffffff });
-              }
-            } else {
-              ballGraphics
-                .circle(0, 0, 24)
-                .fill(0x4ecdc4)
-                .stroke({ width: 2, color: 0xffffff });
-            }
-
-            const indicator = new PIXI.Graphics();
-            indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
-            indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
-            indicator.visible = false;
-
-            const startX = precise.add(
-              50,
-              precise.mul(randomRef.current!.next(), WORLD_WIDTH - 100)
-            );
-            const startY = precise.add(
-              50,
-              precise.mul(randomRef.current!.next(), WORLD_HEIGHT - 100)
-            );
-            const initialDX = precise.mul(
-              precise.sub(randomRef.current!.next(), 0.5),
-              2
-            );
-
-            ballGraphics.position.set(startX, startY);
-            indicator.position.set(startX, startY - 40);
-
-            appRef.current!.stage.addChild(ballGraphics);
-            appRef.current!.stage.addChild(indicator);
-
-            newBalls.push({
-              id: `${gameData.seed}_${ballIndex}`,
-              x: startX,
-              y: startY,
-              dx: initialDX,
-              dy: 0,
-              graphics: ballGraphics,
-              color: 0x4ecdc4,
-              playerId: playerId,
-              finished: false,
-              indicator: indicator,
-              bounceCount: 0,
-            } as Ball);
-            ballIndex++;
-          }
-        }
       }
 
       ballsRef.current = newBalls;
-      console.log('Created', newBalls.length, 'balls with new swapping logic');
-        console.log('gamecanvas speedtime1:', speedUpTime)
 
+      // Удаляем gateBarrier если есть
+      const gateBarrier = (mapDataRef.current as any)?.gateBarrier;
+      if (gateBarrier) {
+        const index = obstaclesRef.current.indexOf(gateBarrier);
+        if (index > -1) {
+          obstaclesRef.current.splice(index, 1);
+        }
+      }
+
+      // Запускаем обычную игру
       setGameState("playing");
       onGameStart?.();
-        console.log('gamecanvas speedtime2:', speedUpTime)
 
+      // Загружаем музыку
       try {
         const rtttlContent = musicContent || RTTTL;
         if (rtttlContent && typeof rtttlContent === "string") {
@@ -1184,32 +1084,28 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         console.warn("Failed to init melody notes", e);
       }
 
-      // --- FAST-FORWARD (apply speedUpTime if provided) ---
+      // Применяем fast forward если нужно
       try {
-        // speedUpTime is a prop in seconds (passed from parent)
         const secondsToFastForward = Number(speedUpTime || 0);
-        console.log('gamecanvas speedtime:', secondsToFastForward)
         if (secondsToFastForward > 0) {
           const frames = Math.floor(secondsToFastForward * FIXED_FPS);
-          // cap frames to avoid freezing main thread; tune as needed
-          const MAX_FRAMES = 3000; // ~133s at 60fps — adjust if you like
+          const MAX_FRAMES = 3000;
           const framesToSimulate = Math.min(frames, MAX_FRAMES);
-          console.log(framesToSimulate)
-          // perform physics updates synchronously
+          
           for (let i = 0; i < framesToSimulate; i++) {
             updatePhysics();
             physicsTimeRef.current += FIXED_DELTA;
           }
-          console.log(`Fast-forwarded physics by ${framesToSimulate} frames (${(framesToSimulate/FIXED_FPS).toFixed(2)}s)`);
+          
+          console.log(`Fast-forwarded physics by ${framesToSimulate} frames`);
         }
       } catch (e) {
         console.warn("Fast-forward failed:", e);
       }
-      // --- end fast-forward ---
 
+      // Запускаем игровые циклы
       const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
       (gameLoopRef as any).physicsIntervalId = physicsInterval;
-
       gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
