@@ -154,7 +154,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const ballStatesRef = useRef<Map<string, BallState>>(new Map());
     const winnerBallIdRef = useRef<string | null>(null);
     const winnerPlayerIdRef = useRef<string | null>(null);
-    const physicsEnabledRef = useRef<boolean>(false);
+
 
     // RTTTL parser (fixed)
     const parseRTTTL = (rtttl: string) => {
@@ -413,7 +413,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       });
 
       ballsRef.current.forEach((ball) => {
-        if (ball.finished || !physicsEnabledRef.current) return;
+        if (ball.finished) return;
 
         // Инициализируем состояние мяча если нужно
         if (!ballStatesRef.current.has(ball.id)) {
@@ -1336,12 +1336,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         width: mapDataRef.current?.mapWidth || 1200,
         height: mapDataRef.current?.mapHeight || 2500,
       }),
-      openGateBarrier: () => {
-        physicsEnabledRef.current = true;
-      },
-      setTornadoEffect: (active: boolean) => {
-        // Tornado effect implementation if needed
-      },
+
       destroyCanvas: () => {
         if ((gameLoopRef as any).physicsIntervalId) {
           clearInterval((gameLoopRef as any).physicsIntervalId);

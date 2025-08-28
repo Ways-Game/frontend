@@ -165,6 +165,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           setCountdownText("LET'S GO!");
           setTimeout(() => {
             setShowCountdown(false);
+            handleGameStart();
             gameCanvasRef.current?.startGame(currentRoundGameData);
           }, 1000);
         }
