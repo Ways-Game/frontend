@@ -92,13 +92,9 @@ const autoStartPendingRef = useRef<any | null>(null);
       const currentGameData = gameDataRef.current;
       if (currentGameData && currentGameData.game_id) {
         try {
-          const gameDetails = await api.getGameById(currentGameData.game_id)
-          if (!gameDetails.winner_id) {
-            // убрал пока обновление победителя
-            //await api.updateGameWinner(currentGameData.game_id, +playerId)
-          }
+            await api.updateGameState(currentGameData.game_id, 'finish' )
         } catch (e) {
-          console.warn('Failed to check/update winner:', e)
+          console.warn('Failed to change game state', e)
         }
       }
 
