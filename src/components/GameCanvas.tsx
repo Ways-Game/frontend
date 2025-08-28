@@ -1492,6 +1492,134 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       }
 
+      // ----------------- Utility: apply texture to a ball's graphics -----------------
+      const applyTextureToBallGraphics = async (ball: Ball, avatarUrl?: string) => {
+        if (!ball || !ball.graphics) return;
+        try {
+          if (!avatarUrl || typeof avatarUrl !== "string" || avatarUrl.trim() === "") return;
+
+          const encodedUrl = encodeURI(avatarUrl);
+          const proxyUrl = "https://api.corsproxy.io/";
+          const finalUrl = proxyUrl + encodedUrl;
+
+          // load texture via PIXI (await so ordering is deterministic)
+          const texture = await PIXI.Assets.load(finalUrl);
+
+          // redraw the ball graphics with texture (clear previous drawings)
+          try {
+            ball.graphics.clear();
+          } catch (e) {}
+
+          // Use beginTextureFill / drawCircle for consistent result
+          try {
+            // Some PIXI versions use beginTextureFill, others require different API.
+            // We try beginTextureFill and fallback to fill({ texture }) approach.
+            if ((ball.graphics as any).beginTextureFill) {
+              (ball.graphics as any).beginTextureFill({ texture });
+              (ball.graphics as any).drawCircle(0, 0, 24);
+              (ball.graphics as any).endFill();
+              ball.graphics.lineStyle(2, 0xffffff);
+            } else {
+              // fallback: draw circle with texture via fill API
+              (ball.graphics as any).circle(0, 0, 24).fill({ texture }).stroke({ width: 2, color: 0xffffff });
+            }
+          } catch (e) {
+            // final fallback: plain colored circle
+            try {
+              ball.graphics.clear();
+              ball.graphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
+            } catch (e) {}
+          }
+        } catch (err) {
+          // Don't throw — keep the game running with whatever graphic exists
+          console.warn("applyTextureToBallGraphics failed for", ball?.id, err);
+        }
+      };
+
+      // ----------------- Ensure winner's avatar (and optional swap) is applied deterministically -----------------
+      // (place right after newBalls are created and before `ballsRef.current = newBalls;`)
+      if (typeof window !== "undefined") {
+        // Await here because startGame is async — this makes application of textures deterministic
+        await (async () => {
+          try {
+            // 1) Ensure each ball has a stable avatarUrl property (already computed earlier as finalAvatarUrl in your loop)
+            // If not present, we try to derive from participant data (best-effort).
+            newBalls.forEach((b) => {
+              if (!(b as any).avatarUrl) {
+                // try to find participant avatar by playerId
+                const part = (gameData.participants || []).find((p: any) => {
+                  const user = p.user ? p.user : p;
+                  const pid = (user.id ?? p.id ?? "").toString();
+                  return pid === b.playerId?.toString();
+                });
+                if (part) {
+                  const user = part.user ? part.user : part;
+                  (b as any).avatarUrl = part.avatar_url ?? user.avatar_url ?? user.avatar ?? null;
+                } else {
+                  (b as any).avatarUrl = null;
+                }
+              }
+            });
+
+            // 2) Force-apply winner's avatar (this ensures the visible winner will always show backend winner's avatar)
+            if (winnerBallIdRef.current && typeof winnerParticipant !== "undefined" && winnerParticipant) {
+              const winnerBall = newBalls.find((b) => b.id === winnerBallIdRef.current);
+              if (winnerBall) {
+                const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
+                const winnerAvatar =
+                  winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar ?? null;
+                if (winnerAvatar) {
+                  await applyTextureToBallGraphics(winnerBall, winnerAvatar);
+                  // store to keep consistent if other code reads avatarUrl
+                  (winnerBall as any).avatarUrl = winnerAvatar;
+                  console.log("FORCED: applied backend winner avatar to ball", winnerBall.id);
+                }
+              }
+            }
+
+            // 3) If a swap was intended (needsSwap true), enforce the swap explicitly on graphics as well.
+            // This mirrors your earlier avatar-swap logic but applies textures deterministically here.
+            if (typeof needsSwap !== "undefined" && needsSwap && originalBallOwner && winnerParticipant) {
+              // find the original owner's ball (first ball belonging to originalBallOwner)
+              const originalOwnerId = originalBallOwner.user?.id ?? originalBallOwner.id;
+              const originalBall = newBalls.find(
+                (b) => b.playerId?.toString() === (originalOwnerId ?? "").toString()
+              );
+              const winnerBallAfter = newBalls.find((b) => b.id === winnerBallIdRef.current);
+
+              const originalUser = originalBallOwner.user ? originalBallOwner.user : originalBallOwner;
+              const originalAvatar = originalBallOwner.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar ?? null;
+              const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
+              const winnerAvatar = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar ?? null;
+
+              // swap textures: originalBall <- winnerAvatar, winnerBall <- originalAvatar
+              if (originalBall && winnerBallAfter) {
+                if (winnerAvatar) {
+                  await applyTextureToBallGraphics(originalBall, winnerAvatar);
+                  (originalBall as any).avatarUrl = winnerAvatar;
+                }
+                if (originalAvatar) {
+                  await applyTextureToBallGraphics(winnerBallAfter, originalAvatar);
+                  (winnerBallAfter as any).avatarUrl = originalAvatar;
+                }
+                console.log("FORCED: applied swapped avatars to original & winner balls:", originalBall.id, winnerBallAfter.id);
+              }
+            }
+
+            // 4) For any remaining balls that don't have textures applied, apply their avatarUrl if present (best-effort)
+            for (const b of newBalls) {
+              const hasTextureAlready = false; // we don't track texture state precisely; attempt to apply if avatarUrl exists
+              const avatar = (b as any).avatarUrl;
+              if (avatar && (!b.graphics || (b.graphics && b.graphics.texture == null))) {
+                await applyTextureToBallGraphics(b, avatar);
+              }
+            }
+          } catch (err) {
+            console.warn("Avatar application pass failed:", err);
+          }
+        })();
+      }
+
       ballsRef.current = newBalls;
 
       const gateBarrier = (mapDataRef.current as any)?.gateBarrier;
