@@ -50,9 +50,15 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 class DeterministicRandom {
   private seed: number;
-  constructor(seed: string) {
-    this.seed = this.hashString(seed || "default_seed");
+  constructor(seed: string | number) {
+    if (typeof seed === "number") {
+      this.seed = Math.floor(Math.abs(seed)) % 2147483647;
+      if (this.seed === 0) this.seed = 1;
+    } else {
+      this.seed = this.hashString((seed as string) || "default_seed");
+    }
   }
+
   private hashString(str: string): number {
     if (!str || typeof str !== "string") str = "default_seed";
     let hash = 0;
@@ -60,11 +66,24 @@ class DeterministicRandom {
       hash = Math.imul(hash, 31) + str.charCodeAt(i);
       hash |= 0;
     }
-    return Math.abs(hash);
+    // keep it positive and non-zero
+    const v = Math.abs(hash) % 2147483647;
+    return v === 0 ? 1 : v;
   }
+
   next(): number {
     this.seed = Math.imul(this.seed, 16807) % 2147483647;
     return (this.seed & 0x7fffffff) / 0x7fffffff;
+  }
+
+  // возвращает "числовое" состояние (для отладки)
+  getState(): number {
+    return this.seed;
+  }
+
+  // клонирование RNG в текущем состоянии — важно для префсимуляции
+  clone(): DeterministicRandom {
+    return new DeterministicRandom(this.seed);
   }
 }
 
@@ -937,7 +956,423 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         await new Promise((r) => setTimeout(r, 50));
       }
     };
+const performSimulationUsingMap = async (
+  simMapData: any,
+  clonedRandom: DeterministicRandom,
+  participants: any[],
+  preSimSeconds = 500
+): Promise<string | null> => {
+  // plain copies of obstacles/spinners
+  const simObstacles: any[] = [];
+  const simSpinners: any[] = [];
+  const simBalls: {
+    id: string;
+    x: number;
+    y: number;
+    dx: number;
+    dy: number;
+    playerId: string;
+    finished: boolean;
+    bounceCount: number;
+    onSurface?: boolean;
+    surfaceObstacleIndex?: number | null;
+  }[] = [];
+  const simBallStates = new Map<string, BallState>();
+  const simActualWinners: string[] = [];
+  let simPhysicsTime = 0;
 
+  // copy numeric map objects (do NOT depend on graphics)
+  (simMapData.obstacles || []).forEach((o: any) => {
+    simObstacles.push({
+      type: o.type,
+      x: o.x,
+      y: o.y,
+      width: o.width,
+      height: o.height,
+      destroyed: !!o.destroyed,
+      hitCount: o.hitCount || 0,
+    });
+  });
+  (simMapData.spinners || []).forEach((s: any) => {
+    simSpinners.push({
+      x: s.x,
+      y: s.y,
+      rotation: s.rotation || 0,
+      radius: s.radius,
+    });
+  });
+
+  // build balls using cloned RNG (clonedRandom) — THIS MUST MATCH main sequence
+  let bi = 0;
+  for (const rawParticipant of participants || []) {
+    const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+    const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
+    const playerId = (user.id ?? rawParticipant.id ?? "").toString();
+    if (ballsCount <= 0) continue;
+    for (let i = 0; i < ballsCount; i++) {
+      const startX = precise.add(50, precise.mul(clonedRandom.next(), WORLD_WIDTH - 100));
+      const startY = precise.add(50, precise.mul(clonedRandom.next(), WORLD_HEIGHT - 100));
+      const initialDX = precise.mul(precise.sub(clonedRandom.next(), 0.5), 2);
+      simBalls.push({
+        id: `${simMapData.seed || "seed"}_${bi}`,
+        x: startX,
+        y: startY,
+        dx: initialDX,
+        dy: 0,
+        playerId,
+        finished: false,
+        bounceCount: 0,
+        onSurface: false,
+        surfaceObstacleIndex: null,
+      });
+      bi++;
+    }
+  }
+
+  // local collision + physics (mirror original logic)
+  const localCheckCollisions = (ball: typeof simBalls[number]) => {
+    // obstacles collisions
+    for (let oi = 0; oi < simObstacles.length; oi++) {
+      const obstacle = simObstacles[oi];
+      if (obstacle.destroyed) continue;
+
+      if (obstacle.type === "peg") {
+        const dx = precise.sub(ball.x, obstacle.x);
+        const dy = precise.sub(ball.y, obstacle.y);
+        const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+        if (distanceSq < 1296) {
+          const distance = precise.sqrt(distanceSq) || 0.0001;
+          const normalX = precise.div(dx, distance);
+          const normalY = precise.div(dy, distance);
+          ball.x = precise.add(obstacle.x, precise.mul(normalX, 36));
+          ball.y = precise.add(obstacle.y, precise.mul(normalY, 36));
+          const dotProduct = precise.add(
+            precise.mul(ball.dx, normalX),
+            precise.mul(ball.dy, normalY)
+          );
+          ball.dx = precise.mul(
+            precise.sub(ball.dx, precise.mul(precise.mul(dotProduct, 2), normalX)),
+            0.82
+          );
+          ball.dy = precise.mul(
+            precise.sub(ball.dy, precise.mul(precise.mul(dotProduct, 2), normalY)),
+            0.82
+          );
+        }
+      } else if (obstacle.type === "barrier") {
+        const halfW = precise.div(obstacle.width, 2);
+        const halfH = precise.div(obstacle.height, 2);
+        if (
+          precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+          precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+        ) {
+          const overlapX = precise.sub(
+            halfW + 24,
+            precise.abs(precise.sub(ball.x, obstacle.x))
+          );
+          const overlapY = precise.sub(
+            halfH + 24,
+            precise.abs(precise.sub(ball.y, obstacle.y))
+          );
+          const isFunnelSegment = obstacle.width <= 8 && obstacle.height <= 8;
+          if (overlapX < overlapY) {
+            if (ball.x < obstacle.x) {
+              ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
+            } else {
+              ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
+            }
+            if (isFunnelSegment) {
+              const centerX = WORLD_WIDTH / 2;
+              const directionToCenter = ball.x < centerX ? 1 : -1;
+              ball.dx = precise.mul(precise.abs(ball.dx), directionToCenter * 0.82);
+            } else {
+              ball.dx = precise.mul(ball.dx, -0.82);
+            }
+            ball.bounceCount++;
+          } else {
+            if (ball.y < obstacle.y) {
+              ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+              if (isFunnelSegment) {
+                const centerX = WORLD_WIDTH / 2;
+                const directionToCenter = ball.x < centerX ? 1 : -1;
+                ball.dy = precise.mul(ball.dy, -0.88);
+                ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 0.5));
+                ball.bounceCount++;
+              } else {
+                const verticalImpact = precise.abs(ball.dy);
+                const shouldStick = verticalImpact < 1.0 && ball.bounceCount >= 2;
+                if (shouldStick) {
+                  ball.onSurface = true;
+                  ball.surfaceObstacleIndex = oi;
+                  ball.dy = 0;
+                } else {
+                  ball.dy = precise.mul(ball.dy, -0.78);
+                  ball.bounceCount++;
+                }
+              }
+            } else {
+              ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
+              ball.dy = precise.mul(ball.dy, -0.78);
+              ball.bounceCount++;
+            }
+          }
+        }
+      } else if (obstacle.type === "brick") {
+        const halfW = precise.div(obstacle.width, 2);
+        const halfH = precise.div(obstacle.height, 2);
+        if (
+          precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+          precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+        ) {
+          obstacle.hitCount = (obstacle.hitCount || 0) + 1;
+          if (obstacle.hitCount >= 3) obstacle.destroyed = true;
+          const overlapX = precise.sub(
+            halfW + 24,
+            precise.abs(precise.sub(ball.x, obstacle.x))
+          );
+          const overlapY = precise.sub(
+            halfH + 24,
+            precise.abs(precise.sub(ball.y, obstacle.y))
+          );
+          if (overlapX < overlapY) ball.dx = precise.mul(ball.dx, -0.78);
+          else ball.dy = precise.mul(ball.dy, -0.78);
+        }
+      } else if (obstacle.type === "spinner") {
+        const dx = precise.sub(ball.x, obstacle.x);
+        const dy = precise.sub(ball.y, obstacle.y);
+        const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+        if (distanceSq < 2304 && distanceSq > 0) {
+          const distance = precise.sqrt(distanceSq) || 0.0001;
+          const normalX = precise.div(dx, distance);
+          const normalY = precise.div(dy, distance);
+          ball.x = precise.add(obstacle.x, precise.mul(normalX, 48));
+          ball.y = precise.add(obstacle.y, precise.mul(normalY, 48));
+          const tangentX = precise.mul(normalY, -1);
+          const tangentY = normalX;
+          const currentSpeed = precise.sqrt(
+            precise.add(precise.mul(ball.dx, ball.dx), precise.mul(ball.dy, ball.dy))
+          );
+          ball.dx = precise.mul(
+            precise.add(
+              precise.mul(precise.mul(normalX, currentSpeed), 0.75),
+              precise.mul(tangentX, 1.6)
+            ),
+            1.1
+          );
+          ball.dy = precise.mul(
+            precise.add(
+              precise.mul(precise.mul(normalY, currentSpeed), 0.75),
+              precise.mul(tangentY, 1.6)
+            ),
+            1.1
+          );
+        }
+      } else if (obstacle.type === "polygon") {
+        const halfW = precise.div(obstacle.width, 2);
+        const halfH = precise.div(obstacle.height, 2);
+        if (
+          precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+          precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+        ) {
+          const overlapX = precise.sub(
+            halfW + 24,
+            precise.abs(precise.sub(ball.x, obstacle.x))
+          );
+          const overlapY = precise.sub(
+            halfH + 24,
+            precise.abs(precise.sub(ball.y, obstacle.y))
+          );
+          if (overlapX < overlapY) {
+            if (ball.x < obstacle.x) ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
+            else ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
+            ball.dx = precise.mul(ball.dx, -0.82);
+          } else {
+            if (ball.y < obstacle.y) ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+            else ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
+            ball.dy = precise.mul(ball.dy, -0.82);
+          }
+        }
+      }
+    }
+
+    // ball-ball collisions
+    for (let j = 0; j < simBalls.length; j++) {
+      const otherBall = simBalls[j];
+      if (otherBall === ball || otherBall.finished) continue;
+      const dx = precise.sub(ball.x, otherBall.x);
+      const dy = precise.sub(ball.y, otherBall.y);
+      const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+      if (distanceSq < 2304 && distanceSq > 0) {
+        const distance = precise.sqrt(distanceSq) || 0.0001;
+        const normalX = precise.div(dx, distance);
+        const normalY = precise.div(dy, distance);
+        const overlap = precise.sub(48, distance);
+        const halfOverlap = precise.mul(overlap, 0.5);
+        ball.x = precise.add(ball.x, precise.mul(normalX, halfOverlap));
+        ball.y = precise.add(ball.y, precise.mul(normalY, halfOverlap));
+        otherBall.x = precise.sub(otherBall.x, precise.mul(normalX, halfOverlap));
+        otherBall.y = precise.sub(otherBall.y, precise.mul(normalY, halfOverlap));
+        const relVelX = precise.sub(ball.dx, otherBall.dx);
+        const relVelY = precise.sub(ball.dy, otherBall.dy);
+        const relSpeed = precise.add(precise.mul(relVelX, normalX), precise.mul(relVelY, normalY));
+        if (relSpeed > 0) continue;
+        const impulse = precise.mul(relSpeed, 0.86);
+        const halfImpulse = precise.mul(impulse, 0.5);
+        ball.dx = precise.sub(ball.dx, precise.mul(normalX, halfImpulse));
+        ball.dy = precise.sub(ball.dy, precise.mul(normalY, halfImpulse));
+        otherBall.dx = precise.add(otherBall.dx, precise.mul(normalX, halfImpulse));
+        otherBall.dy = precise.add(otherBall.dy, precise.mul(normalY, halfImpulse));
+      }
+    }
+
+    // bounds
+    if (ball.x < 24) {
+      ball.x = 24;
+      ball.dx = precise.mul(precise.abs(ball.dx), 0.82);
+    }
+    if (ball.x > 1176) {
+      ball.x = 1176;
+      ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), 0.82);
+    }
+
+    // win/death check
+    if (simMapData) {
+      const { winY, deathY } = simMapData;
+      if (ball.y > winY) {
+        if (simActualWinners.length === 0) {
+          simActualWinners.push(ball.id);
+          ball.finished = true;
+        }
+      }
+      if (ball.y > deathY && ball.y < deathY + 30) {
+        ball.finished = true;
+      }
+    }
+  };
+
+  // physics tick
+  const localUpdatePhysics = () => {
+    for (let s of simSpinners) s.rotation = precise.add(s.rotation || 0, 0.08);
+
+    for (const ball of simBalls) {
+      if (ball.finished) continue;
+
+      if (!simBallStates.has(ball.id)) {
+        simBallStates.set(ball.id, {
+          stuckFrames: 0,
+          lastPositions: [],
+          isStuck: false,
+          stuckRecoveryCountdown: 0,
+        });
+      }
+      const ballState = simBallStates.get(ball.id)!;
+
+      if (ballState.stuckRecoveryCountdown > 0) {
+        ballState.stuckRecoveryCountdown--;
+        if (ballState.stuckRecoveryCountdown === 0) {
+          ballState.stuckFrames = 0;
+          ballState.isStuck = false;
+          ballState.lastPositions = [];
+        }
+      }
+
+      ballState.lastPositions.push({ x: ball.x, y: ball.y });
+      if (ballState.lastPositions.length > 10) ballState.lastPositions.shift();
+
+      if (ballState.lastPositions.length >= 5) {
+        const first = ballState.lastPositions[0];
+        const last = ballState.lastPositions[ballState.lastPositions.length - 1];
+        const dx = precise.sub(last.x, first.x);
+        const dy = precise.sub(last.y, first.y);
+        const distance = precise.sqrt(precise.add(precise.mul(dx, dx), precise.mul(dy, dy)));
+        if (distance < 5) {
+          ballState.stuckFrames++;
+          if (ballState.stuckFrames > STUCK_THRESHOLD && !ballState.isStuck) {
+            ballState.isStuck = true;
+            ballState.stuckRecoveryCountdown = 60;
+            ball.dy = -STUCK_BOUNCE_FORCE;
+            ball.dx = precise.mul(precise.sub(clonedRandom.next(), 0.5), 4);
+          }
+        } else {
+          ballState.stuckFrames = 0;
+          ballState.isStuck = false;
+        }
+      }
+
+      ball.dy = precise.add(ball.dy, 0.08);
+      ball.dx = precise.mul(ball.dx, 0.9999800039998667);
+      ball.dy = precise.mul(ball.dy, 0.9999800039998667);
+
+      if (ball.onSurface && typeof ball.surfaceObstacleIndex === "number") {
+        const obs = simObstacles[ball.surfaceObstacleIndex];
+        if (obs) {
+          const halfW = obs.width / 2;
+          const halfH = obs.height / 2;
+          const minSurfaceSpeed = 0.5;
+          const surfaceFriction = 0.995;
+          ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
+          ball.dy = 0;
+          if (precise.abs(ball.dx) > minSurfaceSpeed) {
+            ball.dx = precise.mul(ball.dx, surfaceFriction);
+          } else {
+            if (ball.dx === 0) {
+              ball.dx = clonedRandom.next() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
+            } else {
+              ball.dx = ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed;
+            }
+          }
+          const noise = clonedRandom.next();
+          const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
+          ball.dx = precise.add(ball.dx, noiseValue);
+          ball.x = precise.add(ball.x, ball.dx);
+          if (
+            obs.destroyed ||
+            ball.x < precise.sub(precise.sub(obs.x, halfW), 24) ||
+            ball.x > precise.add(precise.add(obs.x, halfW), 24)
+          ) {
+            ball.onSurface = false;
+            ball.surfaceObstacleIndex = null;
+            ball.dy = 1;
+          }
+        } else {
+          ball.onSurface = false;
+          ball.surfaceObstacleIndex = null;
+        }
+      } else {
+        ball.x = precise.add(ball.x, ball.dx);
+        ball.y = precise.add(ball.y, ball.dy);
+      }
+
+      // collisions
+      localCheckCollisions(ball);
+    }
+  };
+
+  // run simulation synchronously
+  const frames = Math.floor(preSimSeconds * FIXED_FPS);
+  const MAX_FRAMES = 500 * FIXED_FPS;
+  const framesToSimulate = Math.min(frames, MAX_FRAMES);
+
+  for (let f = 0; f < framesToSimulate; f++) {
+    localUpdatePhysics();
+    simPhysicsTime += FIXED_DELTA;
+
+    // check winners
+    if (simMapData) {
+      const { winY } = simMapData;
+      for (const b of simBalls) {
+        if (!b.finished && b.y > winY) {
+          simActualWinners.push(b.id);
+          b.finished = true;
+          break;
+        }
+      }
+      if (simActualWinners.length > 0) break;
+    }
+  }
+
+  return simActualWinners.length > 0 ? simActualWinners[0] : null;
+};
     // Hidden pre-simulation to determine winning ball
     const performOffscreenFullSimulation = async (
       gameData: { seed: string; mapId: number[] | number; participants: any[] },
@@ -1547,7 +1982,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         } catch (e) {}
       }
     };
-
     // Recreate PIXI app completely
     const recreatePixiApp = async () => {
       // destroy existing app if any
@@ -1706,6 +2140,30 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const deviceHeight = window.innerHeight - 80;
           appRef.current.renderer.resize(deviceWidth, deviceHeight);
           appRef.current.stage.scale.set(deviceWidth / WORLD_WIDTH);
+        }
+
+        // Perform hidden simulation using the same map and a cloned RNG state
+        try {
+          if (randomRef.current && gameData.winner_id !== undefined) {
+            // Clone RNG state at this exact point (after map generation)
+            const clonedRng = new DeterministicRandom(seedRef.current);
+            // Advance cloned RNG to match current state
+            for (let i = 0; i < 100; i++) clonedRng.next();
+            
+            const winnerIdFromPreSim = await performSimulationUsingMap(
+              {
+                ...mapDataRef.current,
+                seed: seedRef.current || gameData.seed || "",
+              },
+              clonedRng,
+              gameData.participants || [],
+              500
+            );
+            console.log("Hidden pre-simulation winner id:", winnerIdFromPreSim);
+            (startGame as any).__preSimWinnerId = winnerIdFromPreSim;
+          }
+        } catch (e) {
+          console.warn("performSimulationUsingMap failed:", e);
         }
       } finally {
         Math.random = originalRandom;
