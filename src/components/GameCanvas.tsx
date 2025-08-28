@@ -925,6 +925,71 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       }
       
+      // ПОЛНОСТЬЮ УНИЧТОЖАЕМ ВСЕ СЛЕДЫ СИМУЛЯЦИИ
+      console.log("DESTROYING ALL SIMULATION TRACES...");
+      
+      // Уничтожаем все временные шары
+      tempBalls.forEach(ball => {
+        try {
+          if (ball.graphics && ball.graphics.parent) {
+            ball.graphics.parent.removeChild(ball.graphics);
+          }
+          if (ball.graphics) {
+            ball.graphics.destroy({ children: true, texture: false });
+          }
+          if (ball.indicator && ball.indicator.parent) {
+            ball.indicator.parent.removeChild(ball.indicator);
+          }
+          if (ball.indicator) {
+            ball.indicator.destroy({ children: true, texture: false });
+          }
+        } catch (e) {
+          console.warn('Error destroying temp ball:', e);
+        }
+      });
+      
+      // Уничтожаем все временные препятствия
+      tempMapData.obstacles.forEach(obstacle => {
+        try {
+          if (obstacle.graphics && obstacle.graphics.parent) {
+            obstacle.graphics.parent.removeChild(obstacle.graphics);
+          }
+          if (obstacle.graphics) {
+            obstacle.graphics.destroy({ children: true, texture: false });
+          }
+        } catch (e) {
+          console.warn('Error destroying temp obstacle:', e);
+        }
+      });
+      
+      // Уничтожаем все временные спиннеры
+      tempMapData.spinners.forEach(spinner => {
+        try {
+          if (spinner.graphics && spinner.graphics.parent) {
+            spinner.graphics.parent.removeChild(spinner.graphics);
+          }
+          if (spinner.graphics) {
+            spinner.graphics.destroy({ children: true, texture: false });
+          }
+        } catch (e) {
+          console.warn('Error destroying temp spinner:', e);
+        }
+      });
+      
+      // ПОЛНОСТЬЮ ОЧИЩАЕМ КАНВАС
+      if (appRef.current && appRef.current.stage) {
+        console.log("CLEARING ENTIRE STAGE...");
+        appRef.current.stage.removeChildren();
+        // Принудительно очищаем все дочерние элементы
+        while (appRef.current.stage.children.length > 0) {
+          const child = appRef.current.stage.children[0];
+          appRef.current.stage.removeChild(child);
+          try {
+            child.destroy({ children: true, texture: false });
+          } catch (e) {}
+        }
+      }
+      
       // Восстанавливаем оригинальное состояние
       ballsRef.current = originalBalls;
       obstaclesRef.current = originalObstacles;
@@ -932,8 +997,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       mapDataRef.current = originalMapData;
       actualWinnersRef.current = originalWinners;
       
+      // Очищаем состояния мячей
+      ballStatesRef.current.clear();
+      
+      // Сбрасываем физику
+      physicsTimeRef.current = 0;
+      lastTimeRef.current = 0;
+      accumulatorRef.current = 0;
+      
       // Снимаем флаг симуляции
       isSimulationRunningRef.current = false;
+      
+      console.log("SIMULATION DESTRUCTION COMPLETE!");
     };
 
     const startGame = async (gameData: {
