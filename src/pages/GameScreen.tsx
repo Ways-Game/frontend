@@ -157,8 +157,16 @@ const autoStartPendingRef = useRef<any | null>(null);
       
       // Запускаем скрытую симуляцию во время таймера если есть winner_id
       let simulationPromise = null;
+      console.log('GameScreen: Checking winner_id:', currentRoundGameData.winner_id);
+      console.log('GameScreen: gameCanvasRef.current:', gameCanvasRef.current);
+      console.log('GameScreen: runHiddenSimulation method:', gameCanvasRef.current?.runHiddenSimulation);
+      
       if (currentRoundGameData.winner_id && currentRoundGameData.winner_id !== 0) {
+        console.log('GameScreen: Starting hidden simulation...');
         simulationPromise = gameCanvasRef.current?.runHiddenSimulation?.(gameDataForCanvas);
+        console.log('GameScreen: simulationPromise:', simulationPromise);
+      } else {
+        console.log('GameScreen: No winner_id, skipping simulation');
       }
       
       const remainingCountdown = countdownDuration - speedUpTime - 1;

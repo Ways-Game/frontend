@@ -1225,7 +1225,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       startGame,
       resetGame,
       gameState,
-
+      runHiddenSimulation,
       setCameraMode: (mode: "leader" | "swipe") => {
         setCameraModeSafe(mode);
       },
