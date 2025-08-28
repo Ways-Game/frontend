@@ -1090,10 +1090,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (originalBallOwner) break;
       }
       
+      // Check if winner ball already belongs to backend winner - no swap needed
+      const originalOwnerId = originalBallOwner?.user?.id ?? originalBallOwner?.id;
+      const needsSwap = originalOwnerId != gameData.winner_id;
+      
       console.log('DEBUG: Winner search - winner_id:', gameData.winner_id);
       console.log('DEBUG: Found winner participant:', winnerParticipant);
       console.log('DEBUG: Original ball owner:', originalBallOwner);
       console.log('DEBUG: Winner ball ID from simulation:', winnerBallIdRef.current);
+      console.log('DEBUG: Needs swap:', needsSwap, 'originalOwnerId:', originalOwnerId);
 
       // Create all balls with avatar swapping logic
       for (const rawParticipant of gameData.participants || []) {
@@ -1106,15 +1111,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const isWinnerParticipant = (user.id ?? rawParticipant.id) == gameData.winner_id;
         const isOriginalBallOwner = originalBallOwner && (user.id ?? rawParticipant.id) == (originalBallOwner.user?.id ?? originalBallOwner.id);
 
-        // Avatar swap logic - ensure winner ball shows winner's avatar
-        if (isWinnerParticipant && originalBallOwner && winnerParticipant.id !== originalBallOwner.id) {
-          // Winner gets original ball owner's avatar
-          const originalUser = originalBallOwner.user ? originalBallOwner.user : originalBallOwner;
-          avatarUrl = originalBallOwner.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar;
-        } else if (isOriginalBallOwner && winnerParticipant && winnerParticipant.id !== originalBallOwner.id) {
-          // Original ball owner gets winner's avatar
-          const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
-          avatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar;
+        // Avatar swap logic - only if swap is needed
+        if (needsSwap) {
+          if (isWinnerParticipant && originalBallOwner) {
+            // Winner gets original ball owner's avatar
+            const originalUser = originalBallOwner.user ? originalBallOwner.user : originalBallOwner;
+            avatarUrl = originalBallOwner.avatar_url ?? originalUser.avatar_url ?? originalUser.avatar;
+          } else if (isOriginalBallOwner && winnerParticipant) {
+            // Original ball owner gets winner's avatar
+            const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
+            avatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar;
+          }
         }
 
         if (ballsCount <= 0) continue;
@@ -1126,9 +1133,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           // Keep original playerId - only swap avatars, not player ownership
           const finalPlayerId = playerId;
           
-          // Override avatar for winner ball to ensure it shows winner's avatar
+          // Override avatar for winner ball to ensure it shows winner's avatar (only if swap needed)
           let finalAvatarUrl = avatarUrl;
-          if (isWinnerBall && winnerParticipant) {
+          if (isWinnerBall && winnerParticipant && needsSwap) {
             const winnerUser = winnerParticipant.user ? winnerParticipant.user : winnerParticipant;
             finalAvatarUrl = winnerParticipant.avatar_url ?? winnerUser.avatar_url ?? winnerUser.avatar;
           }
