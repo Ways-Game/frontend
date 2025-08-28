@@ -947,26 +947,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         Math.random = originalRandom;
       }
 
-      // --- HIDDEN SIMULATION to determine winner ball ---
-      console.log('DEBUG SIMULATION: Running simulation...');
-      const tempRandom = new DeterministicRandom(gameData.seed);
-      const tempBalls: Ball[] = [];
-      const tempSpinners = [...spinnersRef.current.map(s => ({ ...s, rotation: s.rotation }))];
-      let tempBallIndex = 0;
+      // --- SPEEDUP GAME to determine winner ball ---
+      console.log('DEBUG: Running speedup game...');
       
-      // Create temporary balls identical to real game
+      // Create actual game balls first
+      const newBalls: Ball[] = [];
+      let ballIndex = 0;
+      
       for (const rawParticipant of gameData.participants || []) {
         const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
         const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
         if (ballsCount <= 0) continue;
         
         for (let i = 0; i < ballsCount; i++) {
-          const ballId = `${gameData.seed}_${tempBallIndex}`;
-          const startX = precise.add(50, precise.mul(tempRandom.next(), WORLD_WIDTH - 100));
-          const startY = precise.add(50, precise.mul(tempRandom.next(), WORLD_HEIGHT - 100));
-          const initialDX = precise.mul(precise.sub(tempRandom.next(), 0.5), 2);
+          const ballId = `${gameData.seed}_${ballIndex}`;
+          const startX = precise.add(50, precise.mul(randomRef.current.next(), WORLD_WIDTH - 100));
+          const startY = precise.add(50, precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100));
+          const initialDX = precise.mul(precise.sub(randomRef.current.next(), 0.5), 2);
           
-          tempBalls.push({
+          newBalls.push({
             id: ballId,
             x: startX,
             y: startY,
@@ -978,46 +977,34 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             finished: false,
             bounceCount: 0,
           });
-          tempBallIndex++;
+          ballIndex++;
         }
       }
       
-      console.log('DEBUG SIMULATION: Created', tempBalls.length, 'balls for simulation');
-      
-      // Run simulation - use speedUpTime if available, otherwise run full simulation
-      const hiddenSpeedUp = gameData.speedUpTime || speedUpTime || 0;
-      const frames = hiddenSpeedUp > 0 ? Math.floor(hiddenSpeedUp * FIXED_FPS) : 5000;
-      const MAX_FRAMES = 5000;
-      const framesToSimulate = Math.min(frames, MAX_FRAMES);
-      
-      console.log('DEBUG SIMULATION: Running', framesToSimulate, 'frames');
-      
-      for (let frame = 0; frame < framesToSimulate; frame++) {
-        // Update spinners rotation (identical to main game)
-        tempSpinners.forEach((spinner) => {
-          spinner.rotation = precise.add(spinner.rotation, 0.08);
+      // Run speedup physics to find winner
+      const speedMultiplier = 50;
+      for (let frame = 0; frame < 1000; frame++) {
+        spinnersRef.current.forEach((spinner) => {
+          spinner.rotation = precise.add(spinner.rotation, 0.08 * speedMultiplier);
         });
         
-        const winner = updateBallPhysics(tempBalls, obstaclesRef.current, tempSpinners, mapDataRef.current, tempRandom, true);
-        if (winner) {
-          winnerBallIdRef.current = winner;
-          console.log('DEBUG SIMULATION: Winner found at frame', frame, ':', winner);
-          break;
+        for (let i = 0; i < speedMultiplier; i++) {
+          const winner = updateBallPhysics(newBalls, obstaclesRef.current, spinnersRef.current, mapDataRef.current, randomRef.current, true);
+          if (winner) {
+            winnerBallIdRef.current = winner;
+            console.log('DEBUG: Speedup game winner:', winner);
+            break;
+          }
         }
-        
-        if (frame % 500 === 0) {
-          console.log('DEBUG SIMULATION: Frame', frame, 'active balls:', tempBalls.filter(b => !b.finished).length);
-        }
+        if (winnerBallIdRef.current) break;
       }
       
-      console.log('DEBUG SIMULATION: Simulation completed. Winner:', winnerBallIdRef.current);
-
-      // Create actual game balls with winner info
-      const newBalls: Ball[] = [];
-      let ballIndex = 0;
-      
-      // Reset random to same seed for consistent ball creation
+      // Reset balls for visual game
       randomRef.current = new DeterministicRandom(gameData.seed);
+      newBalls.length = 0;
+      ballIndex = 0;
+
+      // Create visual game balls with avatar swapping
 
       // Find winner participant and original ball owner
       const winnerParticipant = gameData.participants.find(
