@@ -924,171 +924,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     };
 
     // Hidden pre-simulation to determine winning ball
-    const performHiddenPreSimulation = async (
-      gameData: { seed: string; mapId: number[] | number; participants: any[] },
-      preSimSeconds = 500
-    ): Promise<string | null> => {
-      await waitForApp();
-      if (!appRef.current) return null;
-
-      // Backup current state
-      const backup = {
-        balls: ballsRef.current,
-        obstacles: obstaclesRef.current,
-        spinners: spinnersRef.current,
-        mapData: mapDataRef.current,
-        random: randomRef.current,
-        actualWinners: [...actualWinnersRef.current],
-        physicsTime: physicsTimeRef.current,
-        stageVisible: appRef.current.stage.visible,
-      };
-
-      try {
-        // Hide stage for invisible simulation
-        appRef.current.stage.visible = false;
-
-        // Independent random for simulation
-        const simRandom = new DeterministicRandom(gameData.seed);
-        randomRef.current = simRandom;
-
-        // Generate map
-        const simMapData = generateMapFromId(appRef.current, gameData.mapId, {
-          seed: gameData.seed,
-          worldWidth: WORLD_WIDTH,
-          worldHeight: WORLD_HEIGHT,
-          random: simRandom,
-        });
-
-        const simObstacles = simMapData.obstacles.sort(
-          (a: any, b: any) => a.x + a.y - (b.x + b.y)
-        );
-        const simSpinners = simMapData.spinners.sort(
-          (a: any, b: any) => a.x + a.y - (b.x + b.y)
-        );
-
-        // Create simulation balls
-        const simBalls: Ball[] = [];
-        let bi = 0;
-        for (const rawParticipant of gameData.participants || []) {
-          const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
-          const ballsCount = Number(
-            rawParticipant.balls_count ?? user.balls_count ?? 0
-          );
-          const playerId = (user.id ?? rawParticipant.id ?? "").toString();
-          if (ballsCount <= 0) continue;
-          for (let i = 0; i < ballsCount; i++) {
-            const startX = precise.add(
-              50,
-              precise.mul(simRandom.next(), WORLD_WIDTH - 100)
-            );
-            const startY = precise.add(
-              50,
-              precise.mul(simRandom.next(), WORLD_HEIGHT - 100)
-            );
-            const initialDX = precise.mul(precise.sub(simRandom.next(), 0.5), 2);
-
-            const ballGraphics = new PIXI.Graphics();
-            ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
-            const indicator = new PIXI.Graphics();
-            indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
-            indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
-            indicator.visible = false;
-
-            ballGraphics.position.set(startX, startY);
-            indicator.position.set(startX, startY - 40);
-
-            appRef.current.stage.addChild(ballGraphics);
-            appRef.current.stage.addChild(indicator);
-
-            simBalls.push({
-              id: `${gameData.seed}_${bi}`,
-              x: startX,
-              y: startY,
-              dx: initialDX,
-              dy: 0,
-              graphics: ballGraphics,
-              color: 0x4ecdc4,
-              playerId: playerId,
-              finished: false,
-              indicator,
-              bounceCount: 0,
-            } as Ball);
-            bi++;
-          }
-        }
-
-        // Set simulation state
-        ballsRef.current = simBalls;
-        obstaclesRef.current = simObstacles;
-        spinnersRef.current = simSpinners;
-        mapDataRef.current = {
-          ...simMapData,
-          mapWidth: WORLD_WIDTH,
-          mapHeight: WORLD_HEIGHT,
-          screenHeight: WORLD_HEIGHT,
-        };
-
-        actualWinnersRef.current = [];
-        physicsTimeRef.current = 0;
-
-        // Run fast simulation
-        const frames = Math.floor(preSimSeconds * FIXED_FPS);
-        const MAX_PRESIM_FRAMES = 500 * FIXED_FPS;
-        const framesToSimulate = Math.min(frames, MAX_PRESIM_FRAMES);
-
-        for (let f = 0; f < framesToSimulate; f++) {
-          updatePhysics();
-          physicsTimeRef.current += FIXED_DELTA;
-          if (actualWinnersRef.current.length > 0) break;
-        }
-
-        const winnerId = actualWinnersRef.current.length > 0 ? actualWinnersRef.current[0] : null;
-        return winnerId;
-      } catch (err) {
-        console.warn("Hidden pre-simulation failed:", err);
-        return null;
-      } finally {
-        // Cleanup simulation graphics
-        try {
-          (ballsRef.current || []).forEach((b) => {
-            try {
-              if (b.graphics && appRef.current) appRef.current.stage.removeChild(b.graphics);
-            } catch (e) {}
-            try {
-              if ((b as any).indicator && appRef.current) appRef.current.stage.removeChild((b as any).indicator);
-            } catch (e) {}
-          });
-          (obstaclesRef.current || []).forEach((o) => {
-            try {
-              if ((o as any).graphics && appRef.current) appRef.current.stage.removeChild((o as any).graphics);
-            } catch (e) {}
-          });
-          (spinnersRef.current || []).forEach((s) => {
-            try {
-              if ((s as any).graphics && appRef.current) appRef.current.stage.removeChild((s as any).graphics);
-            } catch (e) {}
-          });
-        } catch (e) {}
-
-        // Restore backup
-        ballsRef.current = backup.balls;
-        obstaclesRef.current = backup.obstacles;
-        spinnersRef.current = backup.spinners;
-        mapDataRef.current = backup.mapData;
-        randomRef.current = backup.random;
-        actualWinnersRef.current = backup.actualWinners;
-        physicsTimeRef.current = backup.physicsTime;
-        if (appRef.current) {
-          appRef.current.stage.visible = backup.stageVisible;
-        }
-      }
-    };
-
-    const performOffscreenFullSimulation = async (
+const performOffscreenFullSimulation = async (
   gameData: { seed: string; mapId: number[] | number; participants: any[] },
-  preSimSeconds = 500
+  preSimSeconds = 60
 ): Promise<string | null> => {
-  // Создаём offscreen canvas (если поддерживается — OffscreenCanvas, иначе обычный canvas)
+  // Создаём offscreen view
   let offscreenView: HTMLCanvasElement | OffscreenCanvas;
   try {
     if (typeof OffscreenCanvas !== "undefined") {
@@ -1100,41 +940,53 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       offscreenView = c;
     }
   } catch (e) {
-    // fallback if environment doesn't support OffscreenCanvas
     const c = document.createElement("canvas");
     c.width = WORLD_WIDTH;
     c.height = WORLD_HEIGHT;
     offscreenView = c;
   }
 
-  // create isolated PIXI app attached to offscreen view
+  // Создаём отдельный PIXI app для корректной работы generateMapFromId
   const simApp = new PIXI.Application({
     view: offscreenView as any,
     width: WORLD_WIDTH,
     height: WORLD_HEIGHT,
     resolution: 1,
     autoDensity: false,
-    backgroundColor: 0x1a1a2e,
+    backgroundColor: 0x000000,
     antialias: false,
-    // do not append to DOM
   });
 
-  // local deterministic RNG
+  // локальный детерминированный RNG (отдельно от основного)
   const simRandom = new DeterministicRandom(gameData.seed);
 
-  // local simulation containers (fully isolated)
+  // контейнеры для "чистой" симуляции (без графики)
   let simMapData: any = null;
   const simObstacles: any[] = [];
   const simSpinners: any[] = [];
-  const simBalls: Ball[] = [];
-  const simBallStates: Map<string, BallState> = new Map();
+  const simBalls: {
+    id: string;
+    x: number;
+    y: number;
+    dx: number;
+    dy: number;
+    playerId: string;
+    finished: boolean;
+    bounceCount: number;
+    // surface handling
+    onSurface?: boolean;
+    surfaceObstacleIndex?: number | null;
+  }[] = [];
+  const simBallStates = new Map<string, BallState>();
   const simActualWinners: string[] = [];
   let simPhysicsTime = 0;
 
-  // helper: local checkCollisions (copied/adapted from original, but using local arrays)
-  const localCheckCollisions = (ball: Ball) => {
-    simObstacles.forEach((obstacle) => {
-      if (obstacle.destroyed) return;
+  // Локальные функции — точная математика, адаптированная для "чистых" объектов.
+  const localCheckCollisions = (ball: typeof simBalls[number]) => {
+    // obstacles collisions
+    for (let oi = 0; oi < simObstacles.length; oi++) {
+      const obstacle = simObstacles[oi];
+      if (obstacle.destroyed) continue;
 
       if (obstacle.type === "peg") {
         const dx = precise.sub(ball.x, obstacle.x);
@@ -1182,7 +1034,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const isFunnelSegment = obstacle.width <= 8 && obstacle.height <= 8;
 
           if (overlapX < overlapY) {
-            // боковое столкновение
             if (ball.x < obstacle.x) {
               ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
             } else {
@@ -1209,12 +1060,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 ball.bounceCount++;
               } else {
                 const verticalImpact = precise.abs(ball.dy);
-                const shouldStick =
-                  verticalImpact < 1.0 && ball.bounceCount >= 2;
+                const shouldStick = verticalImpact < 1.0 && ball.bounceCount >= 2;
 
                 if (shouldStick) {
-                  (ball as any).onSurface = true;
-                  (ball as any).surfaceObstacle = obstacle;
+                  ball.onSurface = true;
+                  ball.surfaceObstacleIndex = oi;
                   ball.dy = 0;
                 } else {
                   ball.dy = precise.mul(ball.dy, -0.78);
@@ -1236,11 +1086,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
           precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
         ) {
-          (obstacle as any).hitCount = ((obstacle as any).hitCount || 0) + 1;
-
-          if ((obstacle as any).hitCount >= 3) {
+          obstacle.hitCount = (obstacle.hitCount || 0) + 1;
+          if (obstacle.hitCount >= 3) {
             obstacle.destroyed = true;
-            // do not remove graphics here in sim
           }
 
           const overlapX = precise.sub(
@@ -1326,11 +1174,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
       }
-    });
+    }
 
-    // ball-ball collisions (local)
-    simBalls.forEach((otherBall) => {
-      if (otherBall === ball || otherBall.finished) return;
+    // ball-ball collisions
+    for (let j = 0; j < simBalls.length; j++) {
+      const otherBall = simBalls[j];
+      if (otherBall === ball || otherBall.finished) continue;
 
       const dx = precise.sub(ball.x, otherBall.x);
       const dy = precise.sub(ball.y, otherBall.y);
@@ -1351,12 +1200,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         const relVelX = precise.sub(ball.dx, otherBall.dx);
         const relVelY = precise.sub(ball.dy, otherBall.dy);
-        const relSpeed = precise.add(
-          precise.mul(relVelX, normalX),
-          precise.mul(relVelY, normalY)
-        );
+        const relSpeed = precise.add(precise.mul(relVelX, normalX), precise.mul(relVelY, normalY));
 
-        if (relSpeed > 0) return;
+        if (relSpeed > 0) continue;
 
         const impulse = precise.mul(relSpeed, 0.86);
         const halfImpulse = precise.mul(impulse, 0.5);
@@ -1366,7 +1212,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         otherBall.dx = precise.add(otherBall.dx, precise.mul(normalX, halfImpulse));
         otherBall.dy = precise.add(otherBall.dy, precise.mul(normalY, halfImpulse));
       }
-    });
+    }
 
     // bounds
     if (ball.x < 24) {
@@ -1378,35 +1224,30 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), 0.82);
     }
 
+    // win / death detection (using numeric simMapData)
     if (simMapData) {
       const { winY, deathY } = simMapData;
-
       if (ball.y > winY) {
         if (simActualWinners.length === 0) {
           simActualWinners.push(ball.id);
           ball.finished = true;
         }
       }
-
       if (ball.y > deathY && ball.y < deathY + 30) {
         ball.finished = true;
       }
     }
   };
 
-  // local updatePhysics (very close to original)
   const localUpdatePhysics = () => {
-    if (!simRandom) return;
-
     // spinner rotation
-    simSpinners.forEach((spinner) => {
-      spinner.rotation = precise.add(spinner.rotation, 0.08);
-    });
+    for (let s of simSpinners) {
+      s.rotation = precise.add(s.rotation || 0, 0.08);
+    }
 
-    simBalls.forEach((ball) => {
-      if (ball.finished) return;
+    for (const ball of simBalls) {
+      if (ball.finished) continue;
 
-      // init state
       if (!simBallStates.has(ball.id)) {
         simBallStates.set(ball.id, {
           stuckFrames: 0,
@@ -1427,9 +1268,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       ballState.lastPositions.push({ x: ball.x, y: ball.y });
-      if (ballState.lastPositions.length > 10) {
-        ballState.lastPositions.shift();
-      }
+      if (ballState.lastPositions.length > 10) ballState.lastPositions.shift();
 
       if (ballState.lastPositions.length >= 5) {
         const first = ballState.lastPositions[0];
@@ -1455,56 +1294,59 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       ball.dx = precise.mul(ball.dx, 0.9999800039998667);
       ball.dy = precise.mul(ball.dy, 0.9999800039998667);
 
-      if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
-        const obs: any = (ball as any).surfaceObstacle;
-        const halfW = obs.width / 2;
-        const halfH = obs.height / 2;
+      if (ball.onSurface && typeof ball.surfaceObstacleIndex === "number") {
+        const obs = simObstacles[ball.surfaceObstacleIndex];
+        if (obs) {
+          const halfW = obs.width / 2;
+          const halfH = obs.height / 2;
 
-        const minSurfaceSpeed = 0.5;
-        const surfaceFriction = 0.995;
+          const minSurfaceSpeed = 0.5;
+          const surfaceFriction = 0.995;
 
-        ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
-        ball.dy = 0;
+          ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
+          ball.dy = 0;
 
-        if (precise.abs(ball.dx) > minSurfaceSpeed) {
-          ball.dx = precise.mul(ball.dx, surfaceFriction);
-        } else {
-          if (ball.dx === 0) {
-            ball.dx = simRandom.next() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
+          if (precise.abs(ball.dx) > minSurfaceSpeed) {
+            ball.dx = precise.mul(ball.dx, surfaceFriction);
           } else {
-            ball.dx = ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed;
+            if (ball.dx === 0) {
+              ball.dx = simRandom.next() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
+            } else {
+              ball.dx = ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed;
+            }
           }
-        }
 
-        const noise = simRandom.next();
-        const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
-        ball.dx = precise.add(ball.dx, noiseValue);
+          const noise = simRandom.next();
+          const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
+          ball.dx = precise.add(ball.dx, noiseValue);
 
-        ball.x = precise.add(ball.x, ball.dx);
+          ball.x = precise.add(ball.x, ball.dx);
 
-        if (
-          obs.destroyed ||
-          ball.x < precise.sub(precise.sub(obs.x, halfW), 24) ||
-          ball.x > precise.add(precise.add(obs.x, halfW), 24)
-        ) {
-          (ball as any).onSurface = false;
-          (ball as any).surfaceObstacle = null;
-          ball.dy = 1;
+          if (
+            obs.destroyed ||
+            ball.x < precise.sub(precise.sub(obs.x, halfW), 24) ||
+            ball.x > precise.add(precise.add(obs.x, halfW), 24)
+          ) {
+            ball.onSurface = false;
+            ball.surfaceObstacleIndex = null;
+            ball.dy = 1;
+          }
+        } else {
+          ball.onSurface = false;
+          ball.surfaceObstacleIndex = null;
         }
       } else {
         ball.x = precise.add(ball.x, ball.dx);
         ball.y = precise.add(ball.y, ball.dy);
       }
 
+      // collisions & ball-ball
       localCheckCollisions(ball);
-    });
-
-    // remove finished but keep winners (stop simulation when first winner found)
-    // We leave simBalls as-is but we can early-stop if winner found (checked by caller)
+    }
   };
 
   try {
-    // generate full map using same function (this may create graphics; that's OK for offscreen)
+    // generate map via same function (simApp isolated)
     simMapData = generateMapFromId(simApp, gameData.mapId, {
       seed: gameData.seed,
       worldWidth: WORLD_WIDTH,
@@ -1512,18 +1354,30 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       random: simRandom,
     });
 
-    simObstacles.push(...(simMapData.obstacles || []).map((o: any) => ({ ...o })));
-    simSpinners.push(...(simMapData.spinners || []).map((s: any) => ({ ...s, rotation: s.rotation || 0 })));
-    // ensure winY/deathY exist
-    simMapData = {
-      ...simMapData,
-      mapWidth: WORLD_WIDTH,
-      mapHeight: WORLD_HEIGHT,
-      screenHeight: WORLD_HEIGHT,
-    };
+    // copy obstacle/spinner numeric props (plain objects)
+    (simMapData.obstacles || []).forEach((o: any) => {
+      simObstacles.push({
+        type: o.type,
+        x: o.x,
+        y: o.y,
+        width: o.width,
+        height: o.height,
+        destroyed: !!o.destroyed,
+        hitCount: o.hitCount || 0,
+        // keep other flags if present
+      });
+    });
+    (simMapData.spinners || []).forEach((s: any) => {
+      simSpinners.push({
+        x: s.x,
+        y: s.y,
+        rotation: s.rotation || 0,
+        radius: s.radius,
+      });
+    });
 
-    // build sim balls (no external avatar loads — simple graphics suffice)
-    let ballIndex = 0;
+    // build simBalls with the same deterministic sequence
+    let bi = 0;
     for (const rawParticipant of gameData.participants || []) {
       const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
       const ballsCount = Number(rawParticipant.balls_count ?? user.balls_count ?? 0);
@@ -1533,93 +1387,49 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const startX = precise.add(50, precise.mul(simRandom.next(), WORLD_WIDTH - 100));
         const startY = precise.add(50, precise.mul(simRandom.next(), WORLD_HEIGHT - 100));
         const initialDX = precise.mul(precise.sub(simRandom.next(), 0.5), 2);
-
-        const ballGraphics = new PIXI.Graphics();
-        ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
-        const indicator = new PIXI.Graphics();
-        indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
-        indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
-        indicator.visible = false;
-
-        ballGraphics.position.set(startX, startY);
-        indicator.position.set(startX, startY - 40);
-
-        // add to sim stage (not visible)
-        try {
-          simApp.stage.addChild(ballGraphics);
-          simApp.stage.addChild(indicator);
-        } catch (e) {}
-
         simBalls.push({
-          id: `${gameData.seed}_${ballIndex}`,
+          id: `${gameData.seed}_${bi}`,
           x: startX,
           y: startY,
           dx: initialDX,
           dy: 0,
-          graphics: ballGraphics,
-          color: 0x4ecdc4,
           playerId,
           finished: false,
-          indicator,
           bounceCount: 0,
-        } as Ball);
-        ballIndex++;
+          onSurface: false,
+          surfaceObstacleIndex: null,
+        });
+        bi++;
       }
     }
 
-    // now run synchronous physics for requested seconds (or until winner found)
+    // Simulate synchronously
     const frames = Math.floor(preSimSeconds * FIXED_FPS);
     const MAX_FRAMES = 500 * FIXED_FPS;
     const framesToSimulate = Math.min(frames, MAX_FRAMES);
 
     for (let f = 0; f < framesToSimulate; f++) {
-      // update spinner rotations relative to simSpinners (kept in localUpdatePhysics)
-      // localUpdatePhysics uses simSpinners, simBalls etc.
       localUpdatePhysics();
       simPhysicsTime += FIXED_DELTA;
 
-      // if winner found — stop early
-      if (simActualWinners.length > 0) break;
-      // Also check winners discovered inside localCheckCollisions: detect ball.y > winY
-      // We need to evaluate after physics loop to collect finished winners
-      for (const b of simBalls) {
-        if (!b.finished) continue;
-        // if it's finished because of win and simActualWinners already contains, we break
+      // Winner detection: after physics step check if any ball crossed winY
+      if (simMapData) {
+        const { winY } = simMapData;
+        for (const b of simBalls) {
+          if (!b.finished && b.y > winY) {
+            simActualWinners.push(b.id);
+            b.finished = true;
+          }
+        }
+        if (simActualWinners.length > 0) break;
       }
-      // NOTE: localCheckCollisions already pushes to simActualWinners
-      // But our localCheckCollisions only set b.finished and pushed to simActualWinners,
-      // so the check above will catch it via simActualWinners.
     }
 
-    // take first winner id if any
-    const winnerId = simActualWinners.length > 0 ? simActualWinners[0] : null;
-    return winnerId;
+    return simActualWinners.length > 0 ? simActualWinners[0] : null;
   } catch (err) {
-    console.warn("Offscreen pre-simulation failed:", err);
+    console.warn("Offscreen full simulation failed:", err);
     return null;
   } finally {
-    // cleanup simApp and its children
-    try {
-      simBalls.forEach((b) => {
-        try {
-          if (b.graphics) simApp.stage.removeChild(b.graphics);
-        } catch (e) {}
-        try {
-          if (b.indicator) simApp.stage.removeChild(b.indicator);
-        } catch (e) {}
-      });
-      (simObstacles || []).forEach((o: any) => {
-        try {
-          if (o.graphics) simApp.stage.removeChild(o.graphics);
-        } catch (e) {}
-      });
-      (simSpinners || []).forEach((s: any) => {
-        try {
-          if (s.graphics) simApp.stage.removeChild(s.graphics);
-        } catch (e) {}
-      });
-    } catch (e) {}
-
     try {
       simApp.destroy({ removeView: true });
     } catch (e) {}
