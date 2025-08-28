@@ -1004,6 +1004,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const tempBalls: Ball[] = [];
         let tempBallIndex = 0;
         
+        // Get win condition from map data
+        const winY = mapDataRef.current?.winY || WORLD_HEIGHT - 200;
+        console.log('DEBUG SIMULATION: Using winY:', winY, 'from mapData:', mapDataRef.current);
+        
         // Create temporary balls for simulation
         for (const rawParticipant of gameData.participants || []) {
           const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
@@ -1013,7 +1017,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           for (let i = 0; i < ballsCount; i++) {
             const ballId = `${gameData.seed}_${tempBallIndex}`;
             const startX = precise.add(50, precise.mul(tempRandom.next(), WORLD_WIDTH - 100));
-            const startY = precise.add(50, precise.mul(tempRandom.next(), WORLD_HEIGHT - 100));
+            const startY = 100; // Start from top
             const initialDX = precise.mul(precise.sub(tempRandom.next(), 0.5), 2);
             
             tempBalls.push({
@@ -1032,6 +1036,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
         
+        console.log('DEBUG SIMULATION: Created', tempBalls.length, 'temp balls for simulation');
+        
         // Run hidden simulation
         const frames = Math.floor(hiddenSpeedUp * FIXED_FPS);
         const MAX_FRAMES = 3000;
@@ -1040,18 +1046,33 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         for (let frame = 0; frame < framesToSimulate; frame++) {
           tempBalls.forEach((ball) => {
             if (ball.finished) return;
+            
+            // Apply gravity and movement
             ball.dy = precise.add(ball.dy, 0.08);
+            ball.dx = precise.mul(ball.dx, 0.9999800039998667);
+            ball.dy = precise.mul(ball.dy, 0.9999800039998667);
+            
             ball.x = precise.add(ball.x, ball.dx);
             ball.y = precise.add(ball.y, ball.dy);
             
-            // Simple win condition check
-            if (mapDataRef.current && ball.y > mapDataRef.current.winY) {
+            // Boundary checks
+            if (ball.x < 24) {
+              ball.x = 24;
+              ball.dx = precise.mul(precise.abs(ball.dx), 0.82);
+            }
+            if (ball.x > 1176) {
+              ball.x = 1176;
+              ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), 0.82);
+            }
+            
+            // Win condition check
+            if (ball.y > winY) {
               if (!winnerBallIdRef.current) {
                 winnerBallIdRef.current = ball.id;
                 console.log('DEBUG SIMULATION: Winner ball ID determined:', winnerBallIdRef.current);
                 console.log('DEBUG SIMULATION: Winner ball belongs to playerId:', ball.playerId);
+                console.log('DEBUG SIMULATION: Ball reached winY:', ball.y, '>', winY);
                 console.log('DEBUG SIMULATION: Backend winner_id:', gameData.winner_id);
-                console.log('DEBUG SIMULATION: All temp balls:', tempBalls.map(b => ({ id: b.id, playerId: b.playerId })));
               }
               ball.finished = true;
             }
@@ -1059,6 +1080,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           
           if (winnerBallIdRef.current) break;
         }
+        
+        console.log('DEBUG SIMULATION: Simulation completed. Winner ball ID:', winnerBallIdRef.current);
       }
 
       // Create actual game balls with winner info
