@@ -957,7 +957,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       actualWinnersRef.current = [];
       
       // Полностью очищаем сцену
-      if (appRef.current) {
+      if (appRef.current && appRef.current.stage) {
         appRef.current.stage.removeChildren();
       }
 
@@ -988,7 +988,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         screenHeight: WORLD_HEIGHT,
       };
 
-      if (appRef.current) {
+      if (appRef.current && appRef.current.stage) {
         appRef.current.stage.x = 0;
         appRef.current.stage.y = 0;
         const deviceWidth = window.innerWidth;
@@ -1098,8 +1098,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ballGraphics.position.set(startX, startY);
           indicator.position.set(startX, startY - 40);
 
-          appRef.current.stage.addChild(ballGraphics);
-          appRef.current.stage.addChild(indicator);
+          if (appRef.current && appRef.current.stage) {
+            appRef.current.stage.addChild(ballGraphics);
+            appRef.current.stage.addChild(indicator);
+          }
 
           newBalls.push({
             id: ballId,
