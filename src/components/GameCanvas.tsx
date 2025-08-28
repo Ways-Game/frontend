@@ -18,8 +18,7 @@ const WORLD_WIDTH = 1200;
 const WORLD_HEIGHT = 2500;
 const isMobile = 
   typeof window !== 'undefined' && 
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
-  
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 // Anti-stuck system constants
 const MIN_BOUNCE_VELOCITY = 3.0;
 const STUCK_THRESHOLD = 60;
@@ -752,11 +751,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       });
 
       if (ballsRef.current.length > 0 && cameraModeRef.current === "leader") {
-        const activeBalls = ballsRef.current.filter((ball) => !ball.finished);
-        if (activeBalls.length > 0) {
-          const leadingBall = activeBalls.reduce((prev, current) =>
-            prev.y > current.y ? prev : current
-          );
+        const activeBalls = ballsRef.current.filter(
+          (ball) => !ball.finished && Number.isFinite(ball.y) && Number.isFinite(ball.x)
+        );
+
+        // Если нет валидных шаров — выход (без изменения позиции камеры)
+        if (activeBalls.length === 0) return;
+
+        const leadingBall = activeBalls.reduce((prev, current) => (prev.y > current.y ? prev : current));
+
+        // safety: если leadingBall имеет странное значение, используем fallback
+        if (!Number.isFinite(leadingBall.y)) {
+          leadingBall.y = (mapDataRef.current?.mapHeight || WORLD_HEIGHT) / 2;
+        }
 
           ballsRef.current.forEach((ball) => {
             if (ball.indicator) {
@@ -781,7 +788,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           appRef.current.stage.x += (targetX - appRef.current.stage.x) * 0.05;
           appRef.current.stage.y += (targetY - appRef.current.stage.y) * 0.05;
-        }
+        
       } else if (cameraModeRef.current === "swipe") {
         const deviceWidth = window.innerWidth;
         const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
@@ -831,34 +838,27 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       // Создаем отдельный random для симуляции
       const simulationRandom = new DeterministicRandom(gameData.seed);
       
-      // Создаём "виртуальную" контейнерную сцену для симуляции (НЕ добавляем в app.stage)
-      const simContainer = new PIXI.Container();
-      
-      // Создаем временную карту для симуляции
-      const tempMapData = generateMapFromId(appRef.current, gameData.mapId, {
+      // Создаём отдельный offscreen PIXI.Application для симуляции,
+      // чтобы generateMapFromId не трогал реальный appRef.current.stage
+      const simApp = new PIXI.Application();
+      await simApp.init({
+        width: WORLD_WIDTH,
+        height: WORLD_HEIGHT,
+        // не добавляем canvas в DOM
+        autoStart: false,
+        preserveDrawingBuffer: false,
+        backgroundAlpha: 0,
+      });
+
+      // Use simApp.stage as parent for generated graphics
+      const tempMapData = generateMapFromId(simApp, gameData.mapId, {
         seed: gameData.seed,
         worldWidth: WORLD_WIDTH,
         worldHeight: WORLD_HEIGHT,
         random: simulationRandom,
       });
 
-      // Переносим графику во временный контейнер
-      tempMapData.obstacles.forEach(o => {
-        if (o.graphics) {
-          if (o.graphics.parent && o.graphics.parent !== simContainer) {
-            try { o.graphics.parent.removeChild(o.graphics); } catch(e){}
-          }
-          simContainer.addChild(o.graphics);
-        }
-      });
-      tempMapData.spinners.forEach(s => {
-        if (s.graphics) {
-          if (s.graphics.parent && s.graphics.parent !== simContainer) {
-            try { s.graphics.parent.removeChild(s.graphics); } catch(e){}
-          }
-          simContainer.addChild(s.graphics);
-        }
-      });
+      // Graphics are already in simApp.stage, no need to move them
 
       // Создаем временные шары для симуляции
       const tempBalls: Ball[] = [];
@@ -877,7 +877,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
           const ballGraphics = new PIXI.Graphics();
           ballGraphics.circle(0, 0, 24).fill(0x4ecdc4);
-          simContainer.addChild(ballGraphics);
+          simApp.stage.addChild(ballGraphics);
 
           tempBalls.push({
             id: `temp_${tempBalls.length}`,
@@ -994,14 +994,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       }
       
-      // Уничтожаем simContainer и всё его содержимое
-      if (simContainer) {
-        try {
-          simContainer.removeChildren();
-          simContainer.destroy({ children: true, texture: false });
-        } catch (e) { 
-          console.warn("destroy simContainer failed", e); 
-        }
+      // destroy simApp to free resources and ensure nothing было привязано к основному app
+      try {
+        simApp.destroy(true, { children: true, texture: false });
+      } catch(e) {
+        console.warn("simApp.destroy failed", e);
       }
       
       // Снимаем флаг симуляции
@@ -1166,7 +1163,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           indicator.visible = false;
 
           const startX = precise.add(50, precise.mul(randomRef.current!.next(), WORLD_WIDTH - 100));
-          const startY = precise.add(50, precise.mul(randomRef.current!.next(), WORLD_HEIGHT - 100));
+          let startY = precise.add(50, precise.mul(randomRef.current!.next(), WORLD_HEIGHT - 100));
           const initialDX = precise.mul(precise.sub(randomRef.current!.next(), 0.5), 2);
 
           ballGraphics.position.set(startX, startY);
@@ -1194,6 +1191,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       }
 
+      // После составления newBalls, перед ballsRef.current = newBalls:
+      const winY = mapDataRef.current?.winY ?? WORLD_HEIGHT + 100;
+      newBalls.forEach(b => {
+        if (b.y > winY) {
+          // безопасно перенести чуть выше линии выигрыша, чтобы избежать моментальной победы
+          b.y = Math.max(50, winY - 100);
+          if (b.graphics) b.graphics.position.set(b.x, b.y);
+        }
+      });
       ballsRef.current = newBalls;
 
       // Удаляем gateBarrier если есть
