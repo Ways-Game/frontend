@@ -923,20 +923,255 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    // Start game (unchanged except kept in same scope)
+    // Hidden pre-simulation to determine winning ball
+    const performHiddenPreSimulation = async (
+      gameData: { seed: string; mapId: number[] | number; participants: any[] },
+      preSimSeconds = 500
+    ): Promise<string | null> => {
+      await waitForApp();
+      if (!appRef.current) return null;
+
+      // Backup current state
+      const backup = {
+        balls: ballsRef.current,
+        obstacles: obstaclesRef.current,
+        spinners: spinnersRef.current,
+        mapData: mapDataRef.current,
+        random: randomRef.current,
+        actualWinners: [...actualWinnersRef.current],
+        physicsTime: physicsTimeRef.current,
+        stageVisible: appRef.current.stage.visible,
+      };
+
+      try {
+        // Hide stage for invisible simulation
+        appRef.current.stage.visible = false;
+
+        // Independent random for simulation
+        const simRandom = new DeterministicRandom(gameData.seed);
+        randomRef.current = simRandom;
+
+        // Generate map
+        const simMapData = generateMapFromId(appRef.current, gameData.mapId, {
+          seed: gameData.seed,
+          worldWidth: WORLD_WIDTH,
+          worldHeight: WORLD_HEIGHT,
+          random: simRandom,
+        });
+
+        const simObstacles = simMapData.obstacles.sort(
+          (a: any, b: any) => a.x + a.y - (b.x + b.y)
+        );
+        const simSpinners = simMapData.spinners.sort(
+          (a: any, b: any) => a.x + a.y - (b.x + b.y)
+        );
+
+        // Create simulation balls
+        const simBalls: Ball[] = [];
+        let bi = 0;
+        for (const rawParticipant of gameData.participants || []) {
+          const user = rawParticipant.user ? rawParticipant.user : rawParticipant;
+          const ballsCount = Number(
+            rawParticipant.balls_count ?? user.balls_count ?? 0
+          );
+          const playerId = (user.id ?? rawParticipant.id ?? "").toString();
+          if (ballsCount <= 0) continue;
+          for (let i = 0; i < ballsCount; i++) {
+            const startX = precise.add(
+              50,
+              precise.mul(simRandom.next(), WORLD_WIDTH - 100)
+            );
+            const startY = precise.add(
+              50,
+              precise.mul(simRandom.next(), WORLD_HEIGHT - 100)
+            );
+            const initialDX = precise.mul(precise.sub(simRandom.next(), 0.5), 2);
+
+            const ballGraphics = new PIXI.Graphics();
+            ballGraphics.circle(0, 0, 24).fill(0x4ecdc4).stroke({ width: 2, color: 0xffffff });
+            const indicator = new PIXI.Graphics();
+            indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
+            indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
+            indicator.visible = false;
+
+            ballGraphics.position.set(startX, startY);
+            indicator.position.set(startX, startY - 40);
+
+            appRef.current.stage.addChild(ballGraphics);
+            appRef.current.stage.addChild(indicator);
+
+            simBalls.push({
+              id: `${gameData.seed}_${bi}`,
+              x: startX,
+              y: startY,
+              dx: initialDX,
+              dy: 0,
+              graphics: ballGraphics,
+              color: 0x4ecdc4,
+              playerId: playerId,
+              finished: false,
+              indicator,
+              bounceCount: 0,
+            } as Ball);
+            bi++;
+          }
+        }
+
+        // Set simulation state
+        ballsRef.current = simBalls;
+        obstaclesRef.current = simObstacles;
+        spinnersRef.current = simSpinners;
+        mapDataRef.current = {
+          ...simMapData,
+          mapWidth: WORLD_WIDTH,
+          mapHeight: WORLD_HEIGHT,
+          screenHeight: WORLD_HEIGHT,
+        };
+
+        actualWinnersRef.current = [];
+        physicsTimeRef.current = 0;
+
+        // Run fast simulation
+        const frames = Math.floor(preSimSeconds * FIXED_FPS);
+        const MAX_PRESIM_FRAMES = 500 * FIXED_FPS;
+        const framesToSimulate = Math.min(frames, MAX_PRESIM_FRAMES);
+
+        for (let f = 0; f < framesToSimulate; f++) {
+          updatePhysics();
+          physicsTimeRef.current += FIXED_DELTA;
+          if (actualWinnersRef.current.length > 0) break;
+        }
+
+        const winnerId = actualWinnersRef.current.length > 0 ? actualWinnersRef.current[0] : null;
+        return winnerId;
+      } catch (err) {
+        console.warn("Hidden pre-simulation failed:", err);
+        return null;
+      } finally {
+        // Cleanup simulation graphics
+        try {
+          (ballsRef.current || []).forEach((b) => {
+            try {
+              if (b.graphics && appRef.current) appRef.current.stage.removeChild(b.graphics);
+            } catch (e) {}
+            try {
+              if ((b as any).indicator && appRef.current) appRef.current.stage.removeChild((b as any).indicator);
+            } catch (e) {}
+          });
+          (obstaclesRef.current || []).forEach((o) => {
+            try {
+              if ((o as any).graphics && appRef.current) appRef.current.stage.removeChild((o as any).graphics);
+            } catch (e) {}
+          });
+          (spinnersRef.current || []).forEach((s) => {
+            try {
+              if ((s as any).graphics && appRef.current) appRef.current.stage.removeChild((s as any).graphics);
+            } catch (e) {}
+          });
+        } catch (e) {}
+
+        // Restore backup
+        ballsRef.current = backup.balls;
+        obstaclesRef.current = backup.obstacles;
+        spinnersRef.current = backup.spinners;
+        mapDataRef.current = backup.mapData;
+        randomRef.current = backup.random;
+        actualWinnersRef.current = backup.actualWinners;
+        physicsTimeRef.current = backup.physicsTime;
+        if (appRef.current) {
+          appRef.current.stage.visible = backup.stageVisible;
+        }
+      }
+    };
+
+    // Recreate PIXI app completely
+    const recreatePixiApp = async () => {
+      try {
+        if (appRef.current) {
+          try {
+            ballsRef.current.forEach((ball) => {
+              try {
+                appRef.current!.stage.removeChild(ball.graphics);
+              } catch (e) {}
+              try {
+                if (ball.indicator) appRef.current!.stage.removeChild(ball.indicator);
+              } catch (e) {}
+            });
+          } catch (e) {}
+
+          try {
+            appRef.current.destroy({ removeView: true });
+          } catch (e) {}
+          appRef.current = null;
+        }
+      } catch (e) {
+        console.warn("Failed to destroy app for recreation", e);
+      }
+
+      if (!canvasRef.current) return;
+      const deviceWidth = window.innerWidth;
+      const deviceHeight = window.innerHeight;
+
+      const pixiApp = new PIXI.Application();
+      await pixiApp.init({
+        width: deviceWidth,
+        height: deviceHeight - 80,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+        backgroundColor: 0x1a1a2e,
+        antialias: false,
+      });
+
+      PIXI.Ticker.shared.maxFPS = FIXED_FPS;
+      PIXI.Ticker.shared.minFPS = FIXED_FPS;
+
+      if (canvasRef.current && pixiApp.canvas) {
+        canvasRef.current.innerHTML = "";
+        canvasRef.current.appendChild(pixiApp.canvas);
+      }
+
+      appRef.current = pixiApp;
+
+      if (appRef.current) {
+        appRef.current.stage.x = 0;
+        appRef.current.stage.y = 0;
+      }
+
+      cameraModeRef.current = cameraMode;
+      scrollYRef.current = scrollY;
+    };
+
+    // Start game with pre-simulation and ball swapping logic
     const startGame = async (gameData: {
       seed: string;
       mapId: number[] | number;
       participants: any[];
+      winner_id?: number;
     }) => {
       console.log("Starting game with data:", gameData);
-      console.log('gamecanvas speedtime1:', speedUpTime)
-
       await waitForApp();
-      console.log("app ready, continue...", appRef.current);
-
       if (!appRef.current) return;
-      console.log("Starting game with data2:", gameData);
+
+      // If winner_id is specified, perform hidden pre-simulation
+      const targetWinnerPlayerId = gameData.winner_id !== undefined ? String(gameData.winner_id) : null;
+      let preSimWinningBallId: string | null = null;
+
+      if (targetWinnerPlayerId) {
+        try {
+          preSimWinningBallId = await performHiddenPreSimulation(gameData, 500);
+          console.log("Hidden pre-simulation winner id:", preSimWinningBallId);
+        } catch (e) {
+          console.warn("Pre-simulation error:", e);
+          preSimWinningBallId = null;
+        }
+
+        // Recreate canvas completely
+        try {
+          await recreatePixiApp();
+        } catch (e) {
+          console.warn("recreatePixiApp failed:", e);
+        }
+      }
 
       seedRef.current = gameData.seed;
       randomRef.current = new DeterministicRandom(gameData.seed);
@@ -1069,6 +1304,21 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             bounceCount: 0,
           } as Ball);
           ballIndex++;
+        }
+      }
+
+      // Perform ball swap if we have pre-simulation results
+      if (preSimWinningBallId && targetWinnerPlayerId) {
+        const idxWin = newBalls.findIndex((b) => b.id === preSimWinningBallId);
+        const idxTarget = newBalls.findIndex((b) => b.playerId === targetWinnerPlayerId);
+        if (idxWin > -1 && idxTarget > -1 && idxWin !== idxTarget) {
+          // Swap balls in array
+          const tmp = newBalls[idxWin];
+          newBalls[idxWin] = newBalls[idxTarget];
+          newBalls[idxTarget] = tmp;
+          console.log("Swapped balls:", preSimWinningBallId, "↔", targetWinnerPlayerId);
+        } else {
+          console.log("Swap not performed — indexes:", idxWin, idxTarget);
         }
       }
 
