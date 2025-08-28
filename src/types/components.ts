@@ -18,9 +18,10 @@ export interface Ball {
 }
 
 export interface GameCanvasRef {
-  startGame: (gameData: { seed: string; mapId: number[] | number; participants: any[]; }) => Promise<void>;
+  startGame: (gameData: { seed: string; mapId: number[] | number; participants: any[]; winner_id?: string; }) => Promise<void>;
   resetGame: () => void;
   gameState: 'waiting' | 'playing' | 'finished';
+  runHiddenSimulation?: (gameData: { seed: string; mapId: number[] | number; participants: any[]; winner_id?: string; }) => Promise<void>;
   setCameraMode: (mode: 'leader' | 'swipe') => void;
   setScrollY: (y: number) => void;
   getGameSize: () => { width: number; height: number };
