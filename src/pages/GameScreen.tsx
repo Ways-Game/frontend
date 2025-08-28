@@ -92,9 +92,13 @@ const autoStartPendingRef = useRef<any | null>(null);
       const currentGameData = gameDataRef.current;
       if (currentGameData && currentGameData.game_id) {
         try {
-            await api.updateGameState(currentGameData.game_id, 'finish' )
+          const gameDetails = await api.getGameById(currentGameData.game_id)
+          if (!gameDetails.winner_id) {
+            // убрал пока обновление победителя
+            //await api.updateGameWinner(currentGameData.game_id, +playerId)
+          }
         } catch (e) {
-          console.warn('Failed to change game state', e)
+          console.warn('Failed to check/update winner:', e)
         }
       }
 
@@ -138,57 +142,30 @@ const autoStartPendingRef = useRef<any | null>(null);
   }
 
 
-  const startGame = async (dataFromState?: { seed: string; mapId: number[] | number; participants: any[]; winner_id: number }) => {
+  const startGame = (dataFromState?: { seed: string; mapId: number[] | number; participants: any[]; winner_id: number }) => {
     const countdownDuration = 4;
     
     const currentRoundGameData = dataFromState || gameData;
-    
-    // Преобразуем winner_id в string для совместимости с интерфейсом
-    const gameDataForCanvas = {
-      ...currentRoundGameData,
-      winner_id: currentRoundGameData.winner_id ? currentRoundGameData.winner_id.toString() : undefined
-    };
 
     if (speedUpTime >= countdownDuration) {
       handleGameStart();
-      gameCanvasRef.current?.startGame(gameDataForCanvas);
+      gameCanvasRef.current?.startGame(currentRoundGameData);
     } else {
       setShowCountdown(true);
-      
-      // Запускаем скрытую симуляцию во время таймера если есть winner_id
-      let simulationPromise = null;
-      console.log('GameScreen: Checking winner_id:', currentRoundGameData.winner_id);
-      console.log('GameScreen: gameCanvasRef.current:', gameCanvasRef.current);
-      console.log('GameScreen: runHiddenSimulation method:', gameCanvasRef.current?.runHiddenSimulation);
-      
-      if (currentRoundGameData.winner_id && currentRoundGameData.winner_id !== 0) {
-        console.log('GameScreen: Starting hidden simulation...');
-        simulationPromise = gameCanvasRef.current?.runHiddenSimulation?.(gameDataForCanvas);
-        console.log('GameScreen: simulationPromise:', simulationPromise);
-      } else {
-        console.log('GameScreen: No winner_id, skipping simulation');
-      }
       
       const remainingCountdown = countdownDuration - speedUpTime - 1;
       let count = Math.max(1, remainingCountdown);
       
-      const countdown = async () => {
+      const countdown = () => {
         if (count > 0) {
           setCountdownText(count.toString());
           count--;
           setTimeout(countdown, 1000);
         } else {
           setCountdownText("LET'S GO!");
-          
-          // Ждем завершения скрытой симуляции если она запущена
-          if (simulationPromise) {
-            await simulationPromise;
-          }
-          
           setTimeout(() => {
             setShowCountdown(false);
-            handleGameStart();
-            gameCanvasRef.current?.startGame(gameDataForCanvas);
+            gameCanvasRef.current?.startGame(currentRoundGameData);
           }, 1000);
         }
       };
