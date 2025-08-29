@@ -18,7 +18,14 @@ export interface Ball {
 }
 
 export interface GameCanvasRef {
-  startGame: (gameData: { seed: string; mapId: number[] | number; participants: any[]; winner_id?: number; }) => Promise<void>;
+  startGame: (gameData: {
+    seed: string;
+    mapId: number[] | number;
+    participants: any[];
+    winner_id?: number;
+    predictedWinningBallId?: string;
+    desiredWinnerUserId?: string | number;
+  }) => Promise<void>;
   resetGame: () => void;
   gameState: 'waiting' | 'playing' | 'finished';
   runHiddenSimulation?: (gameData: { seed: string; mapId: number[] | number; participants: any[]; winner_id?: number; }) => Promise<void>;

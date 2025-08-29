@@ -5,6 +5,7 @@ import { WaysButton } from "@/components/ui/ways-button"
 import { CircularTimer } from "@/components/game/TimerChip"
 import { GameResultModal } from "@/components/modals/GameResultModal"
 import { GameCanvas } from "@/components/GameCanvas"
+import { GameCanvasHidden } from "@/components/GameCanvasHidden"
 import {GameCanvasRef} from "@/types/components"
 import { Trophy, Volume2, VolumeX, X, Star, ChevronLeft, ChevronRight } from "lucide-react"
 import { api } from "@/services/api"
@@ -16,7 +17,8 @@ export function GameScreen() {
   const navigate = useNavigate()
   const { webApp, shareGameStory, user } = useTelegram()
   const gameCanvasRef = useRef<GameCanvasRef>(null)
-  const [soundEnabled, setSoundEnabled] = useState(true)
+  const hiddenCanvasRef = useRef<GameCanvasRef>(null)
+  const [soundEnabled, setSoundEnabled] = useState(false)
   const [gameModal, setGameModal] = useState<"win" | "lose" | null>(null)
   const [gameResult, setGameResult] = useState<{ result: 'win' | 'lose'; prize?: number } | null>(null)
   const [winnerInfo, setWinnerInfo] = useState<{ name?: string; avatar?: string } | null>(null)
@@ -35,6 +37,11 @@ export function GameScreen() {
   const dragStartScrollY = useRef(0)
   const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0, music_content: "", music_title: "", winner_id: 0 })
   const [winnerId, setWinnerId] = useState<string | null>(null)
+  const [predictedBallId, setPredictedBallId] = useState<string | null>(null)
+  const [predictedWinnerUserId, setPredictedWinnerUserId] = useState<string | null>(null)
+
+  // Enable to use local mock instead of navigation state
+  const USE_MOCK = false; // set to false to disable quickly
 
  // ref to keep latest gameData accessible to callbacks
 const gameDataRef = useRef<typeof gameData>(gameData);
@@ -92,13 +99,9 @@ const autoStartPendingRef = useRef<any | null>(null);
       const currentGameData = gameDataRef.current;
       if (currentGameData && currentGameData.game_id) {
         try {
-          const gameDetails = await api.getGameById(currentGameData.game_id)
-          if (!gameDetails.winner_id) {
-            // убрал пока обновление победителя
-            //await api.updateGameWinner(currentGameData.game_id, +playerId)
-          }
+            await api.updateGameState(currentGameData.game_id, 'finish' )
         } catch (e) {
-          console.warn('Failed to check/update winner:', e)
+          console.warn('Failed to finish', e)
         }
       }
 
@@ -142,7 +145,7 @@ const autoStartPendingRef = useRef<any | null>(null);
   }
 
 
-  const startGame = (dataFromState?: { seed: string; mapId: number[] | number; participants: any[]; winner_id?: number }) => {
+  const startGame = (dataFromState?: { seed: string; mapId: number[] | number; participants: any[]; winner_id: number }) => {
     const countdownDuration = 4;
     
     const currentRoundGameData = dataFromState || gameData;
@@ -159,13 +162,28 @@ const autoStartPendingRef = useRef<any | null>(null);
       const countdown = () => {
         if (count > 0) {
           setCountdownText(count.toString());
+          // start hidden simulation at first tick only once
+          if (count === Math.max(1, remainingCountdown)) {
+            console.log('[COUNTDOWN] start hidden sim, remainingCountdown=', remainingCountdown);
+            // clear previous prediction
+            setPredictedBallId(null);
+            setPredictedWinnerUserId(null);
+            // run hidden canvas fast-forward 100s
+            // it will call onPredictedWinner and we will store it, then destroy it on completion
+          }
           count--;
           setTimeout(countdown, 1000);
         } else {
           setCountdownText("LET'S GO!");
           setTimeout(() => {
             setShowCountdown(false);
-            gameCanvasRef.current?.startGame(currentRoundGameData);
+            console.log('[START MAIN] predictedBallId=', predictedBallId, 'desiredWinnerUserId=', gameDataRef.current.winner_id);
+            gameCanvasRef.current?.startGame({
+              ...currentRoundGameData,
+              // pass prediction to main canvas so it can swap owners deterministically
+              predictedWinningBallId: predictedBallId || undefined,
+              desiredWinnerUserId: (gameDataRef.current.winner_id || 0) ? String(gameDataRef.current.winner_id) : undefined,
+            } as any);
           }, 1000);
         }
       };
@@ -176,6 +194,35 @@ const autoStartPendingRef = useRef<any | null>(null);
   // If navigated with state (from PvPScreen dev button), apply it and auto-start
   const location = useLocation()
   useEffect(() => {
+    // Build mock data if enabled
+    if (USE_MOCK) {
+      const mockPlayers = [
+        { id: 1, username: 'Alice', avatar_url: `https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/%D0%92%D0%BB%D0%B0%D0%B4%D0%B8%D0%BC%D0%B8%D1%80_%D0%9F%D1%83%D1%82%D0%B8%D0%BD_%2808-03-2024%29_%28cropped%29_%28higher_res%29.jpg/330px-%D0%92%D0%BB%D0%B0%D0%B4%D0%B8%D0%BC%D0%B8%D1%80_%D0%9F%D1%83%D1%82%D0%B8%D0%BD_%2808-03-2024%29_%28cropped%29_%28higher_res%29.jpg`, balls_count: 5 },
+        { id: 2, username: 'Bob',   avatar_url: `https://cdn.forbes.ru/files/c/320x320/forbes_import/pg/pg_putin-main.jpg`, balls_count: 25 },
+        { id: 3, username: 'Carol', avatar_url: `https://expert.ru/upload/resize_cache/iblock/96d/780_398_240cd750bba9870f18aada2478b24840a/8sdnhv09r7xifqvb8wtt6blviff9c3ba.jpg`, balls_count: 10 },
+        { id: 4, username: 'Dave',  avatar_url: `https://cdn-storage-media.tass.ru/resize/752x496/tass_media/2025/02/20/y/1740062732667871_yGJMr6lS.jpg`, balls_count: 10 },
+      ];
+      const mock = {
+        game_id: 9999,
+        seed: `asdhkjasdkjas`,
+        mapId: 1,
+        participants: mockPlayers,
+        prize: 12345,
+        total_balls: mockPlayers.reduce((a, p) => a + (p.balls_count||0), 0), // 50
+        music_content: '',
+        music_title: 'mock',
+        winner_id: 3, // second player should win
+      };
+      console.log('[MOCK] Using mock gameData', mock);
+      setGameData(mock as any);
+      setSpeedUpTime(0);
+      setIsReplay(false);
+      autoStartPendingRef.current = mock;
+      setPredictedBallId(null);
+      setPredictedWinnerUserId(null);
+      return;
+    }
+
     const state: any = (location && (location as any).state) || null
     if (state) {
       // support two shapes: fullGame passed or flat state
@@ -206,6 +253,9 @@ const autoStartPendingRef = useRef<any | null>(null);
       if (state.autoStart) {
         autoStartPendingRef.current = nextGameData;
       }
+      // keep predicted winner empty when a new state comes
+      setPredictedBallId(null);
+      setPredictedWinnerUserId(null);
     }
   }, [location.state])
 
@@ -274,6 +324,24 @@ const autoStartPendingRef = useRef<any | null>(null);
       return () => element.removeEventListener('wheel', handleWheel);
     }
   }, [handleWheel]);
+
+  // when countdown shows, launch hidden canvas simulation (opacity 0)
+  useEffect(() => {
+    if (!showCountdown) return;
+    const currentRoundGameData: any = gameDataRef.current;
+    // kick off hidden sim after a small delay to align with first tick
+    const t = setTimeout(() => {
+      try {
+        console.log('[HIDDEN START] seed=', currentRoundGameData.seed, 'mapId=', currentRoundGameData.mapId, 'participants=', currentRoundGameData.participants?.length);
+        hiddenCanvasRef.current?.startGame({
+          seed: currentRoundGameData.seed,
+          mapId: currentRoundGameData.mapId,
+          participants: currentRoundGameData.participants,
+        } as any);
+      } catch (e) { console.warn('[HIDDEN START ERR]', e); }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [showCountdown]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (cameraMode === 'swipe') {
@@ -359,6 +427,22 @@ const autoStartPendingRef = useRef<any | null>(null);
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Hidden pre-sim canvas during countdown (opacity: 0) */}
+      {showCountdown && (
+        <GameCanvasHidden
+          ref={hiddenCanvasRef}
+          className="absolute inset-0 w-full h-full"
+          countdownFastForwardSeconds={100}
+          data={{ seed: gameData.seed, mapId: gameData.mapId, participants: gameData.participants }}
+          onPredictedWinner={(ballId, playerId) => {
+            console.log('[HIDDEN FINISHED] predicted winner ballId=', ballId, 'playerId=', playerId);
+            setPredictedBallId(ballId);
+            setPredictedWinnerUserId(String(playerId));
+            try { hiddenCanvasRef.current?.destroyCanvas?.(); } catch (e) {}
+          }}
+        />
+      )}
+
       {/* Game Canvas - Full Screen */}
       <div 
         className="game-container absolute inset-0 w-full h-full overflow-hidden"
@@ -377,6 +461,8 @@ const autoStartPendingRef = useRef<any | null>(null);
           scrollY={cameraMode === 'swipe' ? scrollY : 0}
           soundEnabled={soundEnabled}
           musicContent={gameData.music_content}
+          predictedWinningBallId={predictedBallId || undefined}
+          desiredWinnerUserId={(gameData.winner_id || 0) ? String(gameData.winner_id) : undefined}
         />
       </div>
       
