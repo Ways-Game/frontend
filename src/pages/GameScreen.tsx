@@ -420,6 +420,12 @@ const autoStartPendingRef = useRef<any | null>(null);
   }, [isDragging, handleScrollbarMoveMouse, handleScrollbarMoveTouch, handleScrollbarEnd])
 
 
+  // Treat modal as replay if it's actual replay or viewer didn't participate
+  const isUserInGame = !!user && Array.isArray(gameData?.participants) && gameData.participants.some((p: any) => {
+    const uid = p?.user?.id ?? p?.id;
+    return Number(uid) === Number(user.id);
+  });
+
   return (
     <div 
       className="min-h-screen bg-black relative overflow-hidden"
@@ -576,7 +582,7 @@ const autoStartPendingRef = useRef<any | null>(null);
           winnerName={winnerInfo?.name}
           winnerAvatar={winnerInfo?.avatar}
           musicTitle={gameData.music_title}
-          isReplay={isReplay}
+          isReplay={isReplay || !isUserInGame}
         />
       )}
     </div>
