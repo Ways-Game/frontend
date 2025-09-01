@@ -39,6 +39,11 @@ export function GameScreen() {
   const [winnerId, setWinnerId] = useState<string | null>(null)
   const [predictedBallId, setPredictedBallId] = useState<string | null>(null)
   const [predictedWinnerUserId, setPredictedWinnerUserId] = useState<string | null>(null)
+  // Refs to avoid stale closures during countdown
+  const predictedBallIdRef = useRef<string | null>(null)
+  const predictedWinnerUserIdRef = useRef<string | null>(null)
+  useEffect(() => { predictedBallIdRef.current = predictedBallId }, [predictedBallId])
+  useEffect(() => { predictedWinnerUserIdRef.current = predictedWinnerUserId }, [predictedWinnerUserId])
 
   // Enable to use local mock instead of navigation state
   const USE_MOCK = false; // set to false to disable quickly
@@ -178,12 +183,14 @@ const autoStartPendingRef = useRef<any | null>(null);
           setCountdownText("LET'S GO!");
           setTimeout(() => {
             setShowCountdown(false);
-            console.log('[START MAIN] predictedBallId=', predictedBallId, 'desiredWinnerUserId=', gameDataRef.current.winner_id);
+            const pBall = predictedBallIdRef.current;
+            const desired = (gameDataRef.current.winner_id || 0) ? String(gameDataRef.current.winner_id) : undefined;
+            console.log('[START MAIN] predictedBallId=', pBall, 'desiredWinnerUserId=', desired);
             gameCanvasRef.current?.startGame({
               ...currentRoundGameData,
               // Use whatever prediction is available by the time we start; if hidden sim not finished, start without it
-              predictedWinningBallId: predictedBallId || undefined,
-              desiredWinnerUserId: (gameDataRef.current.winner_id || 0) ? String(gameDataRef.current.winner_id) : undefined,
+              predictedWinningBallId: pBall || undefined,
+              desiredWinnerUserId: desired,
             } as any);
           }, 800); // slightly shorter dwell to keep pace even when hidden sim is slow
         }
@@ -445,6 +452,8 @@ const autoStartPendingRef = useRef<any | null>(null);
             console.log('[HIDDEN FINISHED] predicted winner ballId=', ballId, 'playerId=', playerId);
             setPredictedBallId(ballId);
             setPredictedWinnerUserId(String(playerId));
+            predictedBallIdRef.current = ballId;
+            predictedWinnerUserIdRef.current = String(playerId);
             try { hiddenCanvasRef.current?.destroyCanvas?.(); } catch (e) {}
           }}
         />

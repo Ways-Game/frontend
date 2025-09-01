@@ -1197,6 +1197,22 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
       // --- end fast-forward ---
 
+      // In deterministic mode (hidden pre-sim), keep physics ticking synchronously
+      if (deterministicMode) {
+        // If winner already decided during fast-forward, stop immediately
+        if (actualWinnersRef.current.length > 0) {
+          return;
+        }
+        // Otherwise, continue stepping frames synchronously until winner appears
+        let guard = 0;
+        while (actualWinnersRef.current.length === 0 && guard < 20000) { // hard cap ~333s
+          updatePhysics();
+          physicsTimeRef.current += FIXED_DELTA;
+          guard++;
+        }
+        return;
+      }
+
       const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
       (gameLoopRef as any).physicsIntervalId = physicsInterval;
 
