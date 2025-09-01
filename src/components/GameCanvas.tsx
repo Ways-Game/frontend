@@ -399,9 +399,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Deterministic physics loop / render functions (mostly unchanged)
     const gameLoop = () => {
-      updatePhysics();
-
+      const won = updatePhysics();
       physicsTimeRef.current += FIXED_DELTA;
+      // In non-deterministic main game we keep ticking; hidden mode doesn't use setInterval
     };
 
     const renderLoop = () => {
@@ -409,8 +409,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
-    const updatePhysics = () => {
-      if (!randomRef.current) return;
+    const updatePhysics = (): boolean => {
+      if (!randomRef.current) return false;
 
       if (physicsTimeRef.current % 1000 === 0 && physicsTimeRef.current > 0) {
         const checksum = ballsRef.current.reduce(
@@ -423,8 +423,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         spinner.rotation = precise.add(spinner.rotation, 0.08);
       });
 
-      ballsRef.current.forEach((ball) => {
-        if (ball.finished) return;
+      let winnerFound = false;
+
+      for (let i = 0; i < ballsRef.current.length; i++) {
+        const ball = ballsRef.current[i];
+        if (ball.finished) continue;
 
         // Инициализируем состояние мяча если нужно
         if (!ballStatesRef.current.has(ball.id)) {
@@ -531,15 +534,22 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ball.y = precise.add(ball.y, ball.dy);
         }
 
-        checkCollisions(ball);
-      });
+        // Collisions and win detection
+        const wonThisStep = checkCollisions(ball);
+        if (wonThisStep) {
+          winnerFound = true;
+          break;
+        }
+      }
 
       ballsRef.current = ballsRef.current.filter(
         (ball) => !ball.finished || actualWinnersRef.current.includes(ball.id)
       );
+
+      return winnerFound;
     };
 
-    const checkCollisions = (ball: Ball) => {
+    const checkCollisions = (ball: Ball): boolean => {
       obstaclesRef.current.forEach((obstacle) => {
         if (obstacle.destroyed) return;
 
@@ -852,6 +862,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             console.log('[WIN] first ball reached winY:', ball.id, 'owner:', ball.playerId);
             onBallWin?.(ball.id, ball.playerId);
             setGameState("finished");
+            return true;
           }
         }
 
@@ -862,6 +873,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
       }
+
+      return false;
     };
 
     // Render (updated swipe handling to match old behavior: centerX & unscaled Y)
@@ -1189,10 +1202,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           console.log('[FAST-FORWARD] framesToSimulate=', framesToSimulate, 'cap=', MAX_FRAMES)
           // perform physics updates synchronously
           for (let i = 0; i < framesToSimulate; i++) {
-            updatePhysics();
+            const won = updatePhysics();
             physicsTimeRef.current += FIXED_DELTA;
             // If we only need the first winner (hidden), we can stop early
-            if (deterministicMode && actualWinnersRef.current.length > 0) break;
+            if (deterministicMode && (won || actualWinnersRef.current.length > 0)) break;
           }
           console.log(`Fast-forwarded physics by ${framesToSimulate} frames (${(framesToSimulate/FIXED_FPS).toFixed(2)}s)`);
         }
@@ -1210,8 +1223,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         // Otherwise, continue stepping frames synchronously until winner appears
         let guard = 0;
         while (actualWinnersRef.current.length === 0 && guard < 20000) { // hard cap ~333s
-          updatePhysics();
+          const won = updatePhysics();
           physicsTimeRef.current += FIXED_DELTA;
+          if (won || actualWinnersRef.current.length > 0) break;
           guard++;
         }
         return;
