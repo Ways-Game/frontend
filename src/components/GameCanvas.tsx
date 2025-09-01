@@ -534,7 +534,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ball.y = precise.add(ball.y, ball.dy);
         }
 
-        // Collisions and win detection
         const wonThisStep = checkCollisions(ball);
         if (wonThisStep) {
           winnerFound = true;
@@ -976,6 +975,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       setActualWinners([]);
       actualWinnersRef.current = [];
+      // Reset per-ball anti-stuck state to avoid cross-run contamination
+      ballStatesRef.current = new Map();
+      // Reset last collision timestamp for safety
+      lastCollisionAtRef.current = 0;
       ballsRef.current.forEach((ball) => {
         appRef.current!.stage.removeChild(ball.graphics);
         if (ball.indicator) {
@@ -1162,6 +1165,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       }
 
+      // Ensure stable iteration order for physics/collisions across runs
+      newBalls.sort((a, b) => a.id.localeCompare(b.id));
       ballsRef.current = newBalls;
 
       const gateBarrier = (mapDataRef.current as any)?.gateBarrier;
