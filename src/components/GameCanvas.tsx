@@ -104,6 +104,8 @@ interface GameCanvasProps {
   predictedWinningBallId?: string;
   // Optional: desired winner user id (server winner_id)
   desiredWinnerUserId?: string | number;
+  // Optional: deterministic mode for hidden pre-sim (no avatar loads, no async awaits in init)
+  deterministicMode?: boolean;
 }
 
 export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
@@ -121,6 +123,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       predictedWinningBallId,
       desiredWinnerUserId,
       fastForwardCapFrames,
+      deterministicMode = false,
     },
     ref
   ) => {
@@ -979,14 +982,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         });
 
         // Stabilize processing order to avoid engine-dependent unstable sort ties
-        const obstaclesWithIndex = mapData.obstacles.map((o, i) => ({ ...(o as any), __i: i }));
-        const spinnersWithIndex = mapData.spinners.map((s, i) => ({ ...(s as any), __i: i }));
+        // Preserve object identity (so gateBarrier reference remains valid)
+        mapData.obstacles.forEach((o: any, i: number) => { o.__i = i });
+        mapData.spinners.forEach((s: any, i: number) => { s.__i = i });
 
-        obstaclesRef.current = obstaclesWithIndex.sort((a: any, b: any) =>
+        obstaclesRef.current = mapData.obstacles.slice().sort((a: any, b: any) =>
           (a.y - b.y) || (a.x - b.x) || ((a.type || '').localeCompare(b.type || '')) ||
           (a.width - b.width) || (a.height - b.height) || (a.__i - b.__i)
         );
-        spinnersRef.current = spinnersWithIndex.sort((a: any, b: any) =>
+        spinnersRef.current = mapData.spinners.slice().sort((a: any, b: any) =>
           (a.y - b.y) || (a.x - b.x) || (a.__i - b.__i)
         );
 
@@ -1072,36 +1076,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const ownerId = owners[ballIndex] ?? (user.id ?? rawParticipant.id ?? "").toString();
           const avatarUrlForOwner = avatarByPlayerId[ownerId];
 
-          const ballGraphics = new PIXI.Graphics();
-
-          if (avatarUrlForOwner) {
-            try {
-              const encodedUrl = encodeURI(avatarUrlForOwner);
-              const proxyUrl = "https://api.corsproxy.io/";
-              const finalUrl = proxyUrl + encodedUrl;
-              const texture = await PIXI.Assets.load(finalUrl);
-              ballGraphics
-                .circle(0, 0, 24)
-                .fill({ texture })
-                .stroke({ width: 2, color: 0xffffff });
-            } catch (error) {
-              ballGraphics
-                .circle(0, 0, 24)
-                .fill(0x4ecdc4)
-                .stroke({ width: 2, color: 0xffffff });
-            }
-          } else {
-            ballGraphics
-              .circle(0, 0, 24)
-              .fill(0x4ecdc4)
-              .stroke({ width: 2, color: 0xffffff });
-          }
-
-          const indicator = new PIXI.Graphics();
-          indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
-          indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
-          indicator.visible = false;
-
+          // Precompute positions deterministically BEFORE any async work
           const startX = precise.add(
             50,
             precise.mul(randomRef.current.next(), WORLD_WIDTH - 100)
@@ -1114,6 +1089,42 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             precise.sub(randomRef.current.next(), 0.5),
             2
           );
+
+          const ballGraphics = new PIXI.Graphics();
+          const indicator = new PIXI.Graphics();
+          indicator.moveTo(0, -15).lineTo(-10, 5).lineTo(10, 5).closePath();
+          indicator.fill(0xffd700).stroke({ width: 2, color: 0xffa500 });
+          indicator.visible = false;
+
+          // In deterministic mode (hidden pre-sim), skip avatar loads entirely
+          if (!deterministicMode && avatarUrlForOwner) {
+            // Start async load but do not await; fill after ball is added to scene
+            (async () => {
+              try {
+                const encodedUrl = encodeURI(avatarUrlForOwner);
+                const proxyUrl = "https://api.corsproxy.io/";
+                const finalUrl = proxyUrl + encodedUrl;
+                const texture = await PIXI.Assets.load(finalUrl);
+                // Re-apply fill if ball still exists
+                try {
+                  ballGraphics.clear();
+                  ballGraphics
+                    .circle(0, 0, 24)
+                    .fill({ texture })
+                    .stroke({ width: 2, color: 0xffffff });
+                } catch (_) {}
+              } catch (error) {
+                // keep fallback fill
+              }
+            })();
+          }
+
+          if (!avatarUrlForOwner || deterministicMode) {
+            ballGraphics
+              .circle(0, 0, 24)
+              .fill(0x4ecdc4)
+              .stroke({ width: 2, color: 0xffffff });
+          }
 
           ballGraphics.position.set(startX, startY);
           indicator.position.set(startX, startY - 40);
