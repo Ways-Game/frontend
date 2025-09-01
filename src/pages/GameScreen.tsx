@@ -183,15 +183,23 @@ const autoStartPendingRef = useRef<any | null>(null);
           setCountdownText("LET'S GO!");
           setTimeout(() => {
             setShowCountdown(false);
-            const pBall = predictedBallIdRef.current;
-            const desired = (gameDataRef.current.winner_id || 0) ? String(gameDataRef.current.winner_id) : undefined;
-            console.log('[START MAIN] predictedBallId=', pBall, 'desiredWinnerUserId=', desired);
-            gameCanvasRef.current?.startGame({
-              ...currentRoundGameData,
-              // Use whatever prediction is available by the time we start; if hidden sim not finished, start without it
-              predictedWinningBallId: pBall || undefined,
-              desiredWinnerUserId: desired,
-            } as any);
+            const launchMain = async () => {
+              // Wait up to 1500ms for predicted result if not ready yet
+              let tries = 0;
+              while (!predictedBallIdRef.current && tries < 30) {
+                await new Promise(r => setTimeout(r, 50));
+                tries++;
+              }
+              const pBall = predictedBallIdRef.current;
+              const desired = (gameDataRef.current.winner_id || 0) ? String(gameDataRef.current.winner_id) : undefined;
+              console.log('[START MAIN] predictedBallId=', pBall, 'desiredWinnerUserId=', desired);
+              gameCanvasRef.current?.startGame({
+                ...currentRoundGameData,
+                predictedWinningBallId: pBall || undefined,
+                desiredWinnerUserId: desired,
+              } as any);
+            };
+            launchMain();
           }, 800); // slightly shorter dwell to keep pace even when hidden sim is slow
         }
       };

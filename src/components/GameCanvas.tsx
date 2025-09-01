@@ -1180,7 +1180,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const secondsToFastForward = Number(speedUpTime || 0);
         console.log('gamecanvas speedtime:', secondsToFastForward)
         if (secondsToFastForward > 0) {
-          const frames = Math.floor(secondsToFastForward * FIXED_FPS);
+          // Ignore any minuses to keep logic consistent
+          const clampedSeconds = Math.max(0, secondsToFastForward);
+          const frames = Math.floor(clampedSeconds * FIXED_FPS);
           // cap frames to avoid freezing main thread; tune as needed
           const MAX_FRAMES = typeof fastForwardCapFrames === 'number' ? fastForwardCapFrames : 3000; // default cap
           const framesToSimulate = Math.min(frames, MAX_FRAMES);
@@ -1189,6 +1191,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           for (let i = 0; i < framesToSimulate; i++) {
             updatePhysics();
             physicsTimeRef.current += FIXED_DELTA;
+            // If we only need the first winner (hidden), we can stop early
+            if (deterministicMode && actualWinnersRef.current.length > 0) break;
           }
           console.log(`Fast-forwarded physics by ${framesToSimulate} frames (${(framesToSimulate/FIXED_FPS).toFixed(2)}s)`);
         }
