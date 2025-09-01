@@ -46,6 +46,21 @@ const precise = {
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+// Deterministic, stateless noise in [0,1) based on ball id and frame index
+const hashStringToInt = (s: string) => {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+};
+const deterministicNoise01 = (ballId: string, frame: number, salt = 0) => {
+  const seed = (hashStringToInt(ballId) + (frame | 0) + (salt | 0)) >>> 0;
+  let x = (Math.imul(seed ^ 0x9e3779b9, 1664525) + 1013904223) >>> 0; // LCG step
+  return (x & 0x7fffffff) / 0x7fffffff;
+};
+
 class DeterministicRandom {
   private seed: number;
   constructor(seed: string) {
@@ -468,9 +483,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               ballState.isStuck = true;
               ballState.stuckRecoveryCountdown = 60; // 60 кадров = 1 секунда при 60 FPS
               
-              // Принудительный отскок
+              // Принудительный отскок (детерминированный без потребления RNG)
               ball.dy = -STUCK_BOUNCE_FORCE;
-              ball.dx = precise.mul(precise.sub(randomRef.current!.next(), 0.5), 4);
+              {
+                const noise = deterministicNoise01(ball.id, physicsTimeRef.current / FIXED_DELTA, 17);
+                ball.dx = precise.mul(precise.sub(noise, 0.5), 4);
+              }
             }
           } else {
             ballState.stuckFrames = 0;
@@ -499,16 +517,20 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           } else {
             // Если скорость ниже минимальной, устанавливаем минимальную скорость
             if (ball.dx === 0) {
-              ball.dx = randomRef.current!.next() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
+              // Детерминированный выбор направления при нуле
+              const noise = deterministicNoise01(ball.id, physicsTimeRef.current / FIXED_DELTA, 23);
+              ball.dx = noise > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
             } else {
               ball.dx = ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed;
             }
           }
 
-          // Добавляем небольшой случайный импульс для предотвращения застревания
-          const noise = randomRef.current!.next();
-          const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
-          ball.dx = precise.add(ball.dx, noiseValue);
+          // Добавляем небольшой детерминированный импульс (без потребления RNG)
+          {
+            const noise = deterministicNoise01(ball.id, physicsTimeRef.current / FIXED_DELTA, 31);
+            const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
+            ball.dx = precise.add(ball.dx, noiseValue);
+          }
 
           ball.x = precise.add(ball.x, ball.dx);
 
@@ -1021,11 +1043,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       // If we have a predicted winning ball id and a desired winner, ensure that index belongs to desired winner by swapping
-      if (predictedWinningBallId && desiredWinnerUserId) {
-        const desiredId = desiredWinnerUserId.toString();
-        const idxStr = predictedWinningBallId.split("_").pop();
+      // Use values from gameData primarily (so caller can pass them at call time), fallback to props for backward compatibility
+      const pBallId = (gameData as any).predictedWinningBallId ?? predictedWinningBallId;
+      const dWinner = (gameData as any).desiredWinnerUserId ?? desiredWinnerUserId;
+
+      if (pBallId && dWinner) {
+        const desiredId = dWinner.toString();
+        const idxStr = pBallId.split("_").pop();
         const predictedIndex = idxStr ? parseInt(idxStr, 10) : NaN;
-        console.log('[SWAP CHECK] predictedWinningBallId=', predictedWinningBallId, 'predictedIndex=', predictedIndex, 'desiredId=', desiredId, 'owners.length=', owners.length);
+        console.log('[SWAP CHECK] predictedWinningBallId=', pBallId, 'predictedIndex=', predictedIndex, 'desiredId=', desiredId, 'owners.length=', owners.length);
         if (!isNaN(predictedIndex) && predictedIndex >= 0 && predictedIndex < owners.length) {
           const currentOwner = owners[predictedIndex];
           console.log('[SWAP CHECK] currentOwner at predictedIndex=', currentOwner);

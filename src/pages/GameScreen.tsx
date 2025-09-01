@@ -174,17 +174,18 @@ const autoStartPendingRef = useRef<any | null>(null);
           count--;
           setTimeout(countdown, 1000);
         } else {
+          // Do not block the timer waiting for hidden sim; let UI proceed
           setCountdownText("LET'S GO!");
           setTimeout(() => {
             setShowCountdown(false);
             console.log('[START MAIN] predictedBallId=', predictedBallId, 'desiredWinnerUserId=', gameDataRef.current.winner_id);
             gameCanvasRef.current?.startGame({
               ...currentRoundGameData,
-              // pass prediction to main canvas so it can swap owners deterministically
+              // Use whatever prediction is available by the time we start; if hidden sim not finished, start without it
               predictedWinningBallId: predictedBallId || undefined,
               desiredWinnerUserId: (gameDataRef.current.winner_id || 0) ? String(gameDataRef.current.winner_id) : undefined,
             } as any);
-          }, 1000);
+          }, 800); // slightly shorter dwell to keep pace even when hidden sim is slow
         }
       };
       countdown();

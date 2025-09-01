@@ -64,7 +64,7 @@ export function MarketScreen() {
 
         {/* Hero Banner */}
         <div 
-          className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden h-[154px]"
+          className="px-5 py-5 bg-gradient-to-b from-fuchsia-500 to-indigo-400 rounded-[20px] flex flex-col gap-5 relative overflow-hidden"
           style={{
             backgroundImage: `url(${refBack})`,
             backgroundSize: 'cover',
