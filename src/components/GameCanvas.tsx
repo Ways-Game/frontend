@@ -52,6 +52,7 @@ class DeterministicRandom {
   private seed: number;
   constructor(seed: string) {
     this.seed = this.hashString(seed || "default_seed");
+
   }
   private hashString(str: string): number {
     if (!str || typeof str !== 'string') str = "default_seed";
@@ -60,6 +61,7 @@ class DeterministicRandom {
       hash = Math.imul(hash, 31) + str.charCodeAt(i);
       hash |= 0;
     }
+    console.log(Math.abs(hash))
     return Math.abs(hash);
   }
   next(): number {
