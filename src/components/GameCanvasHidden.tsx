@@ -24,7 +24,7 @@ export const GameCanvasHidden = forwardRef<GameCanvasRef, GameCanvasHiddenProps>
             }
 
     return (
-      <div className={className} style={{ opacity: 0, pointerEvents: "none"}}>
+      <div className={className} >
         <GameCanvas
           ref={ref}
           className="absolute inset-0 w-full h-full"
