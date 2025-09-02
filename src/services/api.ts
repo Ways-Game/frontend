@@ -96,7 +96,7 @@ class ApiService {
   }
 
   async updateGameState(game_id: number, status: string): Promise<void> {
-    return this.request<void>('/game/dont_use/update_game_status', {
+    return this.request<void>('/game/update_game_status', {
       method: 'PUT',
       body: JSON.stringify({ game_id, status }),
     });
