@@ -76,3 +76,30 @@ export interface ReferralUser {
   earnings: number
   joinedAt: string
 }
+
+// === Market / Gifts ===
+export interface Gift {
+  available_gift_id: number;
+  gift_id: number;
+  telegram_id: number;
+  title: string;
+  url: string; // image url
+  price: number;
+}
+
+export interface GiftBuyRequest {
+  user_id: number;
+  available_gift_id: number;
+  count: number;
+  init_data: string;
+}
+
+export interface GiftBuyResponse {
+  order_id: number;
+  status?: string; // optional, depends on backend
+}
+
+export interface GiftOrderStatusUpdate {
+  order_id: number;
+  new_status: string; // e.g., 'PENDING', 'PAID', 'CANCELLED'
+}

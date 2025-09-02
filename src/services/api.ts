@@ -1,4 +1,4 @@
-import { Player, GameData, UserProfile, GameDetailResponse, GameState } from '@/types';
+import { Player, GameData, UserProfile, GameDetailResponse, GameState, Gift, GiftBuyRequest, GiftBuyResponse } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://bot.guarant.network/api';
 
@@ -28,6 +28,24 @@ class ApiService {
     return this.request<GameDetailResponse >(`/game/get_game/${game_id}`);
   }
 
+  // === Gifts / Market ===
+  async getGifts(): Promise<Gift[]> {
+    return this.request<Gift[]>('/gifts/all');
+  }
+
+  async buyGift(payload: GiftBuyRequest): Promise<GiftBuyResponse> {
+    return this.request<GiftBuyResponse>('/gifts/buy', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateGiftOrderStatus(order_id: number, new_status: string): Promise<void> {
+    return this.request<void>('/gifts/update_status', {
+      method: 'POST',
+      body: JSON.stringify({ order_id, new_status }),
+    });
+  }
 
   async buyBallz(amount: number): Promise<{ success: boolean; newBalance: number }> {
     return this.request<{ success: boolean; newBalance: number }>('/user/buy-ballz', {

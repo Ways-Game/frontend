@@ -1,18 +1,23 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { Search, Filter, ArrowUpDown, X } from "lucide-react"
 import { useTelegram } from "@/hooks/useTelegram"
 import { api } from "@/services/api"
-import type { UserProfile } from "@/types/api"
-import marketGift from "@assets/market_gift.png"
+import type { UserProfile, Gift } from "@/types"
 import refBack from "@assets/ref_back.png"
 import { starIcon, refIcon } from "@/assets/icons"
 
 export function MarketScreen() {
-  const { user } = useTelegram()
-  const [searchQuery, setSearchQuery] = useState('Snoo')
+  const { user, webApp, loadUserProfile, showAlert } = useTelegram()
+
+  const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState('Low to High')
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  
+
+  const [gifts, setGifts] = useState<Gift[]>([])
+  const [loading, setLoading] = useState<boolean>(false)
+  const [buyingId, setBuyingId] = useState<number | null>(null)
+
+  // Load user profile
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (!user?.id) return
@@ -23,17 +28,61 @@ export function MarketScreen() {
         console.error('Failed to fetch user profile:', error)
       }
     }
-    
+
     fetchUserProfile()
   }, [user?.id])
 
-  const products = Array(10).fill(null).map((_, i) => ({
-    id: i + 1,
-    name: 'Snoop Dogg',
-    category: 'Random',
-    price: 200,
-    image: marketGift
-  }))
+  // Load gifts
+  useEffect(() => {
+    const fetchGifts = async () => {
+      try {
+        setLoading(true)
+        const data = await api.getGifts()
+        setGifts(data)
+      } catch (e) {
+        console.error('Failed to load gifts', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchGifts()
+  }, [])
+
+  const filteredGifts = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase().trim()
+    let list = gifts
+    if (q) list = list.filter(g => g.title.toLowerCase().includes(q))
+
+    // basic sort example (not critical now)
+    if (sortOrder === 'Low to High') list = [...list].sort((a,b) => a.price - b.price)
+    if (sortOrder === 'High to Low') list = [...list].sort((a,b) => b.price - a.price)
+    return list
+  }, [gifts, searchQuery, sortOrder])
+
+  const handleBuy = async (gift: Gift) => {
+    if (!user?.id) {
+      showAlert('Please open via Telegram')
+      return
+    }
+
+    try {
+      setBuyingId(gift.available_gift_id)
+      const init_data = webApp?.initData || ''
+      const res = await api.buyGift({
+        user_id: user.id,
+        available_gift_id: gift.available_gift_id,
+        count: 1,
+        init_data,
+      })
+      showAlert(`Order created: #${res.order_id}`)
+      await loadUserProfile()
+    } catch (e: any) {
+      console.error('Buy gift error', e)
+      showAlert(e?.message || 'Failed to buy gift')
+    } finally {
+      setBuyingId(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-black flex flex-col gap-2.5 overflow-hidden pb-20">
@@ -52,9 +101,8 @@ export function MarketScreen() {
             {/* Balance Display */}
             <div className="h-8 px-3 py-2 bg-zinc-800 rounded-[20px] flex items-center gap-1.5">
               <img src={starIcon} className="w-4 h-4" alt="star" />
-              <span className="text-white text-sm font-semibold">{userProfile?.balance || 0}</span>
+              <span className="text-white text-sm font-semibold">{userProfile?.balance ?? 0}</span>
             </div>
-            
             <button className="h-8 px-3 py-2 bg-[#007AFF] rounded-[20px] flex items-center gap-1.5">
               <img src={refIcon} className="w-5 h-5" alt="ref" />
               <span className="text-white text-base font-semibold">Connect</span>
@@ -92,6 +140,7 @@ export function MarketScreen() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 bg-transparent text-white text-base font-normal leading-snug outline-none"
+                placeholder="Search gifts"
               />
             </div>
             {searchQuery ? (
@@ -107,21 +156,31 @@ export function MarketScreen() {
 
         {/* Products Grid */}
         <div className="self-stretch flex-1 relative inline-flex justify-center items-start gap-2.5 flex-wrap content-start overflow-y-auto">
-          {products.map((product) => (
-            <div key={product.id} style={{width: "calc(100% / 3 - 8px)"}} className=" h-34 p-2.5 bg-stone-950 rounded-xl border border-[#5F5F5F] backdrop-blur-sm inline-flex flex-col justify-end items-center gap-2 overflow-hidden">
+          {loading && (
+            <div className="w-full text-center text-neutral-400 py-4">Loading...</div>
+          )}
+          {!loading && filteredGifts.map((gift) => (
+            <div key={gift.available_gift_id} style={{width: "calc(100% / 3 - 8px)"}} className=" h-34 p-2.5 bg-stone-950 rounded-xl border border-[#5F5F5F] backdrop-blur-sm inline-flex flex-col justify-end items-center gap-2 overflow-hidden">
               <div className="flex flex-col justify-start items-center gap-0.5">
-                <span className="text-neutral-50 text-xs">{product.name}</span>
-                <span className="text-neutral-50/50 text-[10px]">{product.category}</span>
+                <span className="text-neutral-50 text-xs truncate max-w-full" title={gift.title}>{gift.title}</span>
+                <span className="text-neutral-50/50 text-[10px]">Gift</span>
               </div>
-              <img className="self-stretch flex-1 rounded-xl object-cover" src={product.image} alt={product.name} />
-              <div className="self-stretch px-[26px] py-[8px] bg-zinc-800 rounded-[20px] inline-flex justify-center items-center gap-2 overflow-hidden">
+              <img className="self-stretch flex-1 rounded-xl object-cover" src={gift.url} alt={gift.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+              <button
+                className="self-stretch px-[26px] py-[8px] bg-zinc-800 rounded-[20px] inline-flex justify-center items-center gap-2 overflow-hidden disabled:opacity-50"
+                onClick={() => handleBuy(gift)}
+                disabled={buyingId === gift.available_gift_id}
+              >
                 <div className="flex justify-start items-center gap-[4px]">
-                  <span className="text-neutral-50 text-sm leading-snug text-[20px]">{product.price}</span>
+                  <span className="text-neutral-50 text-sm leading-snug text-[20px]">{gift.price}</span>
                   <img src={starIcon} className="w-4 h-[18px]" alt="star" />
                 </div>
-              </div>
+              </button>
             </div>
           ))}
+          {!loading && filteredGifts.length === 0 && (
+            <div className="w-full text-center text-neutral-400 py-4">No gifts found</div>
+          )}
         </div>
       </div>
     </div>
