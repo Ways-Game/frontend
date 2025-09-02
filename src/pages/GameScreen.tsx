@@ -453,7 +453,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       {showCountdown && (
         <GameCanvasHidden
           ref={hiddenCanvasRef}
-          className="absolute inset-0 w-full h-full"
+          className="game-container absolute inset-0 w-full h-full overflow-hidden"
           countdownFastForwardSeconds={100}
           data={{ seed: gameData.seed, mapId: gameData.mapId, participants: gameData.participants }}
           onPredictedWinner={(ballId, playerId) => {
