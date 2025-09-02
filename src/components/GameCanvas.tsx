@@ -410,6 +410,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     };
 
     const updatePhysics = (): boolean => {
+      // Сортировка мячей в детерминированном порядке
+      ballsRef.current.sort((a, b) => a.id.localeCompare(b.id));
+
       if (!randomRef.current) return false;
 
       if (physicsTimeRef.current % 1000 === 0 && physicsTimeRef.current > 0) {

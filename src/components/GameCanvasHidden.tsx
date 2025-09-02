@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, useEffect } from "react";
 import { GameCanvas } from "./GameCanvas";
 import { GameCanvasRef } from "@/types";
 
@@ -14,10 +14,23 @@ export interface GameCanvasHiddenProps {
   onPredictedWinner: (ballId: string, playerId: string) => void;
 }
 
+const FIXED_WIDTH = 1200;
+const FIXED_HEIGHT = 2500;
+
 export const GameCanvasHidden = forwardRef<GameCanvasRef, GameCanvasHiddenProps>(
   ({ className, countdownFastForwardSeconds = 100, data, onPredictedWinner }, ref) => {
+    // Гарантированная инициализация перед стартом
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        if (ref && typeof ref !== 'function' && ref.current && ref.current.startGame) {
+          ref.current.startGame(data);
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }, []);
+
     return (
-      <div className={className} style={{ opacity: 0, pointerEvents: "none" }}>
+      <div className={className} style={{ opacity: 0, pointerEvents: "none", width: FIXED_WIDTH, height: FIXED_HEIGHT }}>
         <GameCanvas
           ref={ref}
           className="absolute inset-0 w-full h-full"
