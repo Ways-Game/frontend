@@ -35,7 +35,8 @@ jobs:
             
             # Останавливаем и очищаем проект
             cd frontend
-            git pull origin main
+            git fetch origin main --prune
+            git reset --hard origin/main
             docker-compose down --remove-orphans
             docker-compose up -d --build
           "
