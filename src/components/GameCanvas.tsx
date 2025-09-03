@@ -141,6 +141,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const accumulatorRef = useRef(0);
     const seedRef = useRef<string>("");
     const randomRef = useRef<DeterministicRandom | null>(null);
+    const rngStepCountRef = useRef(0);
+    // Track RNG usage to keep fast-forward identical to real-time
+    const nextRandom = () => {
+      const v = randomRef.current!.next();
+      rngStepCountRef.current++;
+      return v;
+    };
     const gameLoopRef = useRef<number | null>(null);
 
     const [gameState, setGameState] = useState<
@@ -483,7 +490,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               
               // Принудительный отскок
               ball.dy = -STUCK_BOUNCE_FORCE;
-              ball.dx = precise.mul(precise.sub(randomRef.current!.next(), 0.5), 4);
+              ball.dx = precise.mul(precise.sub(nextRandom(), 0.5), 4);
             }
           } else {
             ballState.stuckFrames = 0;
@@ -512,14 +519,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           } else {
             // Если скорость ниже минимальной, устанавливаем минимальную скорость
             if (ball.dx === 0) {
-              ball.dx = randomRef.current!.next() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
+              ball.dx = nextRandom() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
             } else {
               ball.dx = ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed;
             }
           }
 
           // Добавляем небольшой случайный импульс для предотвращения застревания
-          const noise = randomRef.current!.next();
+          const noise = nextRandom();
           const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
           ball.dx = precise.add(ball.dx, noiseValue);
 
@@ -959,6 +966,218 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
+    // Simulation-only types/state and helpers to make fast-forward identical
+    interface SimBall {
+      id: string;
+      x: number;
+      y: number;
+      dx: number;
+      dy: number;
+      finished: boolean;
+      playerId: string;
+      bounceCount: number;
+      onSurface?: boolean;
+      surfaceObstacle?: SimObstacle | null;
+    }
+    interface SimObstacle {
+      type: string;
+      x: number;
+      y: number;
+      width?: number;
+      height?: number;
+      rotation?: number;
+      destroyed?: boolean;
+      hitCount?: number;
+      maxHits?: number;
+      __i?: number;
+    }
+    interface SimSpinner { x: number; y: number; rotation: number; __i?: number; }
+    interface SimBallState {
+      stuckFrames: number;
+      lastPositions: { x: number; y: number }[];
+      isStuck: boolean;
+      stuckRecoveryCountdown: number;
+    }
+    interface SimState {
+      balls: SimBall[];
+      obstacles: SimObstacle[];
+      spinners: SimSpinner[];
+      ballStates: Map<string, SimBallState>;
+      physicsTime: number;
+      winners: string[];
+    }
+    interface SimContext { rng: DeterministicRandom; rngCalls: number; }
+    const nextSimRandom = (ctx: SimContext) => { ctx.rngCalls++; return ctx.rng.next(); };
+
+    const toSimState = (): SimState => ({
+      balls: ballsRef.current.map(b => ({
+        id: b.id,
+        x: b.x,
+        y: b.y,
+        dx: b.dx,
+        dy: b.dy,
+        finished: b.finished,
+        playerId: b.playerId,
+        bounceCount: b.bounceCount,
+        onSurface: (b as any).onSurface,
+        surfaceObstacle: null,
+      })),
+      obstacles: obstaclesRef.current.map((o: any) => ({
+        type: o.type,
+        x: o.x,
+        y: o.y,
+        width: o.width,
+        height: o.height,
+        rotation: o.rotation,
+        destroyed: o.destroyed,
+        hitCount: o.hitCount,
+        maxHits: o.maxHits,
+        __i: o.__i,
+      })),
+      spinners: spinnersRef.current.map((s: any) => ({ x: s.x, y: s.y, rotation: s.rotation, __i: s.__i })),
+      ballStates: new Map(ballStatesRef.current),
+      physicsTime: physicsTimeRef.current,
+      winners: [...actualWinnersRef.current],
+    });
+
+    const applySimStateToLive = (sim: SimState) => {
+      const byId = new Map(sim.balls.map(b => [b.id, b]));
+      for (const b of ballsRef.current) {
+        const s = byId.get(b.id);
+        if (!s) continue;
+        b.x = s.x; b.y = s.y; b.dx = s.dx; b.dy = s.dy;
+        b.finished = s.finished; b.bounceCount = s.bounceCount;
+        (b as any).onSurface = s.onSurface; (b as any).surfaceObstacle = null;
+      }
+      obstaclesRef.current.forEach((o: any) => {
+        const simO = sim.obstacles.find(so => so.__i === o.__i);
+        if (simO) {
+          o.destroyed = simO.destroyed; (o as any).hitCount = simO.hitCount;
+          // Sync brick visual alpha and removal to match real-time behavior
+          if (o.type === 'brick' && o.graphics) {
+            const hits = (o as any).hitCount || 0;
+            const max = (o as any).maxHits || 3;
+            // Original visual: alpha reduces by 0.3 per hit over 3 hits
+            o.graphics.alpha = 1 - (hits / max) * 0.3;
+          }
+          if (o.destroyed && o.graphics && appRef.current) {
+            try { appRef.current.stage.removeChild(o.graphics); } catch {}
+          }
+        }
+      });
+      spinnersRef.current.forEach((s: any) => {
+        const simS = sim.spinners.find(ss => ss.__i === s.__i);
+        if (simS) s.rotation = simS.rotation;
+      });
+      ballStatesRef.current = sim.ballStates;
+      physicsTimeRef.current = sim.physicsTime;
+      actualWinnersRef.current = [...sim.winners];
+    };
+
+    const stepSimPhysics = (sim: SimState, ctx: SimContext): boolean => {
+      sim.balls.sort((a, b) => a.id.localeCompare(b.id));
+      sim.spinners.forEach(sp => { sp.rotation = precise.add(sp.rotation || 0, 0.08); });
+      let winnerFound = false;
+      const winY = mapDataRef.current?.winY;
+      const deathY = mapDataRef.current?.deathY;
+
+      for (let i = 0; i < sim.balls.length; i++) {
+        const ball = sim.balls[i];
+        if (ball.finished) continue;
+        if (!sim.ballStates.has(ball.id)) {
+          sim.ballStates.set(ball.id, { stuckFrames: 0, lastPositions: [], isStuck: false, stuckRecoveryCountdown: 0 });
+        }
+        const bs = sim.ballStates.get(ball.id)!;
+        if (bs.stuckRecoveryCountdown > 0) {
+          bs.stuckRecoveryCountdown--; if (bs.stuckRecoveryCountdown === 0) { bs.stuckFrames = 0; bs.isStuck = false; bs.lastPositions = []; }
+        }
+        bs.lastPositions.push({ x: ball.x, y: ball.y }); if (bs.lastPositions.length > 10) bs.lastPositions.shift();
+        if (bs.lastPositions.length >= 5) {
+          const first = bs.lastPositions[0]; const last = bs.lastPositions[bs.lastPositions.length - 1];
+          const dx = precise.sub(last.x, first.x); const dy = precise.sub(last.y, first.y);
+          const distance = precise.sqrt(precise.add(precise.mul(dx, dx), precise.mul(dy, dy)));
+          if (distance < 5) { bs.stuckFrames++; if (bs.stuckFrames > STUCK_THRESHOLD && !bs.isStuck) { bs.isStuck = true; bs.stuckRecoveryCountdown = 60; ball.dy = -STUCK_BOUNCE_FORCE; ball.dx = precise.mul(precise.sub(nextSimRandom(ctx), 0.5), 4); } }
+          else { bs.stuckFrames = 0; bs.isStuck = false; }
+        }
+        ball.dy = precise.add(ball.dy, 0.08);
+        ball.dx = precise.mul(ball.dx, 0.9999800039998667);
+        ball.dy = precise.mul(ball.dy, 0.9999800039998667);
+        if (ball.onSurface && ball.surfaceObstacle) {
+          const obs = ball.surfaceObstacle; const halfW = (obs.width || 0) / 2; const halfH = (obs.height || 0) / 2;
+          const minSurfaceSpeed = 0.5; const surfaceFriction = 0.995;
+          ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24); ball.dy = 0;
+          if (precise.abs(ball.dx) > minSurfaceSpeed) ball.dx = precise.mul(ball.dx, surfaceFriction);
+          else ball.dx = ball.dx === 0 ? (nextSimRandom(ctx) > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed) : (ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed);
+          const noiseValue = precise.mul(precise.sub(nextSimRandom(ctx), 0.5), 0.05);
+          ball.dx = precise.add(ball.dx, noiseValue);
+          ball.x = precise.add(ball.x, ball.dx);
+          if (obs.destroyed || ball.x < precise.sub(precise.sub(obs.x, halfW), 24) || ball.x > precise.add(precise.add(obs.x, halfW), 24)) { ball.onSurface = false; ball.surfaceObstacle = null; ball.dy = 1; }
+        } else { ball.x = precise.add(ball.x, ball.dx); ball.y = precise.add(ball.y, ball.dy); }
+
+        // Collisions
+        for (const obstacle of sim.obstacles) {
+          if (obstacle.destroyed) continue;
+          if (obstacle.type === "peg") {
+            const dx = precise.sub(ball.x, obstacle.x); const dy = precise.sub(ball.y, obstacle.y);
+            const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+            if (distanceSq < 1296) {
+              const distance = precise.sqrt(distanceSq); const nx = precise.div(dx, distance); const ny = precise.div(dy, distance);
+              ball.x = precise.add(obstacle.x, precise.mul(nx, 36)); ball.y = precise.add(obstacle.y, precise.mul(ny, 36));
+              const dot = precise.add(precise.mul(ball.dx, nx), precise.mul(ball.dy, ny));
+              ball.dx = precise.mul(precise.sub(ball.dx, precise.mul(precise.mul(dot, 2), nx)), 0.82);
+              ball.dy = precise.mul(precise.sub(ball.dy, precise.mul(precise.mul(dot, 2), ny)), 0.82);
+            }
+          } else if (obstacle.type === "barrier") {
+            const halfW = precise.div(obstacle.width || 0, 2); const halfH = precise.div(obstacle.height || 0, 2);
+            if (precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 && precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24) {
+              const overlapX = precise.sub(halfW + 24, precise.abs(precise.sub(ball.x, obstacle.x)));
+              const overlapY = precise.sub(halfH + 24, precise.abs(precise.sub(ball.y, obstacle.y)));
+              const isFunnelSegment = (obstacle.width || 0) <= 8 && (obstacle.height || 0) <= 8;
+              if (overlapX < overlapY) {
+                ball.x = ball.x < obstacle.x ? precise.sub(precise.sub(obstacle.x, halfW), 24) : precise.add(precise.add(obstacle.x, halfW), 24);
+                if (isFunnelSegment) { const centerX = WORLD_WIDTH / 2; const dir = ball.x < centerX ? 1 : -1; ball.dx = precise.mul(precise.abs(ball.dx), dir * 0.82); }
+                else { ball.dx = precise.mul(ball.dx, -0.82); }
+                ball.bounceCount++;
+              } else {
+                if (ball.y < obstacle.y) {
+                  ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+                  if (isFunnelSegment) { const centerX = WORLD_WIDTH / 2; const dir = ball.x < centerX ? 1 : -1; ball.dy = precise.mul(ball.dy, -0.88); ball.dx = precise.add(ball.dx, precise.mul(dir, 0.5)); ball.bounceCount++; }
+                  else { const verticalImpact = precise.abs(ball.dy); const shouldStick = verticalImpact < 1.0 && ball.bounceCount >= 2; if (shouldStick) { ball.onSurface = true; ball.surfaceObstacle = obstacle; ball.dy = 0; } else { ball.dy = precise.mul(ball.dy, -0.78); ball.bounceCount++; if (precise.abs(ball.dy) < MIN_BOUNCE_VELOCITY) ball.dy = ball.dy < 0 ? -MIN_BOUNCE_VELOCITY : MIN_BOUNCE_VELOCITY; } }
+                } else { ball.y = precise.add(precise.add(obstacle.y, halfH), 24); ball.dy = precise.mul(ball.dy, -0.78); ball.bounceCount++; }
+              }
+            }
+          } else if (obstacle.type === "brick") {
+            const halfW = precise.div(obstacle.width || 0, 2); const halfH = precise.div(obstacle.height || 0, 2);
+            if (precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 && precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24) {
+              // Increase hit count and destroy after 3
+              obstacle.hitCount = (obstacle.hitCount || 0) + 1;
+              if ((obstacle.hitCount || 0) >= (obstacle.maxHits || 3)) { obstacle.destroyed = true; }
+              const overlapX = precise.sub(halfW + 24, precise.abs(precise.sub(ball.x, obstacle.x)));
+              const overlapY = precise.sub(halfH + 24, precise.abs(precise.sub(ball.y, obstacle.y)));
+              if (overlapX < overlapY) { ball.dx = precise.mul(ball.dx, -0.78); } else { ball.dy = precise.mul(ball.dy, -0.78); }
+            }
+          } else if (obstacle.type === "spinner") {
+            const dx = precise.sub(ball.x, obstacle.x); const dy = precise.sub(ball.y, obstacle.y);
+            const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
+            if (distanceSq < 2304 && distanceSq > 0) {
+              const distance = precise.sqrt(distanceSq); const normalX = precise.div(dx, distance); const normalY = precise.div(dy, distance);
+              ball.x = precise.add(obstacle.x, precise.mul(normalX, 48)); ball.y = precise.add(obstacle.y, precise.mul(normalY, 48));
+              const tangentX = precise.mul(normalY, -1); const tangentY = normalX;
+              const currentSpeed = precise.sqrt(precise.add(precise.mul(ball.dx, ball.dx), precise.mul(ball.dy, ball.dy)));
+              ball.dx = precise.mul(precise.add(precise.mul(precise.mul(normalX, currentSpeed), 0.75), precise.mul(tangentX, 1.6)), 1.1);
+              ball.dy = precise.mul(precise.add(precise.mul(precise.mul(normalY, currentSpeed), 0.75), precise.mul(tangentY, 1.6)), 1.1);
+            }
+          }
+        }
+        if (winY !== undefined && ball.y > winY) {
+          ball.finished = true; if (!sim.winners.includes(ball.id)) sim.winners.push(ball.id); winnerFound = true; break;
+        }
+        if (deathY !== undefined && ball.y > deathY && ball.y < deathY + 30) { ball.finished = true; }
+      }
+      sim.balls = sim.balls.filter(b => !b.finished || sim.winners.includes(b.id));
+      return winnerFound;
+    };
+
     // Start game (supports optional predicted winner and desired winner user id)
     const startGame = async (gameData: {
       seed: string;
@@ -978,6 +1197,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       seedRef.current = gameData.seed;
       randomRef.current = new DeterministicRandom(gameData.seed);
+      rngStepCountRef.current = 0;
       physicsTimeRef.current = 0;
       lastTimeRef.current = 0;
       accumulatorRef.current = 0;
@@ -996,7 +1216,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       });
 
       const originalRandom = Math.random;
-      Math.random = () => randomRef.current!.next();
+      Math.random = () => nextRandom();
 
       try {
         const mapData = generateMapFromId(appRef.current, gameData.mapId, {
@@ -1104,14 +1324,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           // Precompute positions deterministically BEFORE any async work
           const startX = precise.add(
             50,
-            precise.mul(randomRef.current.next(), WORLD_WIDTH - 100)
+            precise.mul(nextRandom(), WORLD_WIDTH - 100)
           );
           const startY = precise.add(
             50,
-            precise.mul(randomRef.current.next(), WORLD_HEIGHT - 100)
+            precise.mul(nextRandom(), WORLD_HEIGHT - 100)
           );
           const initialDX = precise.mul(
-            precise.sub(randomRef.current.next(), 0.5),
+            precise.sub(nextRandom(), 0.5),
             2
           );
 
@@ -1214,13 +1434,28 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const MAX_FRAMES = typeof fastForwardCapFrames === 'number' ? fastForwardCapFrames : 15000; // default cap
           const framesToSimulate = Math.min(frames, MAX_FRAMES);
           console.log('[FAST-FORWARD] framesToSimulate=', framesToSimulate, 'cap=', MAX_FRAMES)
-          // perform physics updates synchronously
+          // Build a simulation state from live state
+          let sim = toSimState();
+          // Create a sim RNG aligned with live RNG usage so far
+          const simCtx: SimContext = { rng: new DeterministicRandom(seedRef.current), rngCalls: 0 };
+          // Advance sim RNG to match how many times live RNG was used up to this point
+          for (let i = 0; i < rngStepCountRef.current; i++) simCtx.rng.next();
+
           for (let i = 0; i < framesToSimulate; i++) {
-            const won = updatePhysics(false);
-            physicsTimeRef.current += FIXED_DELTA;
-            // If we only need the first winner (hidden), we can stop early
-            if (deterministicMode && (won || actualWinnersRef.current.length > 0)) break;
+            const won = stepSimPhysics(sim, simCtx);
+            sim.physicsTime += FIXED_DELTA;
+            if (deterministicMode && (won || sim.winners.length > 0)) break;
           }
+
+          // Apply simulation results back to live state
+          applySimStateToLive(sim);
+
+          // Re-seed live RNG and advance by total calls used so far + calls consumed during sim
+          randomRef.current = new DeterministicRandom(seedRef.current);
+          const totalCalls = rngStepCountRef.current + simCtx.rngCalls;
+          for (let i = 0; i < totalCalls; i++) randomRef.current.next();
+          rngStepCountRef.current = totalCalls;
+
           console.log(`Fast-forwarded physics by ${framesToSimulate} frames (${(framesToSimulate/FIXED_FPS).toFixed(2)}s)`);
         }
       } catch (e) {

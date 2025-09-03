@@ -66,33 +66,59 @@ export function HistoryScreen() {
           historyPromise,
           api.getUserProfile(user.id),
         ]);
-        setGames(history);
+        setGames(history as any);
         setUserProfile(profile);
 
-        // Fetch winner profiles for each game
-        // Замените текущий блок gamesWithProfiles на этот:
-        const gamesWithProfiles = await Promise.all(
-          history.map(async (game) => {
-            // Добавляем проверку на наличие participants
-            const participants = game.participants || [];
+        // For "luckiest" the API returns a different shape (items with nested game and winner)
+        if (activeFilter === "luckiest") {
+          const luckyItems = (history as any[]) || [];
+          const normalized = luckyItems.map((item) => {
+            const g = item?.game || {};
+            const music = g?.music || {};
+            const winnerProfile = g?.winner || item?.user || undefined;
+            const mapIds = Array.isArray(g?.map_id) ? g.map_id : (g?.map_id != null ? [g.map_id] : []);
 
-            if (game.winner_id) {
-              try {
-                const winnerProfile = await api.getUserProfile(game.winner_id);
-                return { ...game, participants, winnerProfile };
-              } catch (error) {
-                console.error(
-                  `Failed to load winner profile for game ${game.game_id}:`,
-                  error
-                );
-                return { ...game, participants };
+            const normalizedGame: any = {
+              game_id: g?.id ?? item?.game_id ?? 0,
+              seed: g?.seed || "",
+              start_time: g?.start_time || "",
+              map_id: mapIds, // keep as array
+              total_balls: g?.total_balls ?? 0,
+              total_price: g?.total_price ?? 0,
+              status: g?.status,
+              participants: [],
+              start_wait_play: g?.start_wait_play,
+              music_title: music?.music_title,
+              music_content: music?.music_content,
+              winner_id: g?.winner?.id, // take id from winner object
+              winnerProfile,
+              lucky_balls_count: item?.balls_count,
+            };
+            return normalizedGame;
+          });
+          setEnhancedGames(normalized);
+        } else {
+          // Default shape – fetch winner profiles separately
+          const gamesWithProfiles = await Promise.all(
+            (history as GameDetailResponse[]).map(async (game) => {
+              const participants = game.participants || [];
+              if (game.winner_id) {
+                try {
+                  const winnerProfile = await api.getUserProfile(game.winner_id);
+                  return { ...game, participants, winnerProfile };
+                } catch (error) {
+                  console.error(
+                    `Failed to load winner profile for game ${game.game_id}:`,
+                    error
+                  );
+                  return { ...game, participants };
+                }
               }
-            }
-            return { ...game, participants };
-          })
-        );
-
-        setEnhancedGames(gamesWithProfiles);
+              return { ...game, participants };
+            })
+          );
+          setEnhancedGames(gamesWithProfiles);
+        }
       } catch (error) {
         console.error("Failed to load data:", error);
       } finally {
@@ -157,8 +183,12 @@ export function HistoryScreen() {
     });
   };
 
-  const getUserBalls = (game: GameDetailResponse) => {
-    const winner = getWinner(game);
+  const getUserBalls = (game: any) => {
+    // For luckiest view, backend provides balls_count for the lucky user
+    if (game && typeof game.lucky_balls_count === "number") {
+      return game.lucky_balls_count;
+    }
+    const winner = getWinner(game as GameDetailResponse);
     if (!winner) return 0;
     return winner.balls_count || 0;
   };

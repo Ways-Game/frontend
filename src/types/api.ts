@@ -89,7 +89,7 @@ export interface Gift {
 
 export interface GiftBuyRequest {
   user_id: number;
-  available_gift_id: number;
+  id: number;
   count: number;
   init_data: string;
 }

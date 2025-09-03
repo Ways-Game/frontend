@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react"
-import { Search, Filter, ArrowUpDown, X } from "lucide-react"
+import { Search, ArrowUpDown, X } from "lucide-react"
 import { useTelegram } from "@/hooks/useTelegram"
 import { api } from "@/services/api"
 import type { UserProfile, Gift } from "@/types"
@@ -10,7 +10,7 @@ export function MarketScreen() {
   const { user, webApp, loadUserProfile, showAlert } = useTelegram()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortOrder, setSortOrder] = useState('Low to High')
+  const [sortOrder, setSortOrder] = useState<'Low to High' | 'High to Low'>('Low to High')
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
 
   const [gifts, setGifts] = useState<Gift[]>([])
@@ -50,12 +50,13 @@ export function MarketScreen() {
 
   const filteredGifts = useMemo(() => {
     const q = (searchQuery || '').toLowerCase().trim()
-    let list = gifts
+    // Always derive from original data, not previous filtered list
+    let list = [...gifts]
     if (q) list = list.filter(g => g.title.toLowerCase().includes(q))
 
-    // basic sort example (not critical now)
-    if (sortOrder === 'Low to High') list = [...list].sort((a,b) => a.price - b.price)
-    if (sortOrder === 'High to Low') list = [...list].sort((a,b) => b.price - a.price)
+    // Toggle price sorting via button
+    if (sortOrder === 'Low to High') list.sort((a,b) => a.price - b.price)
+    if (sortOrder === 'High to Low') list.sort((a,b) => b.price - a.price)
     return list
   }, [gifts, searchQuery, sortOrder])
 
@@ -70,7 +71,7 @@ export function MarketScreen() {
       const init_data = webApp?.initData || ''
       const res = await api.buyGift({
         user_id: user.id,
-        available_gift_id: gift.available_gift_id,
+        id: gift.available_gift_id,
         count: 1,
         init_data,
       })
@@ -90,12 +91,15 @@ export function MarketScreen() {
         {/* Top Controls */}
         <div className="self-stretch inline-flex justify-between items-start">
           <div className="flex justify-start items-center gap-2">
-            <div className="px-2 py-2 bg-zinc-800 rounded-[20px] flex justify-center items-center gap-2 overflow-hidden">
-              <Filter className="w-4 h-4 text-stone-300" />
-            </div>
-            <div className="px-3 py-2 bg-zinc-800 rounded-[20px] flex justify-center items-center gap-2 overflow-hidden">
+            <button
+              type="button"
+              className="px-3 py-2 bg-zinc-800 rounded-[20px] flex justify-center items-center gap-2 overflow-hidden"
+              onClick={() => setSortOrder(prev => prev === 'Low to High' ? 'High to Low' : 'Low to High')}
+              title={`Sort: ${sortOrder}`}
+            >
               <ArrowUpDown className="w-4 h-4 text-neutral-500 rotate-90" />
-            </div>
+              <span className="text-xs text-neutral-400">{sortOrder}</span>
+            </button>
           </div>
           <div className="flex items-center gap-2">
             {/* Balance Display */}
