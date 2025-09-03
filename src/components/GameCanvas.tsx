@@ -90,21 +90,21 @@ const useGameSound = (initialEnabled = true) => {
   };
 };
 
-// Manage simulation state for fast-forward
-const useSimulationState = () => {
-  const simulationRef = useRef<{
-    isFastForwarding: boolean;
-    originalCallbacks: { onBallWin?: (ballId: string, playerId: string) => void };
-    framesToSimulate: number;
-    currentFrame: number;
+// Manage acceleration state
+const useAccelerationState = () => {
+  const accelerationRef = useRef<{
+    isAccelerating: boolean;
+    timeMultiplier: number;
+    remainingTime: number;
+    originalTimeMultiplier: number;
   }>({
-    isFastForwarding: false,
-    originalCallbacks: {},
-    framesToSimulate: 0,
-    currentFrame: 0,
+    isAccelerating: false,
+    timeMultiplier: 1.0,
+    remainingTime: 0,
+    originalTimeMultiplier: 1.0,
   });
 
-  return simulationRef;
+  return accelerationRef;
 };
 
 interface GameCanvasProps {
@@ -117,8 +117,6 @@ interface GameCanvasProps {
   scrollY?: number;
   soundEnabled?: boolean;
   musicContent?: string;
-  // Optional cap for synchronous fast-forward frames (for hidden pre-sim)
-  fastForwardCapFrames?: number;
   // Optional: predicted winner from a hidden pre-sim
   predictedWinningBallId?: string;
   // Optional: desired winner user id (server winner_id)
@@ -141,7 +139,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       musicContent,
       predictedWinningBallId,
       desiredWinnerUserId,
-      fastForwardCapFrames,
       deterministicMode = false,
     },
     ref
@@ -166,8 +163,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       return v;
     };
     const gameLoopRef = useRef<number | null>(null);
-    // Simulation state
-    const simulationRef = useSimulationState();
+    // Acceleration state
+    const accelerationRef = useAccelerationState();
 
     const [gameState, setGameState] = useState<
       "waiting" | "playing" | "finished"
@@ -425,11 +422,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     }, [audioContextRef, soundEnabledRef]);
 
-    // Deterministic physics loop / render functions (mostly unchanged)
+    // Deterministic physics loop with acceleration support
     const gameLoop = () => {
-      const won = updatePhysics(true);
-      physicsTimeRef.current += FIXED_DELTA;
-      // In non-deterministic main game we keep ticking; hidden mode doesn't use setInterval
+      // Apply acceleration if active
+      let deltaMultiplier = 1.0;
+      if (accelerationRef.current.isAccelerating && accelerationRef.current.remainingTime > 0) {
+        deltaMultiplier = accelerationRef.current.timeMultiplier;
+        accelerationRef.current.remainingTime -= FIXED_DELTA;
+        
+        // Check if acceleration period is over
+        if (accelerationRef.current.remainingTime <= 0) {
+          accelerationRef.current.isAccelerating = false;
+          accelerationRef.current.timeMultiplier = accelerationRef.current.originalTimeMultiplier;
+          accelerationRef.current.remainingTime = 0;
+        }
+      }
+      
+      // Run physics with time multiplier
+      const won = updatePhysics(true, deltaMultiplier);
+      physicsTimeRef.current += FIXED_DELTA * deltaMultiplier;
     };
 
     const renderLoop = () => {
@@ -437,14 +448,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
-    const updatePhysics = (emitCallbacks: boolean = true): boolean => {
+    const updatePhysics = (emitCallbacks: boolean = true, timeMultiplier: number = 1.0): boolean => {
       // Sort deterministic
       ballsRef.current.sort((a, b) => a.id.localeCompare(b.id));
 
       if (!randomRef.current) return false;
 
       spinnersRef.current.forEach((spinner) => {
-        spinner.rotation = precise.add(spinner.rotation, 0.08);
+        spinner.rotation = precise.add(spinner.rotation, 0.08 * timeMultiplier);
       });
 
       let winnerFound = false;
@@ -499,9 +510,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
 
-        ball.dy = precise.add(ball.dy, 0.08);
-        ball.dx = precise.mul(ball.dx, 0.9999800039998667);
-        ball.dy = precise.mul(ball.dy, 0.9999800039998667);
+        ball.dy = precise.add(ball.dy, 0.08 * timeMultiplier);
+        ball.dx = precise.mul(ball.dx, Math.pow(0.9999800039998667, timeMultiplier));
+        ball.dy = precise.mul(ball.dy, Math.pow(0.9999800039998667, timeMultiplier));
 
         if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
           const obs: any = (ball as any).surfaceObstacle;
@@ -598,7 +609,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               0.82
             );
 
-            if (!simulationRef.current.isFastForwarding) {
+            if (!accelerationRef.current.isAccelerating) {
               playMelodyNote();
             }
           }
@@ -674,7 +685,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 ball.bounceCount++;
               }
             }
-            if (!simulationRef.current.isFastForwarding) {
+            if (!accelerationRef.current.isAccelerating) {
               playMelodyNote();
             }
           }
@@ -716,7 +727,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             } else {
               ball.dy = precise.mul(ball.dy, -0.78);
             }
-            if (!simulationRef.current.isFastForwarding) {
+            if (!accelerationRef.current.isAccelerating) {
               playMelodyNote();
             }
           }
@@ -760,7 +771,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               1.1
             );
 
-            if (!simulationRef.current.isFastForwarding) {
+            if (!accelerationRef.current.isAccelerating) {
               playMelodyNote();
             }
           }
@@ -855,7 +866,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             precise.mul(normalY, halfImpulse)
           );
 
-          if (!simulationRef.current.isFastForwarding) {
+          if (!accelerationRef.current.isAccelerating) {
             playMelodyNote();
           }
         }
@@ -876,7 +887,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (ball.y > winY) {
           if (actualWinnersRef.current.length === 0) {
             actualWinnersRef.current = [ball.id];
-            const shouldEmitCallbacks = !simulationRef.current.isFastForwarding;
+            const shouldEmitCallbacks = !accelerationRef.current.isAccelerating;
             if (shouldEmitCallbacks) setActualWinners([...actualWinnersRef.current]);
             ball.finished = true;
             console.log('[WIN] first ball reached winY:', ball.id, 'owner:', ball.playerId);
@@ -974,220 +985,18 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    // Simulation-only types/state and helpers to make fast-forward identical
-    interface SimBall {
-      id: string;
-      x: number;
-      y: number;
-      dx: number;
-      dy: number;
-      finished: boolean;
-      playerId: string;
-      bounceCount: number;
-      onSurface?: boolean;
-      surfaceObstacle?: SimObstacle | null;
-    }
-    interface SimObstacle {
-      type: string;
-      x: number;
-      y: number;
-      width?: number;
-      height?: number;
-      rotation?: number;
-      destroyed?: boolean;
-      hitCount?: number;
-      maxHits?: number;
-      __i?: number;
-    }
-    interface SimSpinner { x: number; y: number; rotation: number; __i?: number; }
-    interface SimBallState {
-      stuckFrames: number;
-      lastPositions: { x: number; y: number }[];
-      isStuck: boolean;
-      stuckRecoveryCountdown: number;
-    }
-    interface SimState {
-      balls: SimBall[];
-      obstacles: SimObstacle[];
-      spinners: SimSpinner[];
-      ballStates: Map<string, SimBallState>;
-      physicsTime: number;
-      winners: string[];
-    }
-    interface SimContext { rng: DeterministicRandom; rngCalls: number; }
-    const nextSimRandom = (ctx: SimContext) => { ctx.rngCalls++; return ctx.rng.next(); };
-
-    const toSimState = (): SimState => ({
-      balls: ballsRef.current.map(b => ({
-        id: b.id,
-        x: b.x,
-        y: b.y,
-        dx: b.dx,
-        dy: b.dy,
-        finished: b.finished,
-        playerId: b.playerId,
-        bounceCount: b.bounceCount,
-        onSurface: (b as any).onSurface,
-        surfaceObstacle: null,
-      })),
-      obstacles: obstaclesRef.current.map((o: any) => ({
-        type: o.type,
-        x: o.x,
-        y: o.y,
-        width: o.width,
-        height: o.height,
-        rotation: o.rotation,
-        destroyed: o.destroyed,
-        hitCount: o.hitCount,
-        maxHits: o.maxHits,
-        __i: o.__i,
-      })),
-      spinners: spinnersRef.current.map((s: any) => ({ x: s.x, y: s.y, rotation: s.rotation, __i: s.__i })),
-      ballStates: new Map(ballStatesRef.current),
-      physicsTime: physicsTimeRef.current,
-      winners: [...actualWinnersRef.current],
-    });
-
-    const applySimStateToLive = (sim: SimState) => {
-      const byId = new Map(sim.balls.map(b => [b.id, b]));
-      for (const b of ballsRef.current) {
-        const s = byId.get(b.id);
-        if (!s) continue;
-        b.x = s.x; b.y = s.y; b.dx = s.dx; b.dy = s.dy;
-        b.finished = s.finished; b.bounceCount = s.bounceCount;
-        (b as any).onSurface = s.onSurface; (b as any).surfaceObstacle = null;
-      }
-      obstaclesRef.current.forEach((o: any) => {
-        const simO = sim.obstacles.find(so => so.__i === o.__i);
-        if (simO) {
-          o.destroyed = simO.destroyed; (o as any).hitCount = simO.hitCount;
-          // Sync brick visual alpha and removal to match real-time behavior
-          if (o.type === 'brick' && o.graphics) {
-            const hits = (o as any).hitCount || 0;
-            const max = (o as any).maxHits || 3;
-            // Original visual: alpha reduces by 0.3 per hit over 3 hits
-            o.graphics.alpha = 1 - (hits / max) * 0.3;
-          }
-          if (o.destroyed && o.graphics && appRef.current) {
-            try { appRef.current.stage.removeChild(o.graphics); } catch {}
-          }
-        }
-      });
-      spinnersRef.current.forEach((s: any) => {
-        const simS = sim.spinners.find(ss => ss.__i === s.__i);
-        if (simS) s.rotation = simS.rotation;
-      });
-      ballStatesRef.current = sim.ballStates;
-      physicsTimeRef.current = sim.physicsTime;
-      actualWinnersRef.current = [...sim.winners];
+    // New acceleration system - applies time multiplier to physics
+    const startAcceleration = (seconds: number, multiplier: number = 10.0) => {
+      if (seconds <= 0) return;
+      
+      accelerationRef.current.isAccelerating = true;
+      accelerationRef.current.timeMultiplier = multiplier;
+      accelerationRef.current.remainingTime = seconds * 1000; // Convert to milliseconds
+      accelerationRef.current.originalTimeMultiplier = 1.0;
+      
+      console.log(`[ACCELERATION] Started: ${seconds}s at ${multiplier}x speed`);
     };
 
-    const stepSimPhysics = (sim: SimState, ctx: SimContext): boolean => {
-      sim.balls.sort((a, b) => a.id.localeCompare(b.id));
-      sim.spinners.forEach(sp => { sp.rotation = precise.add(sp.rotation || 0, 0.08); });
-      let winnerFound = false;
-      const winY = mapDataRef.current?.winY;
-      const deathY = mapDataRef.current?.deathY;
-
-      for (let i = 0; i < sim.balls.length; i++) {
-        const ball = sim.balls[i];
-        if (ball.finished) continue;
-        if (!sim.ballStates.has(ball.id)) {
-          sim.ballStates.set(ball.id, { stuckFrames: 0, lastPositions: [], isStuck: false, stuckRecoveryCountdown: 0 });
-        }
-        const bs = sim.ballStates.get(ball.id)!;
-        if (bs.stuckRecoveryCountdown > 0) {
-          bs.stuckRecoveryCountdown--; if (bs.stuckRecoveryCountdown === 0) { bs.stuckFrames = 0; bs.isStuck = false; bs.lastPositions = []; }
-        }
-        bs.lastPositions.push({ x: ball.x, y: ball.y }); if (bs.lastPositions.length > 10) bs.lastPositions.shift();
-        if (bs.lastPositions.length >= 5) {
-          const first = bs.lastPositions[0]; const last = bs.lastPositions[bs.lastPositions.length - 1];
-          const dx = precise.sub(last.x, first.x); const dy = precise.sub(last.y, first.y);
-          const distance = precise.sqrt(precise.add(precise.mul(dx, dx), precise.mul(dy, dy)));
-          if (distance < 5) { bs.stuckFrames++; if (bs.stuckFrames > STUCK_THRESHOLD && !bs.isStuck) { bs.isStuck = true; bs.stuckRecoveryCountdown = 60; ball.dy = -STUCK_BOUNCE_FORCE; ball.dx = precise.mul(precise.sub(nextSimRandom(ctx), 0.5), 4); } }
-          else { bs.stuckFrames = 0; bs.isStuck = false; }
-        }
-        ball.dy = precise.add(ball.dy, 0.08);
-        ball.dx = precise.mul(ball.dx, 0.9999800039998667);
-        ball.dy = precise.mul(ball.dy, 0.9999800039998667);
-        if (ball.onSurface && ball.surfaceObstacle) {
-          const obs = ball.surfaceObstacle; const halfW = (obs.width || 0) / 2; const halfH = (obs.height || 0) / 2;
-          const minSurfaceSpeed = 0.5; const surfaceFriction = 0.995;
-          ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24); ball.dy = 0;
-          if (precise.abs(ball.dx) > minSurfaceSpeed) ball.dx = precise.mul(ball.dx, surfaceFriction);
-          else ball.dx = ball.dx === 0 ? (nextSimRandom(ctx) > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed) : (ball.dx > 0 ? minSurfaceSpeed : -minSurfaceSpeed);
-          const noiseValue = precise.mul(precise.sub(nextSimRandom(ctx), 0.5), 0.05);
-          ball.dx = precise.add(ball.dx, noiseValue);
-          ball.x = precise.add(ball.x, ball.dx);
-          if (obs.destroyed || ball.x < precise.sub(precise.sub(obs.x, halfW), 24) || ball.x > precise.add(precise.add(obs.x, halfW), 24)) { ball.onSurface = false; ball.surfaceObstacle = null; ball.dy = 1; }
-        } else { ball.x = precise.add(ball.x, ball.dx); ball.y = precise.add(ball.y, ball.dy); }
-
-        // Collisions
-        for (const obstacle of sim.obstacles) {
-          if (obstacle.destroyed) continue;
-          if (obstacle.type === "peg") {
-            const dx = precise.sub(ball.x, obstacle.x); const dy = precise.sub(ball.y, obstacle.y);
-            const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
-            if (distanceSq < 1296) {
-              const distance = precise.sqrt(distanceSq); const nx = precise.div(dx, distance); const ny = precise.div(dy, distance);
-              ball.x = precise.add(obstacle.x, precise.mul(nx, 36)); ball.y = precise.add(obstacle.y, precise.mul(ny, 36));
-              const dot = precise.add(precise.mul(ball.dx, nx), precise.mul(ball.dy, ny));
-              ball.dx = precise.mul(precise.sub(ball.dx, precise.mul(precise.mul(dot, 2), nx)), 0.82);
-              ball.dy = precise.mul(precise.sub(ball.dy, precise.mul(precise.mul(dot, 2), ny)), 0.82);
-            }
-          } else if (obstacle.type === "barrier") {
-            const halfW = precise.div(obstacle.width || 0, 2); const halfH = precise.div(obstacle.height || 0, 2);
-            if (precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 && precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24) {
-              const overlapX = precise.sub(halfW + 24, precise.abs(precise.sub(ball.x, obstacle.x)));
-              const overlapY = precise.sub(halfH + 24, precise.abs(precise.sub(ball.y, obstacle.y)));
-              const isFunnelSegment = (obstacle.width || 0) <= 8 && (obstacle.height || 0) <= 8;
-              if (overlapX < overlapY) {
-                ball.x = ball.x < obstacle.x ? precise.sub(precise.sub(obstacle.x, halfW), 24) : precise.add(precise.add(obstacle.x, halfW), 24);
-                if (isFunnelSegment) { const centerX = WORLD_WIDTH / 2; const dir = ball.x < centerX ? 1 : -1; ball.dx = precise.mul(precise.abs(ball.dx), dir * 0.82); }
-                else { ball.dx = precise.mul(ball.dx, -0.82); }
-                ball.bounceCount++;
-              } else {
-                if (ball.y < obstacle.y) {
-                  ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
-                  if (isFunnelSegment) { const centerX = WORLD_WIDTH / 2; const dir = ball.x < centerX ? 1 : -1; ball.dy = precise.mul(ball.dy, -0.88); ball.dx = precise.add(ball.dx, precise.mul(dir, 0.5)); ball.bounceCount++; }
-                  else { const verticalImpact = precise.abs(ball.dy); const shouldStick = verticalImpact < 1.0 && ball.bounceCount >= 2; if (shouldStick) { ball.onSurface = true; ball.surfaceObstacle = obstacle; ball.dy = 0; } else { ball.dy = precise.mul(ball.dy, -0.78); ball.bounceCount++; if (precise.abs(ball.dy) < MIN_BOUNCE_VELOCITY) ball.dy = ball.dy < 0 ? -MIN_BOUNCE_VELOCITY : MIN_BOUNCE_VELOCITY; } }
-                } else { ball.y = precise.add(precise.add(obstacle.y, halfH), 24); ball.dy = precise.mul(ball.dy, -0.78); ball.bounceCount++; }
-              }
-            }
-          } else if (obstacle.type === "brick") {
-            const halfW = precise.div(obstacle.width || 0, 2); const halfH = precise.div(obstacle.height || 0, 2);
-            if (precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 && precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24) {
-              // Increase hit count and destroy after 3
-              obstacle.hitCount = (obstacle.hitCount || 0) + 1;
-              if ((obstacle.hitCount || 0) >= (obstacle.maxHits || 3)) { obstacle.destroyed = true; }
-              const overlapX = precise.sub(halfW + 24, precise.abs(precise.sub(ball.x, obstacle.x)));
-              const overlapY = precise.sub(halfH + 24, precise.abs(precise.sub(ball.y, obstacle.y)));
-              if (overlapX < overlapY) { ball.dx = precise.mul(ball.dx, -0.78); } else { ball.dy = precise.mul(ball.dy, -0.78); }
-            }
-          } else if (obstacle.type === "spinner") {
-            const dx = precise.sub(ball.x, obstacle.x); const dy = precise.sub(ball.y, obstacle.y);
-            const distanceSq = precise.add(precise.mul(dx, dx), precise.mul(dy, dy));
-            if (distanceSq < 2304 && distanceSq > 0) {
-              const distance = precise.sqrt(distanceSq); const normalX = precise.div(dx, distance); const normalY = precise.div(dy, distance);
-              ball.x = precise.add(obstacle.x, precise.mul(normalX, 48)); ball.y = precise.add(obstacle.y, precise.mul(normalY, 48));
-              const tangentX = precise.mul(normalY, -1); const tangentY = normalX;
-              const currentSpeed = precise.sqrt(precise.add(precise.mul(ball.dx, ball.dx), precise.mul(ball.dy, ball.dy)));
-              ball.dx = precise.mul(precise.add(precise.mul(precise.mul(normalX, currentSpeed), 0.75), precise.mul(tangentX, 1.6)), 1.1);
-              ball.dy = precise.mul(precise.add(precise.mul(precise.mul(normalY, currentSpeed), 0.75), precise.mul(tangentY, 1.6)), 1.1);
-            }
-          }
-        }
-        if (winY !== undefined && ball.y > winY) {
-          ball.finished = true; if (!sim.winners.includes(ball.id)) sim.winners.push(ball.id); winnerFound = true; break;
-        }
-        if (deathY !== undefined && ball.y > deathY && ball.y < deathY + 30) { ball.finished = true; }
-      }
-      sim.balls = sim.balls.filter(b => !b.finished || sim.winners.includes(b.id));
-      return winnerFound;
-    };
-
-    const EXPECTED_RNG_CALLS_PER_FRAME = 10; // Эмпирическое значение, ajust based on your physics
-    console.log("Expected RNG calls per frame:", EXPECTED_RNG_CALLS_PER_FRAME);
     // Start game (supports optional predicted winner and desired winner user id)
     const startGame = async (gameData: {
       seed: string;
@@ -1431,93 +1240,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         console.warn("Failed to init melody notes", e);
       }
 
-      // --- FAST-FORWARD (apply speedUpTime if provided) ---
-      try {
-        const secondsToFastForward = Number(speedUpTime || 0);
-        if (secondsToFastForward > 0) {
-          const clampedSeconds = Math.max(0, secondsToFastForward);
-          const frames = Math.floor(clampedSeconds * FIXED_FPS);
-          const MAX_FRAMES = typeof fastForwardCapFrames === 'number' ? fastForwardCapFrames : 15000;
-          const framesToSimulate = Math.min(frames, MAX_FRAMES);
-
-          // Save original state and enter fast-forward mode
-          simulationRef.current.originalCallbacks.onBallWin = onBallWin;
-          simulationRef.current.isFastForwarding = true;
-
-          // Save exact RNG state (seed and calls)
-          const originalSeed = randomRef.current!.seed;
-          const originalRngCalls = rngStepCountRef.current;
-
-          // Create isolated simulation state and RNG
-          const simState: SimState = toSimState();
-          const simContext: SimContext = {
-            rng: new DeterministicRandom(""),
-            rngCalls: 0,
-          };
-          // Ensure sim RNG starts from the exact same state as the live RNG (advance by prior calls)
-          simContext.rng.seed = originalSeed;
-          for (let i = 0; i < originalRngCalls; i++) {
-            simContext.rng.next();
-          }
-
-          let currentFrame = 0;
-          let winnerFound = false;
-
-          const processSimulation = () => {
-            const batchSize = 100;
-            const endFrame = Math.min(currentFrame + batchSize, framesToSimulate);
-
-            while (currentFrame < endFrame && !winnerFound) {
-              winnerFound = stepSimPhysics(simState, simContext);
-              // Maintain physics time in sim state for later sync
-              simState.physicsTime = precise.add(simState.physicsTime, FIXED_DELTA);
-              currentFrame++;
-            }
-
-            if (currentFrame >= framesToSimulate || winnerFound) {
-              // Apply simulation results to live state
-              applySimStateToLive(simState);
-
-              // Advance main RNG to match simulation's consumed calls
-              randomRef.current!.seed = originalSeed;
-              for (let i = 0; i < simContext.rngCalls; i++) {
-                randomRef.current!.next();
-              }
-              rngStepCountRef.current = originalRngCalls + simContext.rngCalls;
-
-              simulationRef.current.isFastForwarding = false;
-
-              // Handle winner
-              if (winnerFound && simState.winners.length > 0) {
-                const winnerBall = ballsRef.current.find(b => b.id === simState.winners[0]);
-                if (winnerBall) {
-                  simulationRef.current.originalCallbacks.onBallWin?.(
-                    winnerBall.id,
-                    winnerBall.playerId
-                  );
-                  setGameState("finished");
-                }
-              }
-
-              // Start normal realtime loops
-              const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
-              (gameLoopRef as any).physicsIntervalId = physicsInterval;
-              gameLoopRef.current = requestAnimationFrame(renderLoop);
-            } else {
-              // Continue in next batch to avoid blocking UI
-              setTimeout(processSimulation, 0);
-            }
-          };
-
-          processSimulation();
-          return;
-        }
-      } catch (e) {
-        console.warn("Fast-forward failed:", e);
-        simulationRef.current.isFastForwarding = false;
+      // --- NEW ACCELERATION SYSTEM ---
+      // Apply speedUpTime using deterministic time scaling
+      if (speedUpTime && speedUpTime > 0) {
+        console.log(`[ACCELERATION] Applying ${speedUpTime}s acceleration`);
+        startAcceleration(speedUpTime, 10.0); // 10x speed multiplier
       }
 
-      // Normal realtime start
+      // Start normal realtime loops
       const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
       (gameLoopRef as any).physicsIntervalId = physicsInterval;
       gameLoopRef.current = requestAnimationFrame(renderLoop);
