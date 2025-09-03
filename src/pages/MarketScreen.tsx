@@ -79,7 +79,7 @@ export function MarketScreen() {
         count: 1,
         init_data,
       })
-      showAlert(`Order created: #${res.order_id}`)
+      showAlert(`Order created! Wait for your gift a little while`)
       await loadUserProfile()
     } catch (e: any) {
       console.error('Buy gift error', e)

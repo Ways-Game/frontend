@@ -1432,7 +1432,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       // --- FAST-FORWARD (apply speedUpTime if provided) ---
       try {
         const secondsToFastForward = Number(speedUpTime || 0);
-        if (secondsToFastForward > 0 && deterministicMode) {
+        if (secondsToFastForward > 0) {
           const clampedSeconds = Math.max(0, secondsToFastForward);
           const frames = Math.floor(clampedSeconds * FIXED_FPS);
           const MAX_FRAMES = typeof fastForwardCapFrames === 'number' ? fastForwardCapFrames : 15000;
@@ -1453,27 +1453,24 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               // Exit fast-forward
               simulationRef.current.isFastForwarding = false;
 
-              // In deterministic (hidden) mode, do not emit UI callbacks or start loops
-              if (!deterministicMode) {
-                // If winner exists, call original callback now
-                if (actualWinnersRef.current.length > 0) {
-                  const winnerBall = ballsRef.current.find(
-                    (b) => b.id === actualWinnersRef.current[0]
+              // After fast-forward, if winner exists - emit callback now
+              if (actualWinnersRef.current.length > 0) {
+                const winnerBall = ballsRef.current.find(
+                  (b) => b.id === actualWinnersRef.current[0]
+                );
+                if (winnerBall) {
+                  simulationRef.current.originalCallbacks.onBallWin?.(
+                    winnerBall.id,
+                    winnerBall.playerId
                   );
-                  if (winnerBall) {
-                    simulationRef.current.originalCallbacks.onBallWin?.(
-                      winnerBall.id,
-                      winnerBall.playerId
-                    );
-                    setGameState("finished");
-                  }
+                  setGameState("finished");
                 }
-
-                // Start normal realtime loops
-                const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
-                (gameLoopRef as any).physicsIntervalId = physicsInterval;
-                gameLoopRef.current = requestAnimationFrame(renderLoop);
               }
+
+              // Start normal realtime loops in both modes
+              const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
+              (gameLoopRef as any).physicsIntervalId = physicsInterval;
+              gameLoopRef.current = requestAnimationFrame(renderLoop);
               return;
             }
 
