@@ -401,7 +401,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Deterministic physics loop / render functions (mostly unchanged)
     const gameLoop = () => {
-      const won = updatePhysics();
+      const won = updatePhysics(true);
       physicsTimeRef.current += FIXED_DELTA;
       // In non-deterministic main game we keep ticking; hidden mode doesn't use setInterval
     };
@@ -411,7 +411,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
-    const updatePhysics = (): boolean => {
+    const updatePhysics = (emitCallbacks: boolean = true): boolean => {
       // Сортировка мячей в детерминированном порядке
       ballsRef.current.sort((a, b) => a.id.localeCompare(b.id));
 
@@ -861,11 +861,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (ball.y > winY) {
           if (actualWinnersRef.current.length === 0) {
             actualWinnersRef.current = [ball.id];
-            setActualWinners([...actualWinnersRef.current]);
+            // In hidden deterministic mode we suppress React state callbacks
+            if (!deterministicMode) setActualWinners([...actualWinnersRef.current]);
             ball.finished = true;
             console.log('[WIN] first ball reached winY:', ball.id, 'owner:', ball.playerId);
-            onBallWin?.(ball.id, ball.playerId);
-            setGameState("finished");
+            if (!deterministicMode) {
+              onBallWin?.(ball.id, ball.playerId);
+              setGameState("finished");
+            }
+            // do not early-return false path if callbacks suppressed; logic still marks winnerFound via return true
             return true;
           }
         }
@@ -1212,7 +1216,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           console.log('[FAST-FORWARD] framesToSimulate=', framesToSimulate, 'cap=', MAX_FRAMES)
           // perform physics updates synchronously
           for (let i = 0; i < framesToSimulate; i++) {
-            const won = updatePhysics();
+            const won = updatePhysics(false);
             physicsTimeRef.current += FIXED_DELTA;
             // If we only need the first winner (hidden), we can stop early
             if (deterministicMode && (won || actualWinnersRef.current.length > 0)) break;
@@ -1224,6 +1228,25 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
       // --- end fast-forward ---
 
+      // Sync graphics to physics state after fast-forward
+      ballsRef.current.forEach((ball) => {
+        ball.graphics.position.set(ball.x, ball.y);
+        if (ball.indicator) {
+          ball.indicator.position.set(ball.x, ball.y - 40);
+        }
+      });
+
+      // If winner decided during fast-forward, emit callbacks now and stop
+      if (actualWinnersRef.current.length > 0) {
+        const winnerBall = ballsRef.current.find(b => b.id === actualWinnersRef.current[0]);
+        setActualWinners([...actualWinnersRef.current]);
+        if (winnerBall) {
+          onBallWin?.(winnerBall.id, winnerBall.playerId);
+        }
+        setGameState("finished");
+        return;
+      }
+
       // In deterministic mode (hidden pre-sim), keep physics ticking synchronously
       if (deterministicMode) {
         // If winner already decided during fast-forward, stop immediately
@@ -1233,7 +1256,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         // Otherwise, continue stepping frames synchronously until winner appears
         let guard = 0;
         while (actualWinnersRef.current.length === 0 && guard < 20000) { // hard cap ~333s
-          const won = updatePhysics();
+          const won = updatePhysics(false);
           physicsTimeRef.current += FIXED_DELTA;
           if (won || actualWinnersRef.current.length > 0) break;
           guard++;
