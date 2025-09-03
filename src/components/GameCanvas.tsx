@@ -1186,7 +1186,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       return winnerFound;
     };
 
-    const EXPECTED_RNG_CALLS_PER_FRAME = 5; // Эмпирическое значение, ajust based on your physics
+    const EXPECTED_RNG_CALLS_PER_FRAME = 1; // Эмпирическое значение, ajust based on your physics
 
     // Start game (supports optional predicted winner and desired winner user id)
     const startGame = async (gameData: {
