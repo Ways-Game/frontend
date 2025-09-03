@@ -98,12 +98,14 @@ const useAccelerationState = () => {
     remainingTime: number;
     originalTimeMultiplier: number;
     hasBeenApplied: boolean;
+    appliedForSeed: string;
   }>({
     isAccelerating: false,
     timeMultiplier: 1.0,
     remainingTime: 0,
     originalTimeMultiplier: 1.0,
     hasBeenApplied: false,
+    appliedForSeed: '',
   });
 
   return accelerationRef;
@@ -426,23 +428,27 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Deterministic physics loop with acceleration support
     const gameLoop = () => {
-      // Apply acceleration if active
-      let deltaMultiplier = 1.0;
+      // Apply acceleration by running multiple physics steps per frame
+      let stepsToRun = 1;
       if (accelerationRef.current.isAccelerating && accelerationRef.current.remainingTime > 0) {
-        deltaMultiplier = accelerationRef.current.timeMultiplier;
-        accelerationRef.current.remainingTime -= FIXED_DELTA;
+        stepsToRun = Math.floor(accelerationRef.current.timeMultiplier);
+        accelerationRef.current.remainingTime -= FIXED_DELTA * stepsToRun;
         
         // Check if acceleration period is over
         if (accelerationRef.current.remainingTime <= 0) {
           accelerationRef.current.isAccelerating = false;
           accelerationRef.current.timeMultiplier = accelerationRef.current.originalTimeMultiplier;
           accelerationRef.current.remainingTime = 0;
+          console.log('[ACCELERATION] Completed');
         }
       }
       
-      // Run physics with time multiplier
-      const won = updatePhysics(true, deltaMultiplier);
-      physicsTimeRef.current += FIXED_DELTA * deltaMultiplier;
+      // Run multiple physics steps for acceleration, but keep each step identical
+      let won = false;
+      for (let step = 0; step < stepsToRun && !won; step++) {
+        won = updatePhysics(true, 1.0); // Always use 1.0 multiplier for identical physics
+        physicsTimeRef.current += FIXED_DELTA;
+      }
     };
 
     const renderLoop = () => {
@@ -457,7 +463,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       if (!randomRef.current) return false;
 
       spinnersRef.current.forEach((spinner) => {
-        spinner.rotation = precise.add(spinner.rotation, 0.08 * timeMultiplier);
+        spinner.rotation = precise.add(spinner.rotation, 0.08);
       });
 
       let winnerFound = false;
@@ -512,9 +518,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           }
         }
 
-        ball.dy = precise.add(ball.dy, 0.08 * timeMultiplier);
-        ball.dx = precise.mul(ball.dx, Math.pow(0.9999800039998667, timeMultiplier));
-        ball.dy = precise.mul(ball.dy, Math.pow(0.9999800039998667, timeMultiplier));
+        ball.dy = precise.add(ball.dy, 0.08);
+        ball.dx = precise.mul(ball.dx, 0.9999800039998667);
+        ball.dy = precise.mul(ball.dy, 0.9999800039998667);
 
         if ((ball as any).onSurface && (ball as any).surfaceObstacle) {
           const obs: any = (ball as any).surfaceObstacle;
@@ -988,16 +994,20 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     };
 
     // New acceleration system - applies time multiplier to physics
-    const startAcceleration = (seconds: number, multiplier: number = 10.0) => {
-      if (seconds <= 0 || accelerationRef.current.hasBeenApplied) return;
+    const startAcceleration = (seconds: number, multiplier: number = 10.0, seed: string) => {
+      if (seconds <= 0 || (accelerationRef.current.hasBeenApplied && accelerationRef.current.appliedForSeed === seed)) {
+        console.log(`[ACCELERATION] Skipped - already applied for seed ${seed}`);
+        return;
+      }
       
       accelerationRef.current.isAccelerating = true;
       accelerationRef.current.timeMultiplier = multiplier;
       accelerationRef.current.remainingTime = seconds * 1000; // Convert to milliseconds
       accelerationRef.current.originalTimeMultiplier = 1.0;
       accelerationRef.current.hasBeenApplied = true;
+      accelerationRef.current.appliedForSeed = seed;
       
-      console.log(`[ACCELERATION] Started: ${seconds}s at ${multiplier}x speed`);
+      console.log(`[ACCELERATION] Started: ${seconds}s at ${multiplier}x speed for seed ${seed}`);
     };
 
     // Start game (supports optional predicted winner and desired winner user id)
@@ -1030,11 +1040,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       ballStatesRef.current = new Map();
       // Reset last collision timestamp for safety
       lastCollisionAtRef.current = 0;
-      // Reset acceleration state for new game
-      accelerationRef.current.isAccelerating = false;
-      accelerationRef.current.timeMultiplier = 1.0;
-      accelerationRef.current.remainingTime = 0;
-      accelerationRef.current.hasBeenApplied = false;
+      // Reset acceleration state only if this is a different seed
+      if (accelerationRef.current.appliedForSeed !== gameData.seed) {
+        accelerationRef.current.isAccelerating = false;
+        accelerationRef.current.timeMultiplier = 1.0;
+        accelerationRef.current.remainingTime = 0;
+        accelerationRef.current.hasBeenApplied = false;
+        accelerationRef.current.appliedForSeed = '';
+      }
       ballsRef.current.forEach((ball) => {
         appRef.current!.stage.removeChild(ball.graphics);
         if (ball.indicator) {
@@ -1249,10 +1262,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       // --- NEW ACCELERATION SYSTEM ---
-      // Apply speedUpTime using deterministic time scaling (only once per game)
-      if (speedUpTime && speedUpTime > 0 && !accelerationRef.current.hasBeenApplied) {
-        console.log(`[ACCELERATION] Applying ${speedUpTime}s acceleration`);
-        startAcceleration(speedUpTime, 10.0); // 10x speed multiplier
+      // Apply speedUpTime using deterministic time scaling (only once per seed)
+      if (speedUpTime && speedUpTime > 0) {
+        console.log(`[ACCELERATION] Checking acceleration for seed ${gameData.seed}, speedUpTime: ${speedUpTime}`);
+        startAcceleration(speedUpTime, 10.0, gameData.seed); // 10x speed multiplier
       }
 
       // Start normal realtime loops
