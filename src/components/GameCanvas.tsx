@@ -1187,7 +1187,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     };
 
     const EXPECTED_RNG_CALLS_PER_FRAME = 10; // Эмпирическое значение, ajust based on your physics
-
+    console.log("Expected RNG calls per frame:", EXPECTED_RNG_CALLS_PER_FRAME);
     // Start game (supports optional predicted winner and desired winner user id)
     const startGame = async (gameData: {
       seed: string;
