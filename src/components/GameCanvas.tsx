@@ -1454,8 +1454,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             rng: new DeterministicRandom(""),
             rngCalls: 0,
           };
-          // Ensure sim RNG starts from the exact same state as the live RNG
+          // Ensure sim RNG starts from the exact same state as the live RNG (advance by prior calls)
           simContext.rng.seed = originalSeed;
+          for (let i = 0; i < originalRngCalls; i++) {
+            simContext.rng.next();
+          }
 
           let currentFrame = 0;
           let winnerFound = false;
