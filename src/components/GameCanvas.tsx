@@ -1440,44 +1440,53 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const MAX_FRAMES = typeof fastForwardCapFrames === 'number' ? fastForwardCapFrames : 15000;
           const framesToSimulate = Math.min(frames, MAX_FRAMES);
 
-          // Save original callbacks and enter fast-forward mode
+          // Save original state and enter fast-forward mode
           simulationRef.current.originalCallbacks.onBallWin = onBallWin;
           simulationRef.current.isFastForwarding = true;
-          
-          // Track RNG usage precisely
-          const originalRngSeed = randomRef.current?.seed;
-          const rngCallsAtStart = rngStepCountRef.current;
-          
-          let currentFrame = 0;
-          const BATCH_SIZE = 100; // Process in batches to avoid blocking UI
 
-          const processBatch = () => {
-            const batchEnd = Math.min(currentFrame + BATCH_SIZE, framesToSimulate);
-            
-            while (currentFrame < batchEnd && actualWinnersRef.current.length === 0) {
-              updatePhysics(false);
-              physicsTimeRef.current += FIXED_DELTA;
+          // Save exact RNG state (seed and calls)
+          const originalSeed = randomRef.current!.seed;
+          const originalRngCalls = rngStepCountRef.current;
+
+          // Create isolated simulation state and RNG
+          const simState: SimState = toSimState();
+          const simContext: SimContext = {
+            rng: new DeterministicRandom(""),
+            rngCalls: 0,
+          };
+          // Ensure sim RNG starts from the exact same state as the live RNG
+          simContext.rng.seed = originalSeed;
+
+          let currentFrame = 0;
+          let winnerFound = false;
+
+          const processSimulation = () => {
+            const batchSize = 100;
+            const endFrame = Math.min(currentFrame + batchSize, framesToSimulate);
+
+            while (currentFrame < endFrame && !winnerFound) {
+              winnerFound = stepSimPhysics(simState, simContext);
+              // Maintain physics time in sim state for later sync
+              simState.physicsTime = precise.add(simState.physicsTime, FIXED_DELTA);
               currentFrame++;
             }
 
-            if (currentFrame >= framesToSimulate || actualWinnersRef.current.length > 0) {
-              // Exit fast-forward
-              simulationRef.current.isFastForwarding = false;
-              
-              // Precisely realign RNG state to the state AFTER fast-forward
-              if (randomRef.current && originalRngSeed !== undefined) {
-                const rngCallsConsumed = rngStepCountRef.current - rngCallsAtStart;
-                randomRef.current.seed = originalRngSeed;
-                for (let i = 0; i < rngCallsConsumed; i++) {
-                  randomRef.current.next();
-                }
-              }
+            if (currentFrame >= framesToSimulate || winnerFound) {
+              // Apply simulation results to live state
+              applySimStateToLive(simState);
 
-              // After fast-forward, if winner exists - emit callback now
-              if (actualWinnersRef.current.length > 0) {
-                const winnerBall = ballsRef.current.find(
-                  b => b.id === actualWinnersRef.current[0]
-                );
+              // Advance main RNG to match simulation's consumed calls
+              randomRef.current!.seed = originalSeed;
+              for (let i = 0; i < simContext.rngCalls; i++) {
+                randomRef.current!.next();
+              }
+              rngStepCountRef.current = originalRngCalls + simContext.rngCalls;
+
+              simulationRef.current.isFastForwarding = false;
+
+              // Handle winner
+              if (winnerFound && simState.winners.length > 0) {
+                const winnerBall = ballsRef.current.find(b => b.id === simState.winners[0]);
                 if (winnerBall) {
                   simulationRef.current.originalCallbacks.onBallWin?.(
                     winnerBall.id,
@@ -1492,12 +1501,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               (gameLoopRef as any).physicsIntervalId = physicsInterval;
               gameLoopRef.current = requestAnimationFrame(renderLoop);
             } else {
-              // Process next batch
-              setTimeout(processBatch, 0);
+              // Continue in next batch to avoid blocking UI
+              setTimeout(processSimulation, 0);
             }
           };
 
-          processBatch();
+          processSimulation();
           return;
         }
       } catch (e) {
