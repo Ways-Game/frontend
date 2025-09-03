@@ -49,7 +49,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 
 class DeterministicRandom {
-  private seed: number;
+  public seed: number;
   constructor(seed: string) {
     this.seed = this.hashString(seed || "default_seed");
 
@@ -1186,6 +1186,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       return winnerFound;
     };
 
+    const EXPECTED_RNG_CALLS_PER_FRAME = 5; // Эмпирическое значение, ajust based on your physics
+
     // Start game (supports optional predicted winner and desired winner user id)
     const startGame = async (gameData: {
       seed: string;
@@ -1441,22 +1443,39 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           // Save original callbacks and enter fast-forward mode
           simulationRef.current.originalCallbacks.onBallWin = onBallWin;
           simulationRef.current.isFastForwarding = true;
-          simulationRef.current.framesToSimulate = framesToSimulate;
-          simulationRef.current.currentFrame = 0;
+          
+          // Save current RNG state
+          const originalRngState = randomRef.current?.seed;
+          
+          let currentFrame = 0;
+          const BATCH_SIZE = 100; // Process in batches to avoid blocking UI
 
-          // Use the same physics/update path as realtime without emitting callbacks
-          const fastForwardLoop = () => {
-            if (
-              simulationRef.current.currentFrame >= simulationRef.current.framesToSimulate ||
-              actualWinnersRef.current.length > 0
-            ) {
+          const processBatch = () => {
+            const batchEnd = Math.min(currentFrame + BATCH_SIZE, framesToSimulate);
+            
+            while (currentFrame < batchEnd && actualWinnersRef.current.length === 0) {
+              updatePhysics(false);
+              physicsTimeRef.current += FIXED_DELTA;
+              currentFrame++;
+            }
+
+            if (currentFrame >= framesToSimulate || actualWinnersRef.current.length > 0) {
               // Exit fast-forward
               simulationRef.current.isFastForwarding = false;
+              
+              // Restore original RNG state if simulation didn't complete
+              if (randomRef.current && originalRngState !== undefined) {
+                randomRef.current.seed = originalRngState;
+                // Replay the exact number of RNG calls that would have been made
+                for (let i = 0; i < currentFrame * EXPECTED_RNG_CALLS_PER_FRAME; i++) {
+                  randomRef.current.next();
+                }
+              }
 
               // After fast-forward, if winner exists - emit callback now
               if (actualWinnersRef.current.length > 0) {
                 const winnerBall = ballsRef.current.find(
-                  (b) => b.id === actualWinnersRef.current[0]
+                  b => b.id === actualWinnersRef.current[0]
                 );
                 if (winnerBall) {
                   simulationRef.current.originalCallbacks.onBallWin?.(
@@ -1467,22 +1486,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 }
               }
 
-              // Start normal realtime loops in both modes
+              // Start normal realtime loops
               const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
               (gameLoopRef as any).physicsIntervalId = physicsInterval;
               gameLoopRef.current = requestAnimationFrame(renderLoop);
-              return;
+            } else {
+              // Process next batch
+              setTimeout(processBatch, 0);
             }
-
-            // Step physics without emitting callbacks
-            updatePhysics(false);
-            physicsTimeRef.current += FIXED_DELTA;
-            simulationRef.current.currentFrame++;
-            requestAnimationFrame(fastForwardLoop);
           };
 
-          fastForwardLoop();
-          return; // do not continue normal init until fast-forward completes
+          // Estimate RNG calls per frame for accurate state restoration (use constant)
+          processBatch();
+          return;
         }
       } catch (e) {
         console.warn("Fast-forward failed:", e);
