@@ -49,15 +49,19 @@ export function MarketScreen() {
   }, [])
 
   const filteredGifts = useMemo(() => {
-    const q = (searchQuery || '').toLowerCase().trim()
-    // Always derive from original data, not previous filtered list
-    let list = [...gifts]
-    if (q) list = list.filter(g => g.title.toLowerCase().includes(q))
+    const query = (searchQuery || '').toLowerCase().trim()
+    const base = gifts || []
+    const filtered = base.filter((g) => {
+      if (!query) return true
+      const title = (g.title || '').toLowerCase()
+      const priceStr = String(g.price || '').toLowerCase()
+      return title.includes(query) || priceStr.includes(query)
+    })
 
-    // Toggle price sorting via button
-    if (sortOrder === 'Low to High') list.sort((a,b) => a.price - b.price)
-    if (sortOrder === 'High to Low') list.sort((a,b) => b.price - a.price)
-    return list
+    const sorted = [...filtered]
+    if (sortOrder === 'Low to High') sorted.sort((a,b) => a.price - b.price)
+    if (sortOrder === 'High to Low') sorted.sort((a,b) => b.price - a.price)
+    return sorted
   }, [gifts, searchQuery, sortOrder])
 
   const handleBuy = async (gift: Gift) => {
@@ -71,7 +75,7 @@ export function MarketScreen() {
       const init_data = webApp?.initData || ''
       const res = await api.buyGift({
         user_id: user.id,
-        id: gift.available_gift_id,
+        gift_id: gift.gift_id,
         count: 1,
         init_data,
       })

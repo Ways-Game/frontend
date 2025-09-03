@@ -90,6 +90,23 @@ const useGameSound = (initialEnabled = true) => {
   };
 };
 
+// Manage simulation state for fast-forward
+const useSimulationState = () => {
+  const simulationRef = useRef<{
+    isFastForwarding: boolean;
+    originalCallbacks: { onBallWin?: (ballId: string, playerId: string) => void };
+    framesToSimulate: number;
+    currentFrame: number;
+  }>({
+    isFastForwarding: false,
+    originalCallbacks: {},
+    framesToSimulate: 0,
+    currentFrame: 0,
+  });
+
+  return simulationRef;
+};
+
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
   onGameStart?: () => void;
@@ -149,6 +166,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       return v;
     };
     const gameLoopRef = useRef<number | null>(null);
+    // Simulation state
+    const simulationRef = useSimulationState();
 
     const [gameState, setGameState] = useState<
       "waiting" | "playing" | "finished"
@@ -419,17 +438,10 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     };
 
     const updatePhysics = (emitCallbacks: boolean = true): boolean => {
-      // Сортировка мячей в детерминированном порядке
+      // Sort deterministic
       ballsRef.current.sort((a, b) => a.id.localeCompare(b.id));
 
       if (!randomRef.current) return false;
-
-      if (physicsTimeRef.current % 1000 === 0 && physicsTimeRef.current > 0) {
-        const checksum = ballsRef.current.reduce(
-          (sum, b) => sum + b.x * 10000 + b.y * 100 + b.dx * 10 + b.dy,
-          0
-        );
-      }
 
       spinnersRef.current.forEach((spinner) => {
         spinner.rotation = precise.add(spinner.rotation, 0.08);
@@ -441,19 +453,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         const ball = ballsRef.current[i];
         if (ball.finished) continue;
 
-        // Инициализируем состояние мяча если нужно
         if (!ballStatesRef.current.has(ball.id)) {
           ballStatesRef.current.set(ball.id, {
             stuckFrames: 0,
             lastPositions: [],
             isStuck: false,
-            stuckRecoveryCountdown: 0
+            stuckRecoveryCountdown: 0,
           });
         }
-        
+
         const ballState = ballStatesRef.current.get(ball.id)!;
-        
-        // Обрабатываем восстановление после застревания
+
         if (ballState.stuckRecoveryCountdown > 0) {
           ballState.stuckRecoveryCountdown--;
           if (ballState.stuckRecoveryCountdown === 0) {
@@ -462,33 +472,24 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             ballState.lastPositions = [];
           }
         }
-        
-        // Сохраняем текущую позицию
+
         ballState.lastPositions.push({ x: ball.x, y: ball.y });
-        
-        // Ограничиваем историю позиций
         if (ballState.lastPositions.length > 10) {
           ballState.lastPositions.shift();
         }
-        
-        // Проверяем, не застрял ли мяч
+
         if (ballState.lastPositions.length >= 5) {
           const first = ballState.lastPositions[0];
           const last = ballState.lastPositions[ballState.lastPositions.length - 1];
           const dx = precise.sub(last.x, first.x);
           const dy = precise.sub(last.y, first.y);
-          const distance = precise.sqrt(
-            precise.add(precise.mul(dx, dx), precise.mul(dy, dy))
-          );
-          
+          const distance = precise.sqrt(precise.add(precise.mul(dx, dx), precise.mul(dy, dy)));
+
           if (distance < 5) {
             ballState.stuckFrames++;
-            
             if (ballState.stuckFrames > STUCK_THRESHOLD && !ballState.isStuck) {
               ballState.isStuck = true;
-              ballState.stuckRecoveryCountdown = 60; // 60 кадров = 1 секунда при 60 FPS
-              
-              // Принудительный отскок
+              ballState.stuckRecoveryCountdown = 60;
               ball.dy = -STUCK_BOUNCE_FORCE;
               ball.dx = precise.mul(precise.sub(nextRandom(), 0.5), 4);
             }
@@ -513,11 +514,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           ball.y = precise.add(obs.y, precise.mul(-halfH, 1) - 24);
           ball.dy = 0;
 
-          // Применяем трение с учетом минимальной скорости
           if (precise.abs(ball.dx) > minSurfaceSpeed) {
             ball.dx = precise.mul(ball.dx, surfaceFriction);
           } else {
-            // Если скорость ниже минимальной, устанавливаем минимальную скорость
             if (ball.dx === 0) {
               ball.dx = nextRandom() > 0.5 ? minSurfaceSpeed : -minSurfaceSpeed;
             } else {
@@ -525,7 +524,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             }
           }
 
-          // Добавляем небольшой случайный импульс для предотвращения застревания
           const noise = nextRandom();
           const noiseValue = precise.mul(precise.sub(noise, 0.5), 0.05);
           ball.dx = precise.add(ball.dx, noiseValue);
@@ -600,7 +598,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               0.82
             );
 
-            playMelodyNote();
+            if (!simulationRef.current.isFastForwarding) {
+              playMelodyNote();
+            }
           }
         } else if (obstacle.type === "barrier") {
           const halfW = precise.div(obstacle.width, 2);
@@ -674,7 +674,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
                 ball.bounceCount++;
               }
             }
-            playMelodyNote();
+            if (!simulationRef.current.isFastForwarding) {
+              playMelodyNote();
+            }
           }
         } else if (obstacle.type === "brick") {
           const halfW = precise.div(obstacle.width, 2);
@@ -714,7 +716,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             } else {
               ball.dy = precise.mul(ball.dy, -0.78);
             }
-            playMelodyNote();
+            if (!simulationRef.current.isFastForwarding) {
+              playMelodyNote();
+            }
           }
         } else if (obstacle.type === "spinner") {
           const dx = precise.sub(ball.x, obstacle.x);
@@ -756,7 +760,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               1.1
             );
 
-            playMelodyNote();
+            if (!simulationRef.current.isFastForwarding) {
+              playMelodyNote();
+            }
           }
         } else if (obstacle.type === "polygon") {
           // Простая проверка коллизии с полигоном через bounding box
@@ -849,7 +855,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             precise.mul(normalY, halfImpulse)
           );
 
-          playMelodyNote();
+          if (!simulationRef.current.isFastForwarding) {
+            playMelodyNote();
+          }
         }
       });
 
@@ -868,11 +876,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (ball.y > winY) {
           if (actualWinnersRef.current.length === 0) {
             actualWinnersRef.current = [ball.id];
-            // In hidden deterministic mode we suppress React state callbacks
-            if (!deterministicMode) setActualWinners([...actualWinnersRef.current]);
+            const shouldEmitCallbacks = !simulationRef.current.isFastForwarding;
+            if (shouldEmitCallbacks) setActualWinners([...actualWinnersRef.current]);
             ball.finished = true;
             console.log('[WIN] first ball reached winY:', ball.id, 'owner:', ball.playerId);
-            if (!deterministicMode) {
+            if (shouldEmitCallbacks) {
               onBallWin?.(ball.id, ball.playerId);
               setGameState("finished");
             }
@@ -1423,85 +1431,70 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       // --- FAST-FORWARD (apply speedUpTime if provided) ---
       try {
-        // speedUpTime is a prop in seconds (passed from parent)
         const secondsToFastForward = Number(speedUpTime || 0);
-        console.log('gamecanvas speedtime:', secondsToFastForward)
-        if (secondsToFastForward > 0) {
-          // Ignore any minuses to keep logic consistent
+        if (secondsToFastForward > 0 && deterministicMode) {
           const clampedSeconds = Math.max(0, secondsToFastForward);
           const frames = Math.floor(clampedSeconds * FIXED_FPS);
-          // cap frames to avoid freezing main thread; tune as needed
-          const MAX_FRAMES = typeof fastForwardCapFrames === 'number' ? fastForwardCapFrames : 15000; // default cap
+          const MAX_FRAMES = typeof fastForwardCapFrames === 'number' ? fastForwardCapFrames : 15000;
           const framesToSimulate = Math.min(frames, MAX_FRAMES);
-          console.log('[FAST-FORWARD] framesToSimulate=', framesToSimulate, 'cap=', MAX_FRAMES)
-          // Build a simulation state from live state
-          let sim = toSimState();
-          // Create a sim RNG aligned with live RNG usage so far
-          const simCtx: SimContext = { rng: new DeterministicRandom(seedRef.current), rngCalls: 0 };
-          // Advance sim RNG to match how many times live RNG was used up to this point
-          for (let i = 0; i < rngStepCountRef.current; i++) simCtx.rng.next();
 
-          for (let i = 0; i < framesToSimulate; i++) {
-            const won = stepSimPhysics(sim, simCtx);
-            sim.physicsTime += FIXED_DELTA;
-            if (deterministicMode && (won || sim.winners.length > 0)) break;
-          }
+          // Save original callbacks and enter fast-forward mode
+          simulationRef.current.originalCallbacks.onBallWin = onBallWin;
+          simulationRef.current.isFastForwarding = true;
+          simulationRef.current.framesToSimulate = framesToSimulate;
+          simulationRef.current.currentFrame = 0;
 
-          // Apply simulation results back to live state
-          applySimStateToLive(sim);
+          // Use the same physics/update path as realtime without emitting callbacks
+          const fastForwardLoop = () => {
+            if (
+              simulationRef.current.currentFrame >= simulationRef.current.framesToSimulate ||
+              actualWinnersRef.current.length > 0
+            ) {
+              // Exit fast-forward
+              simulationRef.current.isFastForwarding = false;
 
-          // Re-seed live RNG and advance by total calls used so far + calls consumed during sim
-          randomRef.current = new DeterministicRandom(seedRef.current);
-          const totalCalls = rngStepCountRef.current + simCtx.rngCalls;
-          for (let i = 0; i < totalCalls; i++) randomRef.current.next();
-          rngStepCountRef.current = totalCalls;
+              // In deterministic (hidden) mode, do not emit UI callbacks or start loops
+              if (!deterministicMode) {
+                // If winner exists, call original callback now
+                if (actualWinnersRef.current.length > 0) {
+                  const winnerBall = ballsRef.current.find(
+                    (b) => b.id === actualWinnersRef.current[0]
+                  );
+                  if (winnerBall) {
+                    simulationRef.current.originalCallbacks.onBallWin?.(
+                      winnerBall.id,
+                      winnerBall.playerId
+                    );
+                    setGameState("finished");
+                  }
+                }
 
-          console.log(`Fast-forwarded physics by ${framesToSimulate} frames (${(framesToSimulate/FIXED_FPS).toFixed(2)}s)`);
+                // Start normal realtime loops
+                const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
+                (gameLoopRef as any).physicsIntervalId = physicsInterval;
+                gameLoopRef.current = requestAnimationFrame(renderLoop);
+              }
+              return;
+            }
+
+            // Step physics without emitting callbacks
+            updatePhysics(false);
+            physicsTimeRef.current += FIXED_DELTA;
+            simulationRef.current.currentFrame++;
+            requestAnimationFrame(fastForwardLoop);
+          };
+
+          fastForwardLoop();
+          return; // do not continue normal init until fast-forward completes
         }
       } catch (e) {
         console.warn("Fast-forward failed:", e);
-      }
-      // --- end fast-forward ---
-
-      // Sync graphics to physics state after fast-forward
-      ballsRef.current.forEach((ball) => {
-        ball.graphics.position.set(ball.x, ball.y);
-        if (ball.indicator) {
-          ball.indicator.position.set(ball.x, ball.y - 40);
-        }
-      });
-
-      // If winner decided during fast-forward, emit callbacks now and stop
-      if (actualWinnersRef.current.length > 0) {
-        const winnerBall = ballsRef.current.find(b => b.id === actualWinnersRef.current[0]);
-        setActualWinners([...actualWinnersRef.current]);
-        if (winnerBall) {
-          onBallWin?.(winnerBall.id, winnerBall.playerId);
-        }
-        setGameState("finished");
-        return;
+        simulationRef.current.isFastForwarding = false;
       }
 
-      // In deterministic mode (hidden pre-sim), keep physics ticking synchronously
-      if (deterministicMode) {
-        // If winner already decided during fast-forward, stop immediately
-        if (actualWinnersRef.current.length > 0) {
-          return;
-        }
-        // Otherwise, continue stepping frames synchronously until winner appears
-        let guard = 0;
-        while (actualWinnersRef.current.length === 0 && guard < 20000) { // hard cap ~333s
-          const won = updatePhysics(false);
-          physicsTimeRef.current += FIXED_DELTA;
-          if (won || actualWinnersRef.current.length > 0) break;
-          guard++;
-        }
-        return;
-      }
-
+      // Normal realtime start
       const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
       (gameLoopRef as any).physicsIntervalId = physicsInterval;
-
       gameLoopRef.current = requestAnimationFrame(renderLoop);
     };
 
