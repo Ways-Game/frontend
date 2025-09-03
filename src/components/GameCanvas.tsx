@@ -97,11 +97,13 @@ const useAccelerationState = () => {
     timeMultiplier: number;
     remainingTime: number;
     originalTimeMultiplier: number;
+    hasBeenApplied: boolean;
   }>({
     isAccelerating: false,
     timeMultiplier: 1.0,
     remainingTime: 0,
     originalTimeMultiplier: 1.0,
+    hasBeenApplied: false,
   });
 
   return accelerationRef;
@@ -987,12 +989,13 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // New acceleration system - applies time multiplier to physics
     const startAcceleration = (seconds: number, multiplier: number = 10.0) => {
-      if (seconds <= 0) return;
+      if (seconds <= 0 || accelerationRef.current.hasBeenApplied) return;
       
       accelerationRef.current.isAccelerating = true;
       accelerationRef.current.timeMultiplier = multiplier;
       accelerationRef.current.remainingTime = seconds * 1000; // Convert to milliseconds
       accelerationRef.current.originalTimeMultiplier = 1.0;
+      accelerationRef.current.hasBeenApplied = true;
       
       console.log(`[ACCELERATION] Started: ${seconds}s at ${multiplier}x speed`);
     };
@@ -1027,6 +1030,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       ballStatesRef.current = new Map();
       // Reset last collision timestamp for safety
       lastCollisionAtRef.current = 0;
+      // Reset acceleration state for new game
+      accelerationRef.current.isAccelerating = false;
+      accelerationRef.current.timeMultiplier = 1.0;
+      accelerationRef.current.remainingTime = 0;
+      accelerationRef.current.hasBeenApplied = false;
       ballsRef.current.forEach((ball) => {
         appRef.current!.stage.removeChild(ball.graphics);
         if (ball.indicator) {
@@ -1241,8 +1249,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       // --- NEW ACCELERATION SYSTEM ---
-      // Apply speedUpTime using deterministic time scaling
-      if (speedUpTime && speedUpTime > 0) {
+      // Apply speedUpTime using deterministic time scaling (only once per game)
+      if (speedUpTime && speedUpTime > 0 && !accelerationRef.current.hasBeenApplied) {
         console.log(`[ACCELERATION] Applying ${speedUpTime}s acceleration`);
         startAcceleration(speedUpTime, 10.0); // 10x speed multiplier
       }
