@@ -1444,8 +1444,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           simulationRef.current.originalCallbacks.onBallWin = onBallWin;
           simulationRef.current.isFastForwarding = true;
           
-          // Save current RNG state
-          const originalRngState = randomRef.current?.seed;
+          // Track RNG usage precisely
+          const originalRngSeed = randomRef.current?.seed;
+          const rngCallsAtStart = rngStepCountRef.current;
           
           let currentFrame = 0;
           const BATCH_SIZE = 100; // Process in batches to avoid blocking UI
@@ -1463,11 +1464,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
               // Exit fast-forward
               simulationRef.current.isFastForwarding = false;
               
-              // Restore original RNG state if simulation didn't complete
-              if (randomRef.current && originalRngState !== undefined) {
-                randomRef.current.seed = originalRngState;
-                // Replay the exact number of RNG calls that would have been made
-                for (let i = 0; i < currentFrame * EXPECTED_RNG_CALLS_PER_FRAME; i++) {
+              // Precisely realign RNG state to the state AFTER fast-forward
+              if (randomRef.current && originalRngSeed !== undefined) {
+                const rngCallsConsumed = rngStepCountRef.current - rngCallsAtStart;
+                randomRef.current.seed = originalRngSeed;
+                for (let i = 0; i < rngCallsConsumed; i++) {
                   randomRef.current.next();
                 }
               }
@@ -1496,7 +1497,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             }
           };
 
-          // Estimate RNG calls per frame for accurate state restoration (use constant)
           processBatch();
           return;
         }
