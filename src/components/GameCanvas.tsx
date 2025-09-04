@@ -22,11 +22,12 @@ const isMobile =
   
 // Anti-stuck system constants
 const MIN_BOUNCE_VELOCITY = 3.0;
-const STUCK_THRESHOLD = 60;
+const STUCK_THRESHOLD = 60; // теперь в шагах физики, а не в кадрах
 const STUCK_BOUNCE_FORCE = 8.0;
+const STUCK_POSITION_STEPS = 5; // количество шагов для анализа залипания
 
 interface BallState {
-  stuckFrames: number;
+  stuckSteps: number; // изменено с stuckFrames на stuckSteps
   lastPositions: { x: number; y: number }[];
   isStuck: boolean;
   stuckRecoveryCountdown: number;
@@ -167,6 +168,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       return v;
     };
     const gameLoopRef = useRef<number | null>(null);
+  const mainLoopRef = useRef<number | null>(null);
     // Acceleration state
     const accelerationRef = useAccelerationState();
 
@@ -426,34 +428,61 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     }, [audioContextRef, soundEnabledRef]);
 
-    // Deterministic physics loop with acceleration support
-    const gameLoop = () => {
-      // Apply acceleration by running multiple physics steps per frame
-      let stepsToRun = 1;
+    // New unified main loop with accumulator (replaces dual setInterval + rAF)
+    const mainLoop = (timestamp: number) => {
+      if (!lastTimeRef.current) {
+        lastTimeRef.current = timestamp;
+      }
+      // delta in milliseconds (wall-clock)
+      let delta = timestamp - lastTimeRef.current;
+      lastTimeRef.current = timestamp;
+
+      // limit delta (in case tab was sleeping)
+      if (delta > 250) delta = 250;
+
+      // Determine time multiplier (acceleration)
+      const multiplier = accelerationRef.current.isAccelerating
+        ? accelerationRef.current.timeMultiplier
+        : 1.0;
+
+      // Scale elapsed time for acceleration - ensures same physics step order
+      accumulatorRef.current += delta * multiplier;
+
+      // Update remaining acceleration time by real time (wall-clock)
+      // This makes acceleration duration predictable for user
       if (accelerationRef.current.isAccelerating && accelerationRef.current.remainingTime > 0) {
-        stepsToRun = Math.floor(accelerationRef.current.timeMultiplier);
-        accelerationRef.current.remainingTime -= FIXED_DELTA * stepsToRun;
-        
-        // Check if acceleration period is over
+        accelerationRef.current.remainingTime -= delta;
         if (accelerationRef.current.remainingTime <= 0) {
           accelerationRef.current.isAccelerating = false;
-          accelerationRef.current.timeMultiplier = accelerationRef.current.originalTimeMultiplier;
+          accelerationRef.current.timeMultiplier = accelerationRef.current.originalTimeMultiplier || 1.0;
           accelerationRef.current.remainingTime = 0;
-          console.log('[ACCELERATION] Completed');
+          console.log('[ACCELERATION] Completed (by wall-clock)');
         }
       }
-      
-      // Run multiple physics steps for acceleration, but keep each step identical
-      let won = false;
-      for (let step = 0; step < stepsToRun && !won; step++) {
-        won = updatePhysics(true, 1.0); // Always use 1.0 multiplier for identical physics
-        physicsTimeRef.current += FIXED_DELTA;
-      }
-    };
 
-    const renderLoop = () => {
+      // Execute fixed steps while accumulator has enough time
+      // IMPORTANT: emitCallbacks = !isAccelerating => suppress external effects during acceleration
+      let stepsRun = 0;
+      const maxStepsPerFrame = 100; // safety cap to avoid infinite loops
+      while (accumulatorRef.current >= FIXED_DELTA && stepsRun < maxStepsPerFrame) {
+        const emitCallbacks = !accelerationRef.current.isAccelerating;
+        const won = updatePhysics(emitCallbacks, 1.0);
+        physicsTimeRef.current += FIXED_DELTA;
+        accumulatorRef.current -= FIXED_DELTA;
+        stepsRun++;
+
+        if (won) {
+          // If winner found during acceleration, updatePhysics marked finished
+          // but external callbacks were suppressed - break to avoid extra steps
+          break;
+        }
+      }
+
+      // Render (separated) - render uses only visual presentation fields
       render();
-      gameLoopRef.current = requestAnimationFrame(renderLoop);
+
+      // Schedule next frame
+      mainLoopRef.current = requestAnimationFrame(mainLoop);
     };
 
     const updatePhysics = (emitCallbacks: boolean = true, timeMultiplier: number = 1.0): boolean => {
@@ -474,7 +503,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
         if (!ballStatesRef.current.has(ball.id)) {
           ballStatesRef.current.set(ball.id, {
-            stuckFrames: 0,
+            stuckSteps: 0, 
             lastPositions: [],
             isStuck: false,
             stuckRecoveryCountdown: 0,
@@ -486,18 +515,20 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (ballState.stuckRecoveryCountdown > 0) {
           ballState.stuckRecoveryCountdown--;
           if (ballState.stuckRecoveryCountdown === 0) {
-            ballState.stuckFrames = 0;
+            ballState.stuckSteps = 0; 
             ballState.isStuck = false;
             ballState.lastPositions = [];
           }
         }
 
         ballState.lastPositions.push({ x: ball.x, y: ball.y });
-        if (ballState.lastPositions.length > 10) {
+        // Сохраняем только последние STUCK_POSITION_STEPS позиций
+        if (ballState.lastPositions.length > STUCK_POSITION_STEPS) {
           ballState.lastPositions.shift();
         }
 
-        if (ballState.lastPositions.length >= 5) {
+        // Проверяем залипание на основе STUCK_POSITION_STEPS шагов
+        if (ballState.lastPositions.length >= STUCK_POSITION_STEPS) {
           const first = ballState.lastPositions[0];
           const last = ballState.lastPositions[ballState.lastPositions.length - 1];
           const dx = precise.sub(last.x, first.x);
@@ -505,15 +536,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           const distance = precise.sqrt(precise.add(precise.mul(dx, dx), precise.mul(dy, dy)));
 
           if (distance < 5) {
-            ballState.stuckFrames++;
-            if (ballState.stuckFrames > STUCK_THRESHOLD && !ballState.isStuck) {
+            ballState.stuckSteps++; // увеличиваем счетчик шагов
+            if (ballState.stuckSteps > STUCK_THRESHOLD && !ballState.isStuck) {
               ballState.isStuck = true;
               ballState.stuckRecoveryCountdown = 60;
               ball.dy = -STUCK_BOUNCE_FORCE;
               ball.dx = precise.mul(precise.sub(nextRandom(), 0.5), 4);
             }
           } else {
-            ballState.stuckFrames = 0;
+            ballState.stuckSteps = 0; // сбрасываем счетчик шагов
             ballState.isStuck = false;
           }
         }
@@ -993,20 +1024,22 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    // New acceleration system - applies time multiplier to physics
-    const startAcceleration = (seconds: number, multiplier: number = 10.0, seed: string) => {
-      if (seconds <= 0 || (accelerationRef.current.hasBeenApplied && accelerationRef.current.appliedForSeed === seed)) {
+    // Fixed acceleration system with proper wall-clock timing
+    const startAcceleration = (seconds: number, multiplier: number = 10.0, seed?: string) => {
+      if (!seconds || seconds <= 0) return;
+
+      // If already applied for same seed, skip
+      if (accelerationRef.current.hasBeenApplied && seed && accelerationRef.current.appliedForSeed === seed) {
         console.log(`[ACCELERATION] Skipped - already applied for seed ${seed}`);
         return;
       }
-      
+
       accelerationRef.current.isAccelerating = true;
       accelerationRef.current.timeMultiplier = multiplier;
-      accelerationRef.current.remainingTime = seconds * 1000; // Convert to milliseconds
       accelerationRef.current.originalTimeMultiplier = 1.0;
+      accelerationRef.current.remainingTime = seconds * 1000; // seconds -> ms (wall-clock)
       accelerationRef.current.hasBeenApplied = true;
-      accelerationRef.current.appliedForSeed = seed;
-      
+      accelerationRef.current.appliedForSeed = seed || '';
       console.log(`[ACCELERATION] Started: ${seconds}s at ${multiplier}x speed for seed ${seed}`);
     };
 
@@ -1055,8 +1088,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
       });
 
-      const originalRandom = Math.random;
-      Math.random = () => nextRandom();
+      // REMOVED: No longer override global Math.random - use only deterministic RNG
 
       try {
         const mapData = generateMapFromId(appRef.current, gameData.mapId, {
@@ -1096,7 +1128,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           appRef.current.stage.scale.set(deviceWidth / WORLD_WIDTH);
         }
       } finally {
-        Math.random = originalRandom;
+        // REMOVED: No Math.random restoration needed
       }
 
       // Build participant list and ownership order to allow swapping owners deterministically
@@ -1268,27 +1300,27 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         startAcceleration(speedUpTime, 10.0, gameData.seed); // 10x speed multiplier
       }
 
-      // Start normal realtime loops
-      const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
-      (gameLoopRef as any).physicsIntervalId = physicsInterval;
-      gameLoopRef.current = requestAnimationFrame(renderLoop);
+      // Start unified mainLoop on rAF
+      // Initialize timing
+      lastTimeRef.current = performance.now();
+      accumulatorRef.current = 0;
+      if (mainLoopRef.current) {
+        cancelAnimationFrame(mainLoopRef.current);
+      }
+      mainLoopRef.current = requestAnimationFrame(mainLoop);
     };
 
     const resetGame = () => {
-      if ((gameLoopRef as any).physicsIntervalId) {
-        clearInterval((gameLoopRef as any).physicsIntervalId);
-        (gameLoopRef as any).physicsIntervalId = null;
-      }
-      if (gameLoopRef.current) {
-        cancelAnimationFrame(gameLoopRef.current);
-        gameLoopRef.current = null;
+      if (mainLoopRef.current) {
+        cancelAnimationFrame(mainLoopRef.current);
+        mainLoopRef.current = null;
       }
 
       if (appRef.current) {
         ballsRef.current.forEach((ball) => {
-          appRef.current!.stage.removeChild(ball.graphics);
+          try { appRef.current!.stage.removeChild(ball.graphics); } catch (e) {}
           if (ball.indicator) {
-            appRef.current!.stage.removeChild(ball.indicator);
+            try { appRef.current!.stage.removeChild(ball.indicator); } catch (e) {}
           }
         });
       }
@@ -1297,6 +1329,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       setActualWinners([]);
       actualWinnersRef.current = [];
       setGameState("waiting");
+
+      // reset timing refs
+      lastTimeRef.current = 0;
+      accumulatorRef.current = 0;
+      physicsTimeRef.current = 0;
     };
 
     // Integrate old swipe-centering behavior here (restored)
@@ -1342,13 +1379,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         height: mapDataRef.current?.mapHeight || 2500,
       }),
       destroyCanvas: () => {
-        if ((gameLoopRef as any).physicsIntervalId) {
-          clearInterval((gameLoopRef as any).physicsIntervalId);
-          (gameLoopRef as any).physicsIntervalId = null;
-        }
-        if (gameLoopRef.current) {
-          cancelAnimationFrame(gameLoopRef.current);
-          gameLoopRef.current = null;
+        if (mainLoopRef.current) {
+          cancelAnimationFrame(mainLoopRef.current);
+          mainLoopRef.current = null;
         }
 
         try {
