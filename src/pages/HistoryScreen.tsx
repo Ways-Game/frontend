@@ -148,11 +148,14 @@ export function HistoryScreen() {
         )
       : filteredGames;
 
+  // While loading, prepare a fixed-length mock array to keep scrollbar visible
+  const visibleGames = loading ? Array.from({ length: itemsPerPage * 2 }) : sortedGames;
+
   // Pagination logic
-  const totalPages = Math.ceil(sortedGames.length / itemsPerPage);
+  const totalPages = Math.ceil(visibleGames.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentGames = sortedGames.slice(startIndex, endIndex);
+  const currentGames = visibleGames.slice(startIndex, endIndex) as any;
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -193,16 +196,7 @@ export function HistoryScreen() {
     return winner.balls_count || 0;
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-accent-purple border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-text-secondary">Loading history...</p>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-end gap-2.5 overflow-hidden pb-20">
@@ -296,7 +290,46 @@ export function HistoryScreen() {
           className="self-stretch flex-1 flex flex-col justify-start items-start gap-2.5 overflow-y-auto"
           style={{ scrollbarGutter: 'stable both-edges' }}
         >
-          {currentGames.length === 0 ? (
+          {loading && (
+            Array.from({ length: 20 }).map((_, i) => (
+              <div
+                key={`skeleton-${i}`}
+                className="self-stretch px-3.5 py-4 bg-stone-950 rounded-[20px] backdrop-blur-sm flex flex-col justify-center items-center gap-5 overflow-hidden animate-pulse"
+              >
+                <div className="self-stretch inline-flex justify-between items-center">
+                  <div className="rounded-[20px] flex justify-center items-center gap-2">
+                    <div className="h-3 w-24 bg-zinc-800 rounded" />
+                  </div>
+                  <div className="rounded-[20px] flex justify-center items-center gap-2 overflow-hidden">
+                    <div className="h-3 w-40 bg-zinc-800 rounded" />
+                    <div className="w-4 h-4 bg-zinc-800 rounded" />
+                  </div>
+                </div>
+
+                <div className="self-stretch rounded-[37px] inline-flex justify-between items-center overflow-hidden">
+                  <div className="flex justify-start items-center gap-2.5">
+                    <div className="w-7 h-7 bg-zinc-800 rounded-full" />
+                    <div className="h-3 w-24 bg-zinc-800 rounded" />
+                  </div>
+                  <div className="flex justify-end items-center gap-3">
+                    <div className="h-6 w-16 bg-zinc-800 rounded-full" />
+                  </div>
+                </div>
+
+                <div className="self-stretch flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-zinc-800 rounded-full" />
+                    <div className="h-3 w-24 bg-zinc-800 rounded" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-zinc-800 rounded-full" />
+                    <div className="h-3 w-24 bg-zinc-800 rounded" />
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+          {!loading && (currentGames.length === 0 ? (
             <div className="self-stretch flex-1 flex items-center justify-center">
               <p className="text-neutral-400 text-sm">No games found</p>
             </div>
@@ -384,8 +417,9 @@ export function HistoryScreen() {
                   </div>
                 </div>
               );
-            })
-          )}
+             })
+          ))}
+        
         </div>
 
         {/* Pagination */}
