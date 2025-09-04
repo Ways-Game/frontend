@@ -172,6 +172,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     const currentNoteIndexRef = useRef(0);
     const isPlayingRef = useRef(false);
     const lastCollisionAtRef = useRef<number>(0);
+    // ADD: near lastCollisionAtRef (with other refs)
+    const isFastForwardRef = useRef(false);
 
     const { soundEnabledRef, audioContextRef, getAudioContext } =
       useGameSound(soundEnabled);
@@ -356,6 +358,8 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     // Play single melody note using WebAudio (updated to be robust after enable/disable)
     const playMelodyNote = useCallback(() => {
       if (!soundEnabledRef.current) return;
+      // ADD: at top of playMelodyNote
+      if (isFastForwardRef.current) return; // don't play audio while fast-forwarding
       // If a note is already playing, don't overlap (simple guard)
       if (isPlayingRef.current) return;
 
@@ -472,6 +476,38 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       // next frame
       mainLoopRef.current = requestAnimationFrame(mainLoop);
+    };
+
+    // ADD: place this after mainLoop or after updatePhysics
+    const fastForwardSimulation = (seconds: number): boolean => {
+      if (!randomRef.current) return false;
+
+      // enter fast-forward mode
+      isFastForwardRef.current = true;
+
+      // compute deterministic number of fixed steps
+      const steps = Math.max(0, Math.floor(seconds * FIXED_FPS));
+      let winnerFound = false;
+
+      // run physics steps in tight loop (no render, but emitCallbacks = true)
+      const maxSteps = 1000000; // safety guard (shouldn't be hit)
+      const actualSteps = Math.min(steps, maxSteps);
+
+      for (let i = 0; i < actualSteps; i++) {
+        const won = updatePhysics(true, 1.0);
+        // advance logical physics clock as in mainLoop
+        physicsTimeRef.current += FIXED_DELTA;
+        // If a winner was found inside updatePhysics, it will have called onBallWin / setGameState
+        if (won) {
+          winnerFound = true;
+          break;
+        }
+      }
+
+      // exit fast-forward mode
+      isFastForwardRef.current = false;
+
+      return winnerFound;
     };
 
     const updatePhysics = (emitCallbacks: boolean = true, timeMultiplier: number = 1.0): boolean => {
@@ -1266,7 +1302,42 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
       // --- NEW ACCELERATION SYSTEM ---
 
-        // start unified rAF loop
+      // REPLACE/INSERT: in startGame, just after
+      //   setGameState("playing");
+      //   onGameStart?.();
+      // and BEFORE starting the rAF loop.
+      // Insert the following block:
+
+      if (speedUpTime && speedUpTime > 0) {
+        console.log('[FAST FORWARD] starting deterministic fast-forward for', speedUpTime, 's');
+        // Run deterministic fast-forward (this will call updatePhysics with callbacks enabled).
+        const winnerDuringFF = fastForwardSimulation(speedUpTime);
+
+        // Render final state once so visuals reflect results of fast-forward.
+        try { render(); } catch (e) { console.warn('render after fast-forward failed', e); }
+
+        if (winnerDuringFF || (actualWinnersRef.current && actualWinnersRef.current.length > 0) || gameState === 'finished') {
+          // If a winner appeared during fast-forward, we do NOT start the normal rAF loop.
+          // Finalization (onBallWin / setGameState) already ran inside updatePhysics.
+          console.log('[FAST FORWARD] winner detected during fast-forward, skipping normal loop');
+          // ensure main loop is not running
+          if (mainLoopRef.current) {
+            try { cancelAnimationFrame(mainLoopRef.current); } catch (e) {}
+            mainLoopRef.current = null;
+          }
+          // leave startGame (component has been put into finished state)
+        } else {
+          // No winner — continue as normal: start the unified rAF loop
+          lastTimeRef.current = performance.now();
+          accumulatorRef.current = 0;
+          if (mainLoopRef.current) {
+            try { cancelAnimationFrame(mainLoopRef.current); } catch (e) {}
+            mainLoopRef.current = null;
+          }
+          mainLoopRef.current = requestAnimationFrame(mainLoop);
+        }
+      } else {
+        // No fast-forward requested — start the unified rAF loop as before
         lastTimeRef.current = performance.now();
         accumulatorRef.current = 0;
         if (mainLoopRef.current) {
@@ -1274,6 +1345,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           mainLoopRef.current = null;
         }
         mainLoopRef.current = requestAnimationFrame(mainLoop);
+      }
 
       } finally {
         startingRef.current = false;
