@@ -33,6 +33,11 @@ class ApiService {
     return this.request<Gift[]>('/gifts/all');
   }
 
+  // Fetch purchased gifts for a user
+  async getUserGifts(user_id: number): Promise<Gift[]> {
+    return this.request<Gift[]>(`/gifts/all/${user_id}`);
+  }
+
   async buyGift(payload: GiftBuyRequest): Promise<GiftBuyResponse> {
     return this.request<GiftBuyResponse>('/gifts/buy', {
       method: 'POST',
