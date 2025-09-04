@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Search, ArrowUpDown, X, Gift as GiftIcon } from "lucide-react";
 import { useTelegram } from "@/hooks/useTelegram";
 import { api } from "@/services/api";
@@ -19,18 +19,14 @@ export function MarketScreen() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   // Gifts data
-  const [giftsBase, setGiftsBase] = useState<Gift[]>([]); // cached data from server
-  const [giftsView, setGiftsView] = useState<Gift[]>([]); // currently displayed list
-  const [loading, setLoading] = useState<boolean>(false);
+  const [giftsBase, setGiftsBase] = useState<Gift[]>([]); // initial list from API, the source of truth
+  const [loading, setLoading] = useState<boolean>(false); // show only for the first load
   const [buyingId, setBuyingId] = useState<number | null>(null);
 
   // Purchased gifts modal
   const [showPurchased, setShowPurchased] = useState(false);
   const [purchasedGifts, setPurchasedGifts] = useState<Gift[]>([]);
   const [purchasedLoading, setPurchasedLoading] = useState(false);
-
-  // Debounce for search/sort reloading to avoid too many requests while typing
-  const debounceTimer = useRef<number | null>(null);
 
   // Load user profile
   useEffect(() => {
@@ -47,61 +43,47 @@ export function MarketScreen() {
     fetchUserProfile();
   }, [user?.id]);
 
-  // Utility: filter and sort
-  const filterAndSort = useCallback(
-    (base: Gift[]): Gift[] => {
-      const query = (searchQuery || "").toLowerCase().trim();
-      const filtered = base.filter((g) => {
-        if (!query) return true;
-        const title = (g.title || "").toLowerCase();
-        const priceStr = String(g.price || "").toLowerCase();
-        return title.includes(query) || priceStr.includes(query);
-      });
-
-      const sorted = [...filtered];
-      if (sortOrder === "Low to High") sorted.sort((a, b) => a.price - b.price);
-      if (sortOrder === "High to Low") sorted.sort((a, b) => b.price - a.price);
-      return sorted;
-    },
-    [searchQuery, sortOrder]
-  );
-
-  // Fetch gifts from server and rebuild view list (clear first to avoid duplicates)
-  const fetchGiftsFresh = useCallback(async () => {
+  // Fetch gifts from server and update base list
+  const fetchGiftsFresh = useCallback(async (opts?: { showSpinner?: boolean }) => {
+    const showSpinner = opts?.showSpinner ?? false;
     try {
-      setGiftsView([]); // clear visible list immediately as requested
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       const data = await api.getGifts();
-      setGiftsBase(data); // cache
-      const view = filterAndSort(data);
-      setGiftsView(view);
+      setGiftsBase((prev) => {
+        // Keep same reference for items with same id to reduce re-renders
+        const byIdPrev = new Map(prev.map((g) => [g.available_gift_id, g]));
+        return data.map((g) => byIdPrev.get(g.available_gift_id) ?? g);
+      });
     } catch (e) {
       console.error("Failed to load gifts", e);
       setGiftsBase([]);
-      setGiftsView([]);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
-  }, [filterAndSort]);
+  }, []);
 
-  // Initial load
+  // Initial load (show spinner once)
   useEffect(() => {
-    fetchGiftsFresh();
+    fetchGiftsFresh({ showSpinner: true });
   }, [fetchGiftsFresh]);
 
-  // Reload when search/sort changes: clear list first, then refetch from server
-  useEffect(() => {
-    if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
-    // Clear immediately to avoid old items flashing/accumulating
-    setGiftsView([]);
-    setLoading(true);
-    debounceTimer.current = window.setTimeout(() => {
-      fetchGiftsFresh();
-    }, 300);
-    return () => {
-      if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
-    };
-  }, [searchQuery, sortOrder, fetchGiftsFresh]);
+  // Derived visible list: filter and sort locally from base array
+  const visibleGifts = useMemo(() => {
+    const query = (searchQuery || "").toLowerCase().trim();
+
+    const filtered = (giftsBase || []).filter((g) => {
+      if (!query) return true;
+      const title = (g.title || "").toLowerCase();
+      const priceStr = String(g.price || "").toLowerCase();
+      return title.includes(query) || priceStr.includes(query);
+    });
+
+    const sorted = [...filtered];
+    if (sortOrder === "Low to High") sorted.sort((a, b) => a.price - b.price);
+    if (sortOrder === "High to Low") sorted.sort((a, b) => b.price - a.price);
+
+    return sorted;
+  }, [giftsBase, searchQuery, sortOrder]);
 
   // Open purchased gifts modal
   const openPurchased = async () => {
@@ -141,8 +123,8 @@ export function MarketScreen() {
       });
       showAlert(`Order created! Wait for your gift a little while`);
       await loadUserProfile();
-      // Refresh gifts list after purchase
-      await fetchGiftsFresh();
+      // Refresh base array after purchase silently (no spinner, no flicker)
+      await fetchGiftsFresh({ showSpinner: false });
     } catch (e: any) {
       console.error("Buy gift error", e);
       showAlert(e?.message || "Failed to buy gift");
@@ -150,8 +132,6 @@ export function MarketScreen() {
       setBuyingId(null);
     }
   };
-
-  const sortTitle = useMemo(() => sortOrder, [sortOrder]);
 
   return (
     <div className="min-h-screen bg-black flex flex-col gap-2.5 overflow-hidden pb-20">
@@ -178,10 +158,10 @@ export function MarketScreen() {
                   prev === "Low to High" ? "High to Low" : "Low to High"
                 )
               }
-              title={`Sort: ${sortTitle}`}
+              title={`Sort: ${sortOrder}`}
             >
               <ArrowUpDown className="w-4 h-4 text-neutral-500 rotate-90" />
-              <span className="text-xs text-neutral-400">{sortTitle}</span>
+              <span className="text-xs text-neutral-400">{sortOrder}</span>
             </button>
           </div>
           <div className="flex items-center gap-2">
@@ -239,11 +219,11 @@ export function MarketScreen() {
 
         {/* Products Grid */}
         <div className="self-stretch flex-1 relative inline-flex justify-center items-start gap-2.5 flex-wrap content-start overflow-y-auto">
-          {loading && (
+          {loading && giftsBase.length === 0 && (
             <div className="w-full text-center text-neutral-400 py-4">Loading...</div>
           )}
-          {!loading &&
-            giftsView.map((gift) => (
+          {(!loading || giftsBase.length > 0) &&
+            visibleGifts.map((gift) => (
               <div
                 key={gift.available_gift_id}
                 style={{ width: "calc(100% / 3 - 8px)" }}
@@ -278,7 +258,7 @@ export function MarketScreen() {
                 </button>
               </div>
             ))}
-          {!loading && giftsView.length === 0 && (
+          {!loading && visibleGifts.length === 0 && (
             <div className="w-full text-center text-neutral-400 py-4">No gifts found</div>
           )}
         </div>
