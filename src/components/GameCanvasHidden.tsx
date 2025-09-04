@@ -34,8 +34,6 @@ export const GameCanvasHidden = forwardRef<GameCanvasRef, GameCanvasHiddenProps>
           soundEnabled={false}
           musicContent={""}
           deterministicMode={true}
-          // Cap aligned with default 100s at 60 FPS ⇒ 6000 frames
-          fastForwardCapFrames={16000}
           onBallWin={(ballId, playerId) => onPredictedWinner(ballId, playerId)}
         />
       </div>
