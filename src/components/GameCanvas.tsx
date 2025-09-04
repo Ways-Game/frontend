@@ -167,8 +167,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       rngStepCountRef.current++;
       return v;
     };
-    const gameLoopRef = useRef<number | null>(null);
-  const mainLoopRef = useRef<number | null>(null);
+    // Unified main loop ref (use this as single scheduler)
+    const mainLoopRef = useRef<number | null>(null);
+    
+    // Safety flag: предотвращает re-entrancy при старте игры
+    const startingRef = useRef<boolean>(false);
     // Acceleration state
     const accelerationRef = useAccelerationState();
 
@@ -197,6 +200,41 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
 
     // Anti-stuck system
     const ballStatesRef = useRef<Map<string, BallState>>(new Map());
+
+    // Полная атомарная очистка игрового состояния (не уничтожает PIXI app)
+    const resetGameState = () => {
+      // cancel any running main loop
+      if (mainLoopRef.current) {
+        try { cancelAnimationFrame(mainLoopRef.current); } catch(e) {}
+        mainLoopRef.current = null;
+      }
+
+      // remove all balls visuals
+      if (appRef.current) {
+        ballsRef.current.forEach((ball) => {
+          try { appRef.current!.stage.removeChild(ball.graphics); } catch (e) {}
+          if (ball.indicator) {
+            try { appRef.current!.stage.removeChild(ball.indicator); } catch (e) {}
+          }
+        });
+      }
+
+      // clear arrays and maps
+      ballsRef.current = [];
+      obstaclesRef.current = [];
+      spinnersRef.current = [];
+      ballStatesRef.current = new Map();
+
+      // reset timing
+      lastTimeRef.current = 0;
+      accumulatorRef.current = 0;
+      physicsTimeRef.current = 0;
+
+      // reset winners
+      actualWinnersRef.current = [];
+      setActualWinners([]);
+      setGameState("waiting");
+    };
 
     // RTTTL parser (fixed)
     const parseRTTTL = (rtttl: string) => {
@@ -428,60 +466,66 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     }, [audioContextRef, soundEnabledRef]);
 
-    // New unified main loop with accumulator (replaces dual setInterval + rAF)
     const mainLoop = (timestamp: number) => {
-      if (!lastTimeRef.current) {
-        lastTimeRef.current = timestamp;
-      }
-      // delta in milliseconds (wall-clock)
+      if (!lastTimeRef.current) lastTimeRef.current = timestamp;
       let delta = timestamp - lastTimeRef.current;
       lastTimeRef.current = timestamp;
 
-      // limit delta (in case tab was sleeping)
+      // clamp huge deltas (tab wake)
       if (delta > 250) delta = 250;
 
-      // Determine time multiplier (acceleration)
-      const multiplier = accelerationRef.current.isAccelerating
-        ? accelerationRef.current.timeMultiplier
-        : 1.0;
+      const multiplier = accelerationRef.current.isAccelerating ? accelerationRef.current.timeMultiplier : 1.0;
 
-      // Scale elapsed time for acceleration - ensures same physics step order
+      // scale elapsed time for simulation steps
       accumulatorRef.current += delta * multiplier;
 
-      // Update remaining acceleration time by real time (wall-clock)
-      // This makes acceleration duration predictable for user
+      // decrement acceleration remaining time using wall clock (user-oriented)
       if (accelerationRef.current.isAccelerating && accelerationRef.current.remainingTime > 0) {
         accelerationRef.current.remainingTime -= delta;
         if (accelerationRef.current.remainingTime <= 0) {
           accelerationRef.current.isAccelerating = false;
           accelerationRef.current.timeMultiplier = accelerationRef.current.originalTimeMultiplier || 1.0;
           accelerationRef.current.remainingTime = 0;
-          console.log('[ACCELERATION] Completed (by wall-clock)');
+          console.log('[ACCELERATION] Completed (wall-clock).');
+
+          // After finishing acceleration we must flush any suppressed callbacks that happened
+          // during acceleration. If there is a winner already determined (actualWinnersRef),
+          // propagate those callbacks now (so accelerated run matches normal run).
+          if (actualWinnersRef.current.length > 0) {
+            // we call setActualWinners + onBallWin for the first winner if not yet emitted
+            setActualWinners([...actualWinnersRef.current]);
+            // first winner only: find ball and call onBallWin once
+            const winnerId = actualWinnersRef.current[0];
+            const winnerBall = ballsRef.current.find(b => b.id === winnerId);
+            if (winnerBall) {
+              try {
+                onBallWin?.(winnerBall.id, winnerBall.playerId);
+              } catch (e) { console.warn('onBallWin error after accel flush', e); }
+            }
+            setGameState("finished");
+          }
         }
       }
 
-      // Execute fixed steps while accumulator has enough time
-      // IMPORTANT: emitCallbacks = !isAccelerating => suppress external effects during acceleration
-      let stepsRun = 0;
-      const maxStepsPerFrame = 100; // safety cap to avoid infinite loops
-      while (accumulatorRef.current >= FIXED_DELTA && stepsRun < maxStepsPerFrame) {
+      let steps = 0;
+      const maxStepsPerFrame = 200; // safety cap
+      while (accumulatorRef.current >= FIXED_DELTA && steps < maxStepsPerFrame) {
         const emitCallbacks = !accelerationRef.current.isAccelerating;
         const won = updatePhysics(emitCallbacks, 1.0);
         physicsTimeRef.current += FIXED_DELTA;
         accumulatorRef.current -= FIXED_DELTA;
-        stepsRun++;
-
+        steps++;
         if (won) {
-          // If winner found during acceleration, updatePhysics marked finished
-          // but external callbacks were suppressed - break to avoid extra steps
+          // if a winner found and we suppressed callbacks (acceleration), updatePhysics already
+          // marked ball.finished and actualWinnersRef. We'll flush on accel end (see above).
           break;
         }
       }
 
-      // Render (separated) - render uses only visual presentation fields
+      // Render visual state
       render();
 
-      // Schedule next frame
+      // next frame
       mainLoopRef.current = requestAnimationFrame(mainLoop);
     };
 
@@ -1024,26 +1068,26 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    // Fixed acceleration system with proper wall-clock timing
     const startAcceleration = (seconds: number, multiplier: number = 10.0, seed?: string) => {
       if (!seconds || seconds <= 0) return;
 
-      // If already applied for same seed, skip
+      // If already applied for same seed — skip
       if (accelerationRef.current.hasBeenApplied && seed && accelerationRef.current.appliedForSeed === seed) {
-        console.log(`[ACCELERATION] Skipped - already applied for seed ${seed}`);
+        console.log(`[ACCELERATION] Already applied for seed ${seed}, skipping.`);
         return;
       }
+
+      // mark immediately to avoid concurrent calls race
+      accelerationRef.current.hasBeenApplied = true;
+      accelerationRef.current.appliedForSeed = seed || '';
 
       accelerationRef.current.isAccelerating = true;
       accelerationRef.current.timeMultiplier = multiplier;
       accelerationRef.current.originalTimeMultiplier = 1.0;
-      accelerationRef.current.remainingTime = seconds * 1000; // seconds -> ms (wall-clock)
-      accelerationRef.current.hasBeenApplied = true;
-      accelerationRef.current.appliedForSeed = seed || '';
-      console.log(`[ACCELERATION] Started: ${seconds}s at ${multiplier}x speed for seed ${seed}`);
+      accelerationRef.current.remainingTime = seconds * 1000; // ms
+      console.log(`[ACCELERATION] Started: ${seconds}s at ${multiplier}x for seed ${seed}`);
     };
 
-    // Start game (supports optional predicted winner and desired winner user id)
     const startGame = async (gameData: {
       seed: string;
       mapId: number[] | number;
@@ -1051,46 +1095,61 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       predictedWinningBallId?: string;
       desiredWinnerUserId?: string | number;
     }) => {
-      console.log("Starting game with data:", gameData);
-      console.log('gamecanvas speedtime1:', speedUpTime)
-
-      await waitForApp();
-      console.log("app ready, continue...", appRef.current);
-
-      if (!appRef.current) return;
-      console.log("Starting game with data2:", gameData);
-
-      seedRef.current = gameData.seed;
-      randomRef.current = new DeterministicRandom(gameData.seed);
-      rngStepCountRef.current = 0;
-      physicsTimeRef.current = 0;
-      lastTimeRef.current = 0;
-      accumulatorRef.current = 0;
-
-      setActualWinners([]);
-      actualWinnersRef.current = [];
-      // Reset per-ball anti-stuck state to avoid cross-run contamination
-      ballStatesRef.current = new Map();
-      // Reset last collision timestamp for safety
-      lastCollisionAtRef.current = 0;
-      // Reset acceleration state only if this is a different seed
-      if (accelerationRef.current.appliedForSeed !== gameData.seed) {
-        accelerationRef.current.isAccelerating = false;
-        accelerationRef.current.timeMultiplier = 1.0;
-        accelerationRef.current.remainingTime = 0;
-        accelerationRef.current.hasBeenApplied = false;
-        accelerationRef.current.appliedForSeed = '';
+      // prevent concurrent starts
+      if (startingRef.current) {
+        console.log('[startGame] already starting, ignoring reentrant call');
+        return;
       }
-      ballsRef.current.forEach((ball) => {
-        appRef.current!.stage.removeChild(ball.graphics);
-        if (ball.indicator) {
-          appRef.current!.stage.removeChild(ball.indicator);
-        }
-      });
-
-      // REMOVED: No longer override global Math.random - use only deterministic RNG
+      startingRef.current = true;
 
       try {
+        console.log("Starting game with data:", gameData);
+
+        // Ensure PIXI app ready
+        await waitForApp();
+        if (!appRef.current) return;
+
+        // If a play is already ongoing, fully reset it first to avoid double loops / visual jumps
+        if (mainLoopRef.current) {
+          console.log('[startGame] existing run detected - resetting before new start');
+          resetGameState();
+        }
+
+        // init deterministic RNG and timing
+        seedRef.current = gameData.seed;
+        randomRef.current = new DeterministicRandom(gameData.seed);
+        rngStepCountRef.current = 0;
+        physicsTimeRef.current = 0;
+        lastTimeRef.current = 0;
+        accumulatorRef.current = 0;
+
+        // reset winners & states
+        setActualWinners([]);
+        actualWinnersRef.current = [];
+        ballStatesRef.current = new Map();
+        lastCollisionAtRef.current = 0;
+
+        // Do not reset acceleration if it was applied for the same seed (we want idempotency),
+        // but if appliedForSeed !== gameData.seed then reset flags so new seed can accept accel.
+        if (accelerationRef.current.appliedForSeed !== gameData.seed) {
+          accelerationRef.current.isAccelerating = false;
+          accelerationRef.current.timeMultiplier = 1.0;
+          accelerationRef.current.remainingTime = 0;
+          accelerationRef.current.hasBeenApplied = false;
+          accelerationRef.current.appliedForSeed = '';
+        }
+
+        // remove previous visuals
+        if (appRef.current) {
+          ballsRef.current.forEach((ball) => {
+            try { appRef.current!.stage.removeChild(ball.graphics); } catch (e) {}
+            if (ball.indicator) {
+              try { appRef.current!.stage.removeChild(ball.indicator); } catch (e) {}
+            }
+          });
+        }
+
+        // Build map using deterministic RNG passed into generateMapFromId
         const mapData = generateMapFromId(appRef.current, gameData.mapId, {
           seed: gameData.seed,
           worldWidth: WORLD_WIDTH,
@@ -1118,18 +1177,15 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
           screenHeight: WORLD_HEIGHT,
         };
 
+        // prepare renderer scale
         if (appRef.current) {
           appRef.current.stage.x = 0;
           appRef.current.stage.y = 0;
-
           const deviceWidth = window.innerWidth;
           const deviceHeight = window.innerHeight - 80;
           appRef.current.renderer.resize(deviceWidth, deviceHeight);
           appRef.current.stage.scale.set(deviceWidth / WORLD_WIDTH);
         }
-      } finally {
-        // REMOVED: No Math.random restoration needed
-      }
 
       // Build participant list and ownership order to allow swapping owners deterministically
       const participantList = (gameData.participants || []).map((rawParticipant: any) => {
@@ -1294,20 +1350,23 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       // --- NEW ACCELERATION SYSTEM ---
-      // Apply speedUpTime using deterministic time scaling (only once per seed)
-      if (speedUpTime && speedUpTime > 0) {
-        console.log(`[ACCELERATION] Checking acceleration for seed ${gameData.seed}, speedUpTime: ${speedUpTime}`);
-        startAcceleration(speedUpTime, 10.0, gameData.seed); // 10x speed multiplier
-      }
+        // apply speedUpTime only if not applied already for this seed
+        if (speedUpTime && speedUpTime > 0 && !(accelerationRef.current.hasBeenApplied && accelerationRef.current.appliedForSeed === gameData.seed)) {
+          startAcceleration(speedUpTime, 10.0, gameData.seed);
+        }
 
-      // Start unified mainLoop on rAF
-      // Initialize timing
-      lastTimeRef.current = performance.now();
-      accumulatorRef.current = 0;
-      if (mainLoopRef.current) {
-        cancelAnimationFrame(mainLoopRef.current);
+        // start unified rAF loop
+        lastTimeRef.current = performance.now();
+        accumulatorRef.current = 0;
+        if (mainLoopRef.current) {
+          try { cancelAnimationFrame(mainLoopRef.current); } catch (e) {}
+          mainLoopRef.current = null;
+        }
+        mainLoopRef.current = requestAnimationFrame(mainLoop);
+
+      } finally {
+        startingRef.current = false;
       }
-      mainLoopRef.current = requestAnimationFrame(mainLoop);
     };
 
     const resetGame = () => {
@@ -1560,11 +1619,156 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       initGame();
 
       return () => {
-        if ((gameLoopRef as any).physicsIntervalId) {
-          clearInterval((gameLoopRef as any).physicsIntervalId);
+        if (mainLoopRef.current) {
+          cancelAnimationFrame(mainLoopRef.current);
+          mainLoopRef.current = null;
         }
-        if (gameLoopRef.current) {
-          cancelAnimationFrame(gameLoopRef.current);
+        if (appRef.current) {
+          appRef.current.destroy({ removeView: true });
+          appRef.current = null;
+        }
+      };
+    }, []);
+
+    // Keep scrollY prop in sync (restored old behavior: unscaled Y)
+    useEffect(() => {
+      scrollYRef.current = scrollY;
+      if (appRef.current && cameraModeRef.current === "swipe") {
+        appRef.current.stage.y = -scrollY;
+      }
+    }, [scrollY]);
+
+    // React to soundEnabled prop changes robustly:
+    useEffect(() => {
+      // update ref
+      soundEnabledRef.current = !!soundEnabled;
+
+      if (!soundEnabled) {
+        // Stop any playing oscillator and mark not playing
+        try {
+          if (oscillatorRef.current) {
+            try {
+              oscillatorRef.current.onended = null;
+            } catch (e) {}
+            try {
+              oscillatorRef.current.stop();
+            } catch (e) {}
+            oscillatorRef.current = null;
+          }
+        } catch (e) {}
+
+        try {
+          if (currentGainRef.current) {
+            try {
+              currentGainRef.current.disconnect();
+            } catch (e) {}
+            currentGainRef.current = null;
+          }
+        } catch (e) {}
+        try {
+          if (currentFilterRef.current) {
+            try {
+              currentFilterRef.current.disconnect();
+            } catch (e) {}
+            currentFilterRef.current = null;
+          }
+        } catch (e) {}
+
+        // close audio context to free resources (user requested mute)
+        try {
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+          }
+        } catch (e) {}
+
+        // allow new notes after re-enable
+        isPlayingRef.current = false;
+      } else {
+        // on enabling, ensure audio context exists and try to resume it
+        try {
+          if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext ||
+              (window as any).webkitAudioContext)();
+          }
+          const ctx = audioContextRef.current;
+          if (ctx.state === "suspended") {
+            ctx.resume().catch((err) => console.warn("resume failed:", err));
+          }
+        } catch (e) {
+          console.warn("Failed to (re)create AudioContext:", e);
+        }
+      }
+    }, [soundEnabled]);
+
+    // Resize handler updated to use old centering behavior for swipe mode
+    useEffect(() => {
+      const handleResize = () => {
+        if (appRef.current) {
+          appRef.current.renderer.resize(
+            window.innerWidth,
+            window.innerHeight - 80
+          );
+
+          if (cameraModeRef.current === "swipe") {
+            const deviceWidth = window.innerWidth;
+            const mapWidth = mapDataRef.current?.mapWidth || WORLD_WIDTH;
+
+            const scale = deviceWidth / WORLD_WIDTH;
+            appRef.current.stage.scale.set(scale);
+
+            // Центрирование по X (учитываем масштаб)
+            const targetX = (deviceWidth - mapWidth * scale) / 2;
+            appRef.current.stage.x = targetX;
+            appRef.current.stage.y = -scrollYRef.current;
+          }
+        }
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }, []);
+
+    // PIXI initialization 
+    useEffect(() => {
+      if (!canvasRef.current || appRef.current) return;
+
+      const initGame = async () => {
+        if (!canvasRef.current) return;
+
+        const deviceWidth = window.innerWidth;
+        const deviceHeight = window.innerHeight;
+
+        const pixiApp = new PIXI.Application();
+        await pixiApp.init({
+          width: deviceWidth,
+          height: deviceHeight - 80,
+          resolution: window.devicePixelRatio || 1,
+          autoDensity: true,
+          backgroundColor: 0x1a1a2e,
+          antialias: false,
+        });
+
+        PIXI.Ticker.shared.maxFPS = FIXED_FPS;
+        PIXI.Ticker.shared.minFPS = FIXED_FPS;
+
+        if (canvasRef.current && pixiApp.canvas) {
+          canvasRef.current.appendChild(pixiApp.canvas);
+        } else {
+          return;
+        }
+
+        appRef.current = pixiApp;
+        cameraModeRef.current = cameraMode;
+        scrollYRef.current = scrollY;
+      };
+
+      initGame();
+
+      return () => {
+        if (mainLoopRef.current) {
+          cancelAnimationFrame(mainLoopRef.current);
+          mainLoopRef.current = null;
         }
         if (appRef.current) {
           appRef.current.destroy({ removeView: true });
