@@ -79,7 +79,20 @@ export function TabBar() {
     }
 
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+
+    // Observe container size changes (e.g., when scrollbar appears)
+    let ro: ResizeObserver | null = null
+    if (containerRef.current && 'ResizeObserver' in window) {
+      ro = new ResizeObserver(() => {
+        updateHighlightPosition()
+      })
+      ro.observe(containerRef.current)
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (ro && containerRef.current) ro.disconnect()
+    }
   }, [updateHighlightPosition])
   
   const handleTabChange = (tab: string) => {

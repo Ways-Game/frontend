@@ -292,7 +292,10 @@ export function HistoryScreen() {
         </div>
 
         {/* Games List */}
-        <div className="self-stretch flex-1 flex flex-col justify-start items-start gap-2.5 overflow-y-auto">
+        <div
+          className="self-stretch flex-1 flex flex-col justify-start items-start gap-2.5 overflow-y-auto"
+          style={{ scrollbarGutter: 'stable both-edges' }}
+        >
           {currentGames.length === 0 ? (
             <div className="self-stretch flex-1 flex items-center justify-center">
               <p className="text-neutral-400 text-sm">No games found</p>

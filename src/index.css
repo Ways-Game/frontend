@@ -253,6 +253,7 @@ html, body {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  scrollbar-gutter: stable both-edges;
 }
 
 /* Specifically for game screen to prevent any swipe interference */
