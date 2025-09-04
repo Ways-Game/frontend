@@ -1277,6 +1277,19 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         }
         return;
       }
+      // speed up initial phase with speedUpTime
+      if (speedUpTime && !deterministicMode) {
+
+         const frames = Math.max(0, Math.round(speedUpTime * FIXED_FPS));
+          const MAX_FRAMES = 5000;
+          const framesToSim = Math.min(frames, MAX_FRAMES);
+          for (let f = 0; f < framesToSim; f++) {
+          const won = updatePhysics();
+          physicsTimeRef.current += FIXED_DELTA;
+          if (won || actualWinnersRef.current.length > 0) break;
+
+        }
+      }
 
       const physicsInterval = setInterval(gameLoop, FIXED_DELTA);
       (gameLoopRef as any).physicsIntervalId = physicsInterval;
