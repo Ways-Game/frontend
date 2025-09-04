@@ -10,7 +10,7 @@ import { GameCanvasRef } from "@/types";
 export interface GameCanvasHiddenProps {
   className?: string;
   countdownFastForwardSeconds?: number; // default 100
-  data: { seed: string; mapId: number | number[]; participants: any[] };
+  data: { seed: string; mapId: number[]; participants: any[] };
   onPredictedWinner: (ballId: string, playerId: string) => void;
 }
 

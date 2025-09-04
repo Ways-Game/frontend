@@ -34,7 +34,7 @@ export interface GameDetailResponse {
   game_id: number;
   seed: string;
   start_time: string;
-  map_id: number;
+  map_id: number[]; // always array of numbers
   total_balls: number;
   total_price: number;
   status: GameState;
@@ -56,7 +56,7 @@ export interface Player {
 export interface GameData {
   game_id: number
   seed: string
-  mapId: number
+  mapId: number[] // always array of numbers
   participants: ParticipantData[]
   prize: number
   total_balls: number

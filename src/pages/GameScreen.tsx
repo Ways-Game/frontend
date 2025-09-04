@@ -35,7 +35,7 @@ export function GameScreen() {
   const [isDragging, setIsDragging] = useState(false)
   const dragStartY = useRef(0)
   const dragStartScrollY = useRef(0)
-  const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: 0, participants: [], prize: 0, total_balls: 0, music_content: "", music_title: "", winner_id: 0 })
+  const [gameData, setGameData] = useState({ game_id: 0, seed: "", mapId: [] as number[], participants: [], prize: 0, total_balls: 0, music_content: "", music_title: "", winner_id: 0 })
   const [winnerId, setWinnerId] = useState<string | null>(null)
   const [predictedBallId, setPredictedBallId] = useState<string | null>(null)
   const [predictedWinnerUserId, setPredictedWinnerUserId] = useState<string | null>(null)
@@ -150,7 +150,7 @@ const autoStartPendingRef = useRef<any | null>(null);
   }
 
 
-  const startGame = (dataFromState?: { seed: string; mapId: number[] | number; participants: any[]; winner_id: number }) => {
+  const startGame = (dataFromState?: { seed: string; mapId: number[]; participants: any[]; winner_id: number }) => {
     const countdownDuration = 4;
     
     const currentRoundGameData = dataFromState || gameData;
@@ -246,7 +246,7 @@ const autoStartPendingRef = useRef<any | null>(null);
       const nextGameData = {
         game_id: payload.game_id ?? payload.gameId ?? 0,
         seed: payload.seed || state.seed || "",
-        mapId: payload.map_id ?? payload.mapId ?? state.mapId ?? 0,
+        mapId: Array.isArray(payload.map_id) ? payload.map_id : (payload.map_id != null ? [payload.map_id] : (Array.isArray(payload.mapId) ? payload.mapId : (state.mapId != null ? (Array.isArray(state.mapId) ? state.mapId : [state.mapId]) : []))),
         participants: payload.participants || state.participants || [],
         prize: payload.total_price ?? payload.total_price ?? payload.prize ?? state.prize ?? 0,
         total_balls: payload.total_balls ?? payload.totalBalls ?? state.total_balls ?? 0,

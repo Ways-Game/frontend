@@ -1025,7 +1025,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     // Start game (supports optional predicted winner and desired winner user id)
     const startGame = async (gameData: {
       seed: string;
-      mapId: number[] | number;
+      mapId: number[];
       participants: any[];
       predictedWinningBallId?: string;
       desiredWinnerUserId?: string | number;

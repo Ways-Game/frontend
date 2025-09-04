@@ -71,7 +71,7 @@ export function PvPScreen() {
       state: {
         game_id: game.game_id,
         seed: game.seed,
-        mapId: game.map_id,
+        mapId: Array.isArray(game.map_id) ? game.map_id : (game.map_id != null ? [game.map_id as any] : []),
         participants: game.participants,
         prize: game.total_price,
         total_balls: game.total_balls,
@@ -150,7 +150,7 @@ export function PvPScreen() {
         navigate('/game', { state: {
           game_id: fresh.game_id,
           seed: fresh.seed,
-          mapId: fresh.map_id,
+          mapId: Array.isArray(fresh.map_id) ? fresh.map_id : (fresh.map_id != null ? [fresh.map_id as any] : []),
           participants: fresh.participants,
           prize: fresh.total_price,
           total_balls: fresh.total_balls,

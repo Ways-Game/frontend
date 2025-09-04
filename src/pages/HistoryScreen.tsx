@@ -28,7 +28,7 @@ export function HistoryScreen() {
       state: {
         game_id: game.game_id,
         seed: game.seed,
-        mapId: game.map_id,
+        mapId: Array.isArray(game.map_id) ? game.map_id : (game.map_id != null ? [game.map_id as any] : []),
         participants: game.participants,
         prize: game.total_price,
         total_balls: game.total_balls,
@@ -69,56 +69,29 @@ export function HistoryScreen() {
         setGames(history as any);
         setUserProfile(profile);
 
-        // For "luckiest" the API returns a different shape (items with nested game and winner)
-        if (activeFilter === "luckiest") {
-          const luckyItems = (history as any[]) || [];
-          const normalized = luckyItems.map((item) => {
-            const g = item?.game || {};
-            const music = g?.music || {};
-            const winnerProfile = g?.winner || item?.user || undefined;
-            const mapIds = Array.isArray(g?.map_id) ? g.map_id : (g?.map_id != null ? [g.map_id] : []);
+        // Use API response as-is for all filters; no special normalization for "luckiest"
+        const normalizedGames = history as GameDetailResponse[];
 
-            const normalizedGame: any = {
-              game_id: g?.id ?? item?.game_id ?? 0,
-              seed: g?.seed || "",
-              start_time: g?.start_time || "",
-              map_id: mapIds, // keep as array
-              total_balls: g?.total_balls ?? 0,
-              total_price: g?.total_price ?? 0,
-              status: g?.status,
-              participants: [],
-              start_wait_play: g?.start_wait_play,
-              music_title: music?.music_title,
-              music_content: music?.music_content,
-              winner_id: g?.winner?.id, // take id from winner object
-              winnerProfile,
-              lucky_balls_count: item?.balls_count,
-            };
-            return normalizedGame;
-          });
-          setEnhancedGames(normalized);
-        } else {
-          // Default shape – fetch winner profiles separately
-          const gamesWithProfiles = await Promise.all(
-            (history as GameDetailResponse[]).map(async (game) => {
-              const participants = game.participants || [];
-              if (game.winner_id) {
-                try {
-                  const winnerProfile = await api.getUserProfile(game.winner_id);
-                  return { ...game, participants, winnerProfile };
-                } catch (error) {
-                  console.error(
-                    `Failed to load winner profile for game ${game.game_id}:`,
-                    error
-                  );
-                  return { ...game, participants };
-                }
+        // Fetch winner profiles for all games
+        const gamesWithProfiles = await Promise.all(
+          normalizedGames.map(async (game) => {
+            const participants = game.participants || [];
+            if (game.winner_id) {
+              try {
+                const winnerProfile = await api.getUserProfile(game.winner_id);
+                return { ...game, participants, winnerProfile } as any;
+              } catch (error) {
+                console.error(
+                  `Failed to load winner profile for game ${game.game_id}:`,
+                  error
+                );
+                return { ...game, participants } as any;
               }
-              return { ...game, participants };
-            })
-          );
-          setEnhancedGames(gamesWithProfiles);
-        }
+            }
+            return { ...game, participants } as any;
+          })
+        );
+        setEnhancedGames(gamesWithProfiles);
       } catch (error) {
         console.error("Failed to load data:", error);
       } finally {
@@ -288,7 +261,7 @@ export function HistoryScreen() {
         {/* Games List */}
         <div
           className="self-stretch flex-1 flex flex-col justify-start items-start gap-2.5 overflow-y-auto"
-          style={{ scrollbarGutter: 'stable both-edges' }}
+          style={{ scrollbarGutter: 'stable' }}
         >
           {loading && (
             Array.from({ length: 20 }).map((_, i) => (
@@ -343,7 +316,7 @@ export function HistoryScreen() {
               return (
                 <div
                   key={game.game_id}
-                  className="self-stretch px-3.5 py-4 bg-stone-950 rounded-[20px] backdrop-blur-sm flex flex-col justify-center items-center gap-5 overflow-hidden"
+                  className="self-stretch px-4 py-4 bg-stone-950 rounded-[20px] backdrop-blur-sm flex flex-col justify-center items-center gap-5 overflow-hidden"
                 >
                   {/* Game Header */}
                   <div className="self-stretch inline-flex justify-between items-center">

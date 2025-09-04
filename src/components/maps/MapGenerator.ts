@@ -4,7 +4,7 @@ import { Obstacle, Spinner, MapData } from "@/types/maps";
 
 export const generateMapFromId = (
   app: PIXI.Application, 
-  mapId: number[] | number, 
+  mapId: number[], 
   options: { seed: string; worldWidth: number; worldHeight: number; random: any }
 ) => {
   const { worldWidth, worldHeight } = options;
