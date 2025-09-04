@@ -91,26 +91,6 @@ const useGameSound = (initialEnabled = true) => {
   };
 };
 
-// Manage acceleration state
-const useAccelerationState = () => {
-  const accelerationRef = useRef<{
-    isAccelerating: boolean;
-    timeMultiplier: number;
-    remainingTime: number;
-    originalTimeMultiplier: number;
-    hasBeenApplied: boolean;
-    appliedForSeed: string;
-  }>({
-    isAccelerating: false,
-    timeMultiplier: 1.0,
-    remainingTime: 0,
-    originalTimeMultiplier: 1.0,
-    hasBeenApplied: false,
-    appliedForSeed: '',
-  });
-
-  return accelerationRef;
-};
 
 interface GameCanvasProps {
   onBallWin?: (ballId: string, playerId: string) => void;
@@ -172,8 +152,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
     
     // Safety flag: предотвращает re-entrancy при старте игры
     const startingRef = useRef<boolean>(false);
-    // Acceleration state
-    const accelerationRef = useAccelerationState();
 
     const [gameState, setGameState] = useState<
       "waiting" | "playing" | "finished"
@@ -474,50 +452,17 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       // clamp huge deltas (tab wake)
       if (delta > 250) delta = 250;
 
-      const multiplier = accelerationRef.current.isAccelerating ? accelerationRef.current.timeMultiplier : 1.0;
-
       // scale elapsed time for simulation steps
-      accumulatorRef.current += delta * multiplier;
-
-      // decrement acceleration remaining time using wall clock (user-oriented)
-      if (accelerationRef.current.isAccelerating && accelerationRef.current.remainingTime > 0) {
-        accelerationRef.current.remainingTime -= delta;
-        if (accelerationRef.current.remainingTime <= 0) {
-          accelerationRef.current.isAccelerating = false;
-          accelerationRef.current.timeMultiplier = accelerationRef.current.originalTimeMultiplier || 1.0;
-          accelerationRef.current.remainingTime = 0;
-          console.log('[ACCELERATION] Completed (wall-clock).');
-
-          // After finishing acceleration we must flush any suppressed callbacks that happened
-          // during acceleration. If there is a winner already determined (actualWinnersRef),
-          // propagate those callbacks now (so accelerated run matches normal run).
-          if (actualWinnersRef.current.length > 0) {
-            // we call setActualWinners + onBallWin for the first winner if not yet emitted
-            setActualWinners([...actualWinnersRef.current]);
-            // first winner only: find ball and call onBallWin once
-            const winnerId = actualWinnersRef.current[0];
-            const winnerBall = ballsRef.current.find(b => b.id === winnerId);
-            if (winnerBall) {
-              try {
-                onBallWin?.(winnerBall.id, winnerBall.playerId);
-              } catch (e) { console.warn('onBallWin error after accel flush', e); }
-            }
-            setGameState("finished");
-          }
-        }
-      }
+      accumulatorRef.current += delta;
 
       let steps = 0;
       const maxStepsPerFrame = 200; // safety cap
       while (accumulatorRef.current >= FIXED_DELTA && steps < maxStepsPerFrame) {
-        const emitCallbacks = !accelerationRef.current.isAccelerating;
-        const won = updatePhysics(emitCallbacks, 1.0);
+        const won = updatePhysics(true, 1.0);
         physicsTimeRef.current += FIXED_DELTA;
         accumulatorRef.current -= FIXED_DELTA;
         steps++;
         if (won) {
-          // if a winner found and we suppressed callbacks (acceleration), updatePhysics already
-          // marked ball.finished and actualWinnersRef. We'll flush on accel end (see above).
           break;
         }
       }
@@ -656,242 +601,246 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       obstaclesRef.current.forEach((obstacle) => {
         if (obstacle.destroyed) return;
 
-        if (obstacle.type === "peg") {
-          const dx = precise.sub(ball.x, obstacle.x);
-          const dy = precise.sub(ball.y, obstacle.y);
-          const distanceSq = precise.add(
-            precise.mul(dx, dx),
-            precise.mul(dy, dy)
-          );
-
-          if (distanceSq < 1296) {
-            const distance = precise.sqrt(distanceSq);
-            const normalX = precise.div(dx, distance);
-            const normalY = precise.div(dy, distance);
-
-            ball.x = precise.add(obstacle.x, precise.mul(normalX, 36));
-            ball.y = precise.add(obstacle.y, precise.mul(normalY, 36));
-
-            const dotProduct = precise.add(
-              precise.mul(ball.dx, normalX),
-              precise.mul(ball.dy, normalY)
+        switch (obstacle.type) {
+          case "peg": {
+            const dx = precise.sub(ball.x, obstacle.x);
+            const dy = precise.sub(ball.y, obstacle.y);
+            const distanceSq = precise.add(
+              precise.mul(dx, dx),
+              precise.mul(dy, dy)
             );
 
-            ball.dx = precise.mul(
-              precise.sub(
-                ball.dx,
-                precise.mul(precise.mul(dotProduct, 2), normalX)
-              ),
-              0.82
-            );
-            ball.dy = precise.mul(
-              precise.sub(
-                ball.dy,
-                precise.mul(precise.mul(dotProduct, 2), normalY)
-              ),
-              0.82
-            );
+            if (distanceSq < 1296) {
+              const distance = precise.sqrt(distanceSq);
+              const normalX = precise.div(dx, distance);
+              const normalY = precise.div(dy, distance);
 
-            if (!accelerationRef.current.isAccelerating) {
+              ball.x = precise.add(obstacle.x, precise.mul(normalX, 36));
+              ball.y = precise.add(obstacle.y, precise.mul(normalY, 36));
+
+              const dotProduct = precise.add(
+                precise.mul(ball.dx, normalX),
+                precise.mul(ball.dy, normalY)
+              );
+
+              ball.dx = precise.mul(
+                precise.sub(
+                  ball.dx,
+                  precise.mul(precise.mul(dotProduct, 2), normalX)
+                ),
+                0.82
+              );
+              ball.dy = precise.mul(
+                precise.sub(
+                  ball.dy,
+                  precise.mul(precise.mul(dotProduct, 2), normalY)
+                ),
+                0.82
+              );
+
               playMelodyNote();
             }
+            break;
           }
-        } else if (obstacle.type === "barrier") {
-          const halfW = precise.div(obstacle.width, 2);
-          const halfH = precise.div(obstacle.height, 2);
+          case "barrier": {
+            const halfW = precise.div(obstacle.width, 2);
+            const halfH = precise.div(obstacle.height, 2);
 
-          if (
-            precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
-            precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
-          ) {
-            const overlapX = precise.sub(
-              halfW + 24,
-              precise.abs(precise.sub(ball.x, obstacle.x))
-            );
-            const overlapY = precise.sub(
-              halfH + 24,
-              precise.abs(precise.sub(ball.y, obstacle.y))
-            );
+            if (
+              precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+              precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+            ) {
+              const overlapX = precise.sub(
+                halfW + 24,
+                precise.abs(precise.sub(ball.x, obstacle.x))
+              );
+              const overlapY = precise.sub(
+                halfH + 24,
+                precise.abs(precise.sub(ball.y, obstacle.y))
+              );
 
-            // Проверяем, является ли это частью воронки (маленькие сегменты)
-            const isFunnelSegment = obstacle.width <= 8 && obstacle.height <= 8;
-            
-            if (overlapX < overlapY) {
-              // Боковое столкновение
-              if (ball.x < obstacle.x) {
-                ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
-              } else {
-                ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
-              }
+              // Проверяем, является ли это частью воронки (маленькие сегменты)
+              const isFunnelSegment = obstacle.width <= 8 && obstacle.height <= 8;
               
-              if (isFunnelSegment) {
-                // Для воронки: направляем к центру
-                const centerX = WORLD_WIDTH / 2;
-                const directionToCenter = ball.x < centerX ? 1 : -1;
-                ball.dx = precise.mul(precise.abs(ball.dx), directionToCenter * 0.82);
-              } else {
-                ball.dx = precise.mul(ball.dx, -0.82);
-              }
-              ball.bounceCount++;
-            } else {
-              if (ball.y < obstacle.y) {
-                // Столкновение с верхней частью барьера
-                ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+              if (overlapX < overlapY) {
+                // Боковое столкновение
+                if (ball.x < obstacle.x) {
+                  ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
+                } else {
+                  ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
+                }
                 
                 if (isFunnelSegment) {
-                  // Для воронки: отскок с направлением к центру
+                  // Для воронки: направляем к центру
                   const centerX = WORLD_WIDTH / 2;
                   const directionToCenter = ball.x < centerX ? 1 : -1;
-                  ball.dy = precise.mul(ball.dy, -0.88);
-                  ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 0.5));
-                  ball.bounceCount++;
+                  ball.dx = precise.mul(precise.abs(ball.dx), directionToCenter * 0.82);
                 } else {
-                  // Обычная логика для больших барьеров
-                  const verticalImpact = precise.abs(ball.dy);
-                  const shouldStick = 
-                    verticalImpact < 1.0 &&
-                    ball.bounceCount >= 2; 
-                    
-                  if (shouldStick) {
-                    (ball as any).onSurface = true;
-                    (ball as any).surfaceObstacle = obstacle;
-                    ball.dy = 0;
-                  } else {
-                    ball.dy = precise.mul(ball.dy, -0.78);
-                    ball.bounceCount++;
-                  }
+                  ball.dx = precise.mul(ball.dx, -0.82);
                 }
-              } else {
-                // Столкновение с нижней частью барьера
-                ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
-                ball.dy = precise.mul(ball.dy, -0.78);
                 ball.bounceCount++;
-              }
-            }
-            if (!accelerationRef.current.isAccelerating) {
-              playMelodyNote();
-            }
-          }
-        } else if (obstacle.type === "brick") {
-          const halfW = precise.div(obstacle.width, 2);
-          const halfH = precise.div(obstacle.height, 2);
-
-          if (
-            precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
-            precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
-          ) {
-            // Increase hit count
-            (obstacle as any).hitCount = ((obstacle as any).hitCount || 0) + 1;
-            
-            // Set transparency based on hit count
-            if (obstacle.graphics) {
-              obstacle.graphics.alpha = 1 - ((obstacle as any).hitCount / 3) * 0.3;
-            }
-            
-            // Destroy after 3 hits
-            if ((obstacle as any).hitCount >= 3) {
-              obstacle.destroyed = true;
-              if (obstacle.graphics && appRef.current) {
-                appRef.current.stage.removeChild(obstacle.graphics);
-              }
-            }
-
-            const overlapX = precise.sub(
-              halfW + 24,
-              precise.abs(precise.sub(ball.x, obstacle.x))
-            );
-            const overlapY = precise.sub(
-              halfH + 24,
-              precise.abs(precise.sub(ball.y, obstacle.y))
-            );
-
-            if (overlapX < overlapY) {
-              ball.dx = precise.mul(ball.dx, -0.78);
-            } else {
-              ball.dy = precise.mul(ball.dy, -0.78);
-            }
-            if (!accelerationRef.current.isAccelerating) {
-              playMelodyNote();
-            }
-          }
-        } else if (obstacle.type === "spinner") {
-          const dx = precise.sub(ball.x, obstacle.x);
-          const dy = precise.sub(ball.y, obstacle.y);
-          const distanceSq = precise.add(
-            precise.mul(dx, dx),
-            precise.mul(dy, dy)
-          );
-
-          if (distanceSq < 2304 && distanceSq > 0) {
-            const distance = precise.sqrt(distanceSq);
-            const normalX = precise.div(dx, distance);
-            const normalY = precise.div(dy, distance);
-
-            ball.x = precise.add(obstacle.x, precise.mul(normalX, 48));
-            ball.y = precise.add(obstacle.y, precise.mul(normalY, 48));
-
-            const tangentX = precise.mul(normalY, -1);
-            const tangentY = normalX;
-            const currentSpeed = precise.sqrt(
-              precise.add(
-                precise.mul(ball.dx, ball.dx),
-                precise.mul(ball.dy, ball.dy)
-              )
-            );
-
-            ball.dx = precise.mul(
-              precise.add(
-                precise.mul(precise.mul(normalX, currentSpeed), 0.75),
-                precise.mul(tangentX, 1.6)
-              ),
-              1.1
-            );
-            ball.dy = precise.mul(
-              precise.add(
-                precise.mul(precise.mul(normalY, currentSpeed), 0.75),
-                precise.mul(tangentY, 1.6)
-              ),
-              1.1
-            );
-
-            if (!accelerationRef.current.isAccelerating) {
-              playMelodyNote();
-            }
-          }
-        } else if (obstacle.type === "polygon") {
-          // Простая проверка коллизии с полигоном через bounding box
-          const halfW = precise.div(obstacle.width, 2);
-          const halfH = precise.div(obstacle.height, 2);
-
-          if (
-            precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
-            precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
-          ) {
-            const overlapX = precise.sub(
-              halfW + 24,
-              precise.abs(precise.sub(ball.x, obstacle.x))
-            );
-            const overlapY = precise.sub(
-              halfH + 24,
-              precise.abs(precise.sub(ball.y, obstacle.y))
-            );
-
-            if (overlapX < overlapY) {
-              if (ball.x < obstacle.x) {
-                ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
               } else {
-                ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
-              }
-              ball.dx = precise.mul(ball.dx, -0.82);
-            } else {
-              if (ball.y < obstacle.y) {
-                ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
-              } else {
-                ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
-              }
-              ball.dy = precise.mul(ball.dy, -0.82);
+                if (ball.y < obstacle.y) {
+                  // Столкновение с верхней частью барьера
+                  ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+                  
+                  if (isFunnelSegment) {
+                    // Для воронки: отскок с направлением к центру
+                    const centerX = WORLD_WIDTH / 2;
+                    const directionToCenter = ball.x < centerX ? 1 : -1;
+                    ball.dy = precise.mul(ball.dy, -0.88);
+                    ball.dx = precise.add(ball.dx, precise.mul(directionToCenter, 0.5));
+                    ball.bounceCount++;
+                  } else {
+                    // Обычная логика для больших барьеров
+                    const verticalImpact = precise.abs(ball.dy);
+                    const shouldStick = 
+                      verticalImpact < 1.0 &&
+                      ball.bounceCount >= 2; 
+                      
+                    if (shouldStick) {
+                      (ball as any).onSurface = true;
+                      (ball as any).surfaceObstacle = obstacle;
+                      ball.dy = 0;
+                    } else {
+                      ball.dy = precise.mul(ball.dy, -0.78);
+                      ball.bounceCount++;
+                    }
+                  }
+                } else {
+                  // Столкновение с нижней частью барьера
+                  ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
+                  ball.dy = precise.mul(ball.dy, -0.78);
+                  ball.dx = precise.mul(precise.mul(precise.abs(ball.dx), -1), 0.82);
+                }
+
+              playMelodyNote();
             }
-            playMelodyNote();
+            break;
+          }
+          }
+          case "brick": {
+            const halfW = precise.div(obstacle.width, 2);
+            const halfH = precise.div(obstacle.height, 2);
+
+            if (
+              precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+              precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+            ) {
+              // Increase hit count
+              (obstacle as any).hitCount = ((obstacle as any).hitCount || 0) + 1;
+              
+              // Set transparency based on hit count
+              if (obstacle.graphics) {
+                obstacle.graphics.alpha = 1 - ((obstacle as any).hitCount / 3) * 0.3;
+              }
+              
+              // Destroy after 3 hits
+              if ((obstacle as any).hitCount >= 3) {
+                obstacle.destroyed = true;
+                if (obstacle.graphics && appRef.current) {
+                  appRef.current.stage.removeChild(obstacle.graphics);
+                }
+              }
+
+              const overlapX = precise.sub(
+                halfW + 24,
+                precise.abs(precise.sub(ball.x, obstacle.x))
+              );
+              const overlapY = precise.sub(
+                halfH + 24,
+                precise.abs(precise.sub(ball.y, obstacle.y))
+              );
+
+              if (overlapX < overlapY) {
+                ball.dx = precise.mul(ball.dx, -0.78);
+              } else {
+                ball.dy = precise.mul(ball.dy, -0.78);
+              }
+              playMelodyNote();
+            }
+            break;
+          }
+          case "spinner": {
+            const dx = precise.sub(ball.x, obstacle.x);
+            const dy = precise.sub(ball.y, obstacle.y);
+            const distanceSq = precise.add(
+              precise.mul(dx, dx),
+              precise.mul(dy, dy)
+            );
+
+            if (distanceSq < 2304 && distanceSq > 0) {
+              const distance = precise.sqrt(distanceSq);
+              const normalX = precise.div(dx, distance);
+              const normalY = precise.div(dy, distance);
+
+              ball.x = precise.add(obstacle.x, precise.mul(normalX, 48));
+              ball.y = precise.add(obstacle.y, precise.mul(normalY, 48));
+
+              const tangentX = precise.mul(normalY, -1);
+              const tangentY = normalX;
+              const currentSpeed = precise.sqrt(
+                precise.add(
+                  precise.mul(ball.dx, ball.dx),
+                  precise.mul(ball.dy, ball.dy)
+                )
+              );
+
+              ball.dx = precise.mul(
+                precise.add(
+                  precise.mul(precise.mul(normalX, currentSpeed), 0.75),
+                  precise.mul(tangentX, 1.6)
+                ),
+                1.1
+              );
+              ball.dy = precise.mul(
+                precise.add(
+                  precise.mul(precise.mul(normalY, currentSpeed), 0.75),
+                  precise.mul(tangentY, 1.6)
+                ),
+                1.1
+              );
+
+              playMelodyNote();
+            }
+            break;
+          }
+          case "polygon": {
+            // Простая проверка коллизии с полигоном через bounding box
+            const halfW = precise.div(obstacle.width, 2);
+            const halfH = precise.div(obstacle.height, 2);
+
+            if (
+              precise.abs(precise.sub(ball.x, obstacle.x)) < halfW + 24 &&
+              precise.abs(precise.sub(ball.y, obstacle.y)) < halfH + 24
+            ) {
+              const overlapX = precise.sub(
+                halfW + 24,
+                precise.abs(precise.sub(ball.x, obstacle.x))
+              );
+              const overlapY = precise.sub(
+                halfH + 24,
+                precise.abs(precise.sub(ball.y, obstacle.y))
+              );
+
+              if (overlapX < overlapY) {
+                if (ball.x < obstacle.x) {
+                  ball.x = precise.sub(precise.sub(obstacle.x, halfW), 24);
+                } else {
+                  ball.x = precise.add(precise.add(obstacle.x, halfW), 24);
+                }
+                ball.dx = precise.mul(ball.dx, -0.82);
+              } else {
+                if (ball.y < obstacle.y) {
+                  ball.y = precise.sub(precise.sub(obstacle.y, halfH), 24);
+                } else {
+                  ball.y = precise.add(precise.add(obstacle.y, halfH), 24);
+                }
+                ball.dy = precise.mul(ball.dy, -0.82);
+              }
+              playMelodyNote();
+            }
+            break;
           }
         }
       });
@@ -949,9 +898,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
             precise.mul(normalY, halfImpulse)
           );
 
-          if (!accelerationRef.current.isAccelerating) {
-            playMelodyNote();
-          }
+          playMelodyNote();
         }
       });
 
@@ -970,15 +917,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         if (ball.y > winY) {
           if (actualWinnersRef.current.length === 0) {
             actualWinnersRef.current = [ball.id];
-            const shouldEmitCallbacks = !accelerationRef.current.isAccelerating;
-            if (shouldEmitCallbacks) setActualWinners([...actualWinnersRef.current]);
+            setActualWinners([...actualWinnersRef.current]);
             ball.finished = true;
             console.log('[WIN] first ball reached winY:', ball.id, 'owner:', ball.playerId);
-            if (shouldEmitCallbacks) {
-              onBallWin?.(ball.id, ball.playerId);
-              setGameState("finished");
-            }
-            // do not early-return false path if callbacks suppressed; logic still marks winnerFound via return true
+            onBallWin?.(ball.id, ball.playerId);
+            setGameState("finished");
             return true;
           }
         }
@@ -1068,25 +1011,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
     };
 
-    const startAcceleration = (seconds: number, multiplier: number = 10.0, seed?: string) => {
-      if (!seconds || seconds <= 0) return;
-
-      // If already applied for same seed — skip
-      if (accelerationRef.current.hasBeenApplied && seed && accelerationRef.current.appliedForSeed === seed) {
-        console.log(`[ACCELERATION] Already applied for seed ${seed}, skipping.`);
-        return;
-      }
-
-      // mark immediately to avoid concurrent calls race
-      accelerationRef.current.hasBeenApplied = true;
-      accelerationRef.current.appliedForSeed = seed || '';
-
-      accelerationRef.current.isAccelerating = true;
-      accelerationRef.current.timeMultiplier = multiplier;
-      accelerationRef.current.originalTimeMultiplier = 1.0;
-      accelerationRef.current.remainingTime = seconds * 1000; // ms
-      console.log(`[ACCELERATION] Started: ${seconds}s at ${multiplier}x for seed ${seed}`);
-    };
 
     const startGame = async (gameData: {
       seed: string;
@@ -1129,15 +1053,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
         ballStatesRef.current = new Map();
         lastCollisionAtRef.current = 0;
 
-        // Do not reset acceleration if it was applied for the same seed (we want idempotency),
-        // but if appliedForSeed !== gameData.seed then reset flags so new seed can accept accel.
-        if (accelerationRef.current.appliedForSeed !== gameData.seed) {
-          accelerationRef.current.isAccelerating = false;
-          accelerationRef.current.timeMultiplier = 1.0;
-          accelerationRef.current.remainingTime = 0;
-          accelerationRef.current.hasBeenApplied = false;
-          accelerationRef.current.appliedForSeed = '';
-        }
 
         // remove previous visuals
         if (appRef.current) {
@@ -1350,10 +1265,6 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(
       }
 
       // --- NEW ACCELERATION SYSTEM ---
-        // apply speedUpTime only if not applied already for this seed
-        if (speedUpTime && speedUpTime > 0 && !(accelerationRef.current.hasBeenApplied && accelerationRef.current.appliedForSeed === gameData.seed)) {
-          startAcceleration(speedUpTime, 10.0, gameData.seed);
-        }
 
         // start unified rAF loop
         lastTimeRef.current = performance.now();
